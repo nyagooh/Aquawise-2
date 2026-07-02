@@ -137,6 +137,34 @@ export interface NetworkData {
 
 let cache: Promise<NetworkData> | null = null;
 
+/** Drop the memoised network so the next loadNetwork() refetches from source. */
+export function clearNetworkCache(): void {
+  cache = null;
+}
+
+/**
+ * Auth headers for the optional Django backend (network upload / chooser pages).
+ * The bundled Riverton demo is fully static and never calls this — it only runs
+ * when a user drives the backend-backed upload flow against a live API.
+ */
+let accessToken: string | null = null;
+export async function getAuthHeaders(): Promise<HeadersInit> {
+  if (!accessToken) {
+    const res = await fetch('/api/v1/auth/token/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: 'admin123' })
+    });
+    if (!res.ok) throw new Error('Failed to authenticate with backend.');
+    const data = await res.json();
+    accessToken = data.access;
+  }
+  return {
+    'Authorization': `Bearer ${accessToken}`,
+    'Content-Type': 'application/json'
+  };
+}
+
 export function loadNetwork(): Promise<NetworkData> {
   if (cache) return cache;
   cache = (async () => {
