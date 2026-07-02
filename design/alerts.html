@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AquaWatch — Alerts</title>
+<link rel="stylesheet" href="assets/shared.css">
+<style>
+.alerts-layout { display: grid; grid-template-columns: 1fr 380px; gap: var(--s6); }
+@media(max-width:1000px){ .alerts-layout { grid-template-columns: 1fr; } }
+.alert-list-item {
+  display: flex; align-items: flex-start; gap: var(--s4);
+  padding: var(--s4) var(--s5);
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer; transition: background var(--t-fast);
+  position: relative;
+}
+.alert-list-item:hover { background: rgba(255,255,255,0.025); }
+.alert-list-item.selected { background: var(--accent-glow); border-left: 3px solid var(--accent); }
+.alert-list-item.unread::before {
+  content: ''; position: absolute; left: -1px; top: 50%; transform: translateY(-50%);
+  width: 3px; height: 40px; background: var(--accent); border-radius: 0 2px 2px 0;
+}
+.alert-list-item:last-child { border-bottom: none; }
+.alert-body-icon { width: 40px; height: 40px; border-radius: var(--r-lg); display:flex;align-items:center;justify-content:center; flex-shrink:0; }
+.alert-body-meta { flex: 1; min-width: 0; }
+.alert-body-title { font-size: 0.875rem; font-weight: 600; color: var(--text-primary); margin-bottom: 2px; }
+.alert-body-desc { font-size: 0.8125rem; color: var(--text-secondary); margin-bottom: 4px; }
+.alert-body-time { font-size: 0.75rem; color: var(--text-muted); }
+.detail-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-xl);
+  overflow: hidden;
+  position: sticky; top: calc(var(--topbar-h) + var(--s6));
+  max-height: calc(100vh - var(--topbar-h) - var(--s12));
+  overflow-y: auto;
+}
+.detail-header {
+  padding: var(--s5) var(--s6);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--danger-bg);
+}
+.detail-param-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: var(--s3) 0;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.875rem;
+}
+.detail-param-row:last-child { border-bottom: none; }
+.stat-strip { display:grid; grid-template-columns:repeat(3,1fr); gap:0; }
+.stat-cell { text-align:center; padding:var(--s4); border-right:1px solid var(--border-subtle); }
+.stat-cell:last-child { border-right:none; }
+.stat-cell-val { font-size:1.25rem; font-weight:700; font-family:var(--font-mono); margin-bottom:2px; }
+.stat-cell-lbl { font-size:0.6875rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; }
+.filter-bar { display:flex; gap:var(--s3); flex-wrap:wrap; }
+</style>
+</head>
+<body>
+<div class="app-shell">
+<aside class="sidebar">
+  <div class="sidebar-logo"><svg width="28" height="28" viewBox="0 0 28 28" fill="none"><path d="M14 2C14 2 4 11 4 18A10 10 0 0024 18C24 11 14 2 14 2Z" fill="#3B82F6"/><path d="M14 9C14 9 9 14 9 18A5 5 0 0019 18C19 14 14 9 14 9Z" fill="rgba(7,23,40,0.5)"/></svg><span class="sidebar-logo-text">Aqua<span>Watch</span></span></div>
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Monitor</div>
+    <a href="dashboard.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard</a>
+    <a href="location-detail.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>Locations</a>
+    <a href="alerts.html" class="nav-item active"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>Alerts<span class="badge">3</span></a>
+    <div class="nav-section-label">Analyse</div>
+    <a href="historical.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Historical Data</a>
+    <a href="predictive.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Predictive Analytics</a>
+    <a href="statistics.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Statistics</a>
+    <div class="nav-section-label">Account</div>
+    <a href="account.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>My Account</a>
+    <a href="settings.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>Settings</a>
+  </nav>
+  <div class="sidebar-footer"><div class="user-chip"><div class="user-avatar">TL</div><div class="user-info"><div class="user-name">Tom Lee</div><div class="user-role">Field Researcher</div></div></div></div>
+</aside>
+
+<main class="main">
+  <div class="mobile-topbar">
+    <span style="font-weight:700;font-size:1rem">Aqua<span style="color:var(--accent)">Watch</span></span>
+    <span class="badge badge-danger" style="margin-left:auto">3 Active</span>
+  </div>
+  <div class="topbar">
+    <div class="topbar-title">Alerts</div>
+    <div class="topbar-actions">
+      <button class="btn btn-sm btn-secondary">Mark All Read</button>
+      <button class="btn btn-sm btn-secondary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export
+      </button>
+    </div>
+  </div>
+
+  <div class="page-content">
+
+    <!-- Stats strip -->
+    <div class="card">
+      <div class="stat-strip">
+        <div class="stat-cell">
+          <div class="stat-cell-val" style="color:var(--danger)">1</div>
+          <div class="stat-cell-lbl">Critical</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-cell-val" style="color:var(--warning)">2</div>
+          <div class="stat-cell-lbl">Warning</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-cell-val" style="color:var(--text-secondary)">14</div>
+          <div class="stat-cell-lbl">This Week</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filter bar -->
+    <div class="filter-bar">
+      <div class="tabs">
+        <button class="tab-btn active" onclick="filterAlerts(this,'all')">All</button>
+        <button class="tab-btn" onclick="filterAlerts(this,'active')">Active</button>
+        <button class="tab-btn" onclick="filterAlerts(this,'resolved')">Resolved</button>
+      </div>
+      <select class="form-control" style="width:auto;padding:6px 12px;font-size:0.8125rem">
+        <option>All Locations</option>
+        <option>Crocodile River</option>
+        <option>Limpopo River</option>
+        <option>Olifants River</option>
+      </select>
+      <select class="form-control" style="width:auto;padding:6px 12px;font-size:0.8125rem">
+        <option>All Parameters</option>
+        <option>pH</option>
+        <option>Turbidity</option>
+        <option>Dissolved Oxygen</option>
+        <option>Nitrates</option>
+      </select>
+      <div class="search-box" style="flex:1;max-width:280px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" placeholder="Search alerts…">
+      </div>
+    </div>
+
+    <!-- Main layout -->
+    <div class="alerts-layout">
+      <!-- Alert List -->
+      <div class="card" style="overflow:hidden">
+        <div class="card-header">
+          <div class="card-title">Alert Feed</div>
+          <span style="font-size:0.75rem;color:var(--text-muted)">3 unread</span>
+        </div>
+
+        <div id="alert-list">
+          <!-- Critical -->
+          <div class="alert-list-item selected unread" onclick="selectAlert(this,0)">
+            <div class="alert-body-icon alert-icon-danger">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            </div>
+            <div class="alert-body-meta">
+              <div class="alert-body-title">Nitrates exceed safe limit</div>
+              <div class="alert-body-desc">Crocodile River — 78.3 mg/L detected (limit 45 mg/L)</div>
+              <div class="alert-body-time">2 minutes ago · ALT-2024-0187</div>
+            </div>
+            <span class="badge badge-danger">Critical</span>
+          </div>
+
+          <!-- Warning 1 -->
+          <div class="alert-list-item unread" onclick="selectAlert(this,1)">
+            <div class="alert-body-icon alert-icon-warning">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            </div>
+            <div class="alert-body-meta">
+              <div class="alert-body-title">Low dissolved oxygen</div>
+              <div class="alert-body-desc">Olifants River — 4.2 mg/L (min 5.0 mg/L)</div>
+              <div class="alert-body-time">18 minutes ago · ALT-2024-0186</div>
+            </div>
+            <span class="badge badge-warning">Warning</span>
+          </div>
+
+          <!-- Warning 2 -->
+          <div class="alert-list-item unread" onclick="selectAlert(this,2)">
+            <div class="alert-body-icon alert-icon-warning">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            </div>
+            <div class="alert-body-meta">
+              <div class="alert-body-title">High turbidity detected</div>
+              <div class="alert-body-desc">Limpopo River — 4.8 NTU (limit 5.0 NTU)</div>
+              <div class="alert-body-time">1 hour ago · ALT-2024-0185</div>
+            </div>
+            <span class="badge badge-warning">Warning</span>
+          </div>
+
+          <!-- Resolved -->
+          <div class="alert-list-item" style="opacity:0.6" onclick="selectAlert(this,3)">
+            <div class="alert-body-icon alert-icon-info">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div class="alert-body-meta">
+              <div class="alert-body-title">Sensor Vaal-03 came online</div>
+              <div class="alert-body-desc">Connection restored after maintenance</div>
+              <div class="alert-body-time">1 hour ago · ALT-2024-0184</div>
+            </div>
+            <span class="badge badge-neutral">Resolved</span>
+          </div>
+
+          <div class="alert-list-item" style="opacity:0.6" onclick="selectAlert(this,4)">
+            <div class="alert-body-icon" style="background:rgba(239,68,68,0.12);color:var(--danger)">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            </div>
+            <div class="alert-body-meta">
+              <div class="alert-body-title">Nitrates exceed safe limit</div>
+              <div class="alert-body-desc">Crocodile River — 62.1 mg/L</div>
+              <div class="alert-body-time">3 days ago · ALT-2024-0181</div>
+            </div>
+            <span class="badge badge-neutral">Resolved</span>
+          </div>
+
+          <div class="alert-list-item" style="opacity:0.6">
+            <div class="alert-body-icon" style="background:rgba(245,158,11,0.12);color:var(--warning)">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            </div>
+            <div class="alert-body-meta">
+              <div class="alert-body-title">pH slightly above range</div>
+              <div class="alert-body-desc">Crocodile River — 8.6 pH</div>
+              <div class="alert-body-time">2 weeks ago · ALT-2024-0172</div>
+            </div>
+            <span class="badge badge-neutral">Resolved</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Detail Panel -->
+      <div class="detail-panel" id="detail-panel">
+        <div class="detail-header">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--s3)">
+            <span class="badge badge-danger" style="font-size:0.75rem">Critical Alert</span>
+            <span style="font-size:0.75rem;color:var(--text-muted)">ALT-2024-0187</span>
+          </div>
+          <h2 style="font-size:1rem;font-weight:700;margin-bottom:4px">Nitrates exceed safe limit</h2>
+          <p style="font-size:0.8125rem;color:var(--text-secondary)">Triggered 2 minutes ago — unacknowledged</p>
+        </div>
+        <div style="padding:var(--s5) var(--s6)">
+          <div style="margin-bottom:var(--s5)">
+            <div style="font-size:0.75rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:var(--s3)">Measurement</div>
+            <div style="display:flex;align-items:flex-end;gap:var(--s4)">
+              <div>
+                <div style="font-size:0.6875rem;color:var(--text-muted)">Detected</div>
+                <div style="font-family:var(--font-mono);font-size:2rem;font-weight:700;color:var(--danger)">78.3</div>
+                <div style="font-size:0.75rem;color:var(--text-muted)">mg/L</div>
+              </div>
+              <div style="font-size:1.5rem;color:var(--text-muted)">vs</div>
+              <div>
+                <div style="font-size:0.6875rem;color:var(--text-muted)">Safe limit</div>
+                <div style="font-family:var(--font-mono);font-size:2rem;font-weight:700;color:var(--text-secondary)">45</div>
+                <div style="font-size:0.75rem;color:var(--text-muted)">mg/L</div>
+              </div>
+              <div style="background:var(--danger-bg);border:1px solid rgba(239,68,68,0.3);border-radius:var(--r-lg);padding:var(--s3) var(--s4);margin-left:auto">
+                <div style="font-size:0.6875rem;color:var(--text-muted)">Excess</div>
+                <div style="font-family:var(--font-mono);font-size:1.25rem;font-weight:700;color:var(--danger)">+74%</div>
+              </div>
+            </div>
+            <div class="meter-bar" style="margin-top:var(--s3)"><div class="meter-fill danger" style="width:95%"></div></div>
+          </div>
+
+          <div style="margin-bottom:var(--s5)">
+            <div style="font-size:0.75rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:var(--s3)">Details</div>
+            <div class="detail-param-row"><span style="color:var(--text-muted)">Location</span><a href="location-detail.html" style="color:var(--accent)">Crocodile River →</a></div>
+            <div class="detail-param-row"><span style="color:var(--text-muted)">Parameter</span><span style="color:var(--text-primary)">Nitrates (NO₃⁻)</span></div>
+            <div class="detail-param-row"><span style="color:var(--text-muted)">Sensor ID</span><span style="font-family:var(--font-mono);color:var(--accent)">ESP32-CRR-004</span></div>
+            <div class="detail-param-row"><span style="color:var(--text-muted)">Triggered</span><span style="color:var(--text-primary)">04:20 AM, 20 Apr 2026</span></div>
+            <div class="detail-param-row"><span style="color:var(--text-muted)">Duration</span><span style="color:var(--danger)">Active 2 min</span></div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:var(--s3)">
+            <button class="btn btn-primary" style="width:100%;justify-content:center">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Acknowledge Alert
+            </button>
+            <a href="location-detail.html" class="btn btn-secondary" style="justify-content:center">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              Go to Location
+            </a>
+            <button class="btn btn-ghost" style="width:100%;justify-content:center;color:var(--text-muted)">Dismiss</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <nav class="bottom-nav">
+    <a href="dashboard.html" class="bottom-nav-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Home</a>
+    <a href="location-detail.html" class="bottom-nav-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>Locations</a>
+    <a href="alerts.html" class="bottom-nav-item active"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>Alerts</a>
+    <a href="statistics.html" class="bottom-nav-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Stats</a>
+    <a href="account.html" class="bottom-nav-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Account</a>
+  </nav>
+</main>
+</div>
+<script>
+function filterAlerts(btn, type) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+function selectAlert(el, idx) {
+  document.querySelectorAll('.alert-list-item').forEach(i => i.classList.remove('selected'));
+  el.classList.add('selected');
+}
+</script>
+<script src="assets/theme.js"></script>
+</body>
+</html>

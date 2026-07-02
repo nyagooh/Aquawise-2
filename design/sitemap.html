@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AquaWatch — Sitemap</title>
+<link rel="stylesheet" href="assets/shared.css">
+<style>
+body { background: var(--bg-base); padding: var(--s10); font-family: var(--font); color: var(--text-primary); }
+h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: var(--s2); }
+.subtitle { color: var(--text-secondary); font-size: 0.9rem; margin-bottom: var(--s12); }
+
+/* Tree */
+.tree { display: flex; flex-direction: column; align-items: center; gap: 0; }
+.tier { display: flex; justify-content: center; gap: 0; position: relative; margin-bottom: 0; }
+.connector-h {
+  position: absolute;
+  top: 0;
+  left: 0; right: 0;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+/* Node */
+.node-wrap { display: flex; flex-direction: column; align-items: center; }
+.node {
+  padding: var(--s3) var(--s5);
+  border-radius: var(--r-xl);
+  text-align: center;
+  position: relative;
+  transition: box-shadow var(--t-fast);
+}
+.node:hover { box-shadow: var(--shadow-lg); }
+.node-icon { font-size: 1.25rem; margin-bottom: var(--s1); }
+.node-label { font-size: 0.8125rem; font-weight: 600; white-space: nowrap; }
+.node-desc { font-size: 0.6875rem; margin-top: 2px; opacity: 0.75; }
+
+/* Node colours */
+.node-root   { background: linear-gradient(135deg,#3B82F6,#60A5FA); color: #070B17; min-width: 180px; }
+.node-l1     { background: var(--bg-elevated); border: 1px solid var(--border-default); color: var(--text-primary); min-width: 150px; }
+.node-l2     { background: var(--bg-card); border: 1px solid var(--border-subtle); color: var(--text-secondary); min-width: 130px; font-size: 0.75rem; }
+
+/* Connecting lines via CSS */
+.v-line {
+  width: 2px;
+  background: var(--border-default);
+}
+.v-line-short { height: 24px; }
+.v-line-medium { height: 40px; }
+
+.h-branch {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0;
+  position: relative;
+}
+.branch-group {
+  display: flex;
+  gap: 16px;
+}
+.branch-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ── Legend ── */
+.legend {
+  display: flex; gap: var(--s6); margin-top: var(--s12); flex-wrap: wrap;
+}
+.legend-item { display: flex; align-items: center; gap: var(--s2); font-size: 0.8125rem; color: var(--text-secondary); }
+.legend-swatch {
+  width: 24px; height: 12px; border-radius: var(--r-sm);
+}
+
+/* ── Back nav ── */
+.back-nav { margin-bottom: var(--s8); }
+.nav-links { display: flex; gap: var(--s4); flex-wrap: wrap; margin-top: var(--s3); }
+.nav-links a {
+  padding: var(--s2) var(--s4);
+  border-radius: var(--r-md);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  transition: all var(--t-fast);
+}
+.nav-links a:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Full sitemap grid ── */
+.sitemap-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--s8);
+}
+.sm-section { }
+.sm-section-header {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin-bottom: var(--s4);
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.sm-section-num {
+  width: 28px; height: 28px;
+  border-radius: var(--r-full);
+  background: var(--accent-glow);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.sm-section-title { font-size: 1rem; font-weight: 600; }
+.sm-section-desc { font-size: 0.8125rem; color: var(--text-muted); }
+.sm-pages { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--s3); }
+.sm-page-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-lg);
+  padding: var(--s4);
+  transition: all var(--t-fast);
+}
+.sm-page-card:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+.sm-page-icon { font-size: 1.5rem; margin-bottom: var(--s2); }
+.sm-page-name { font-size: 0.875rem; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+.sm-page-url { font-size: 0.6875rem; font-family: var(--font-mono); color: var(--accent); margin-bottom: var(--s2); }
+.sm-page-desc { font-size: 0.75rem; color: var(--text-muted); line-height: 1.5; }
+.sm-sub-pages { margin-top: var(--s2); padding-top: var(--s2); border-top: 1px solid var(--border-subtle); }
+.sm-sub-item {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  padding: 2px 0;
+  display: flex; align-items: center; gap: var(--s2);
+}
+.sm-sub-item::before { content: '↳'; color: var(--accent-dim); font-size: 0.625rem; }
+
+/* Diagram */
+.diagram-section { margin-bottom: var(--s12); }
+.diagram-title { font-size: 1.125rem; font-weight: 600; margin-bottom: var(--s6); color: var(--text-primary); }
+.diagram {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-2xl);
+  padding: var(--s8) var(--s6);
+  overflow-x: auto;
+}
+.d-root { display: flex; flex-direction: column; align-items: center; }
+.d-row { display: flex; justify-content: center; align-items: flex-start; gap: var(--s6); flex-wrap: wrap; margin-bottom: var(--s8); }
+.d-node {
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-xl);
+  padding: var(--s4) var(--s5);
+  text-align: center;
+  min-width: 140px;
+  position: relative;
+  transition: all var(--t-fast);
+}
+.d-node:hover { border-color: var(--accent); box-shadow: var(--shadow-teal); transform: translateY(-2px); }
+.d-node.root {
+  background: linear-gradient(135deg, rgba(59,130,246,0.2), rgba(79,195,247,0.2));
+  border-color: var(--accent);
+  min-width: 200px;
+}
+.d-node-icon { font-size: 1.5rem; margin-bottom: var(--s1); }
+.d-node-label { font-size: 0.8125rem; font-weight: 600; color: var(--text-primary); }
+.d-node-sub { font-size: 0.6875rem; color: var(--text-muted); margin-top: 2px; }
+.d-connector { width: 2px; height: 40px; background: var(--border-default); margin: 0 auto; }
+.d-h-line {
+  height: 2px;
+  background: var(--border-default);
+  align-self: flex-start;
+  margin-top: 0;
+}
+.d-children {
+  display: flex;
+  gap: var(--s4);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.d-child-group { display: flex; flex-direction: column; align-items: center; }
+.d-child-v { width: 2px; height: 24px; background: var(--border-default); margin: 0 auto; }
+.d-child-sub {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  margin-top: var(--s3);
+  padding-left: var(--s6);
+  border-left: 2px solid var(--border-subtle);
+}
+.d-subnode {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+  padding: var(--s2) var(--s4);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.d-subnode:hover { border-color: var(--border-default); color: var(--text-primary); }
+</style>
+</head>
+<body>
+
+<div class="back-nav">
+  <h1>🗺 AquaWatch — Site Architecture</h1>
+  <p class="subtitle">Complete information architecture, page hierarchy, and navigation flows</p>
+  <div class="nav-links">
+    <a href="index.html">← Design Index</a>
+    <a href="style-guide.html">Style Guide</a>
+    <a href="dashboard.html">Dashboard</a>
+    <a href="location-detail.html">Location Detail</a>
+    <a href="alerts.html">Alerts</a>
+    <a href="historical.html">Historical Data</a>
+    <a href="predictive.html">Predictive Analytics</a>
+    <a href="statistics.html">Statistics</a>
+    <a href="account.html">Account</a>
+    <a href="settings.html">Settings</a>
+  </div>
+</div>
+
+<!-- ── Visual Hierarchy Diagram ── -->
+<div class="diagram-section">
+  <h2 class="diagram-title">Page Hierarchy Diagram</h2>
+  <div class="diagram">
+    <div class="d-root">
+      <!-- Root -->
+      <div class="d-node root">
+        <div class="d-node-icon">💧</div>
+        <div class="d-node-label">AquaWatch</div>
+        <div class="d-node-sub">Water Quality Monitoring Platform</div>
+      </div>
+      <div class="d-connector"></div>
+
+      <!-- Auth branch -->
+      <div class="d-row" style="margin-bottom:0">
+        <div class="d-child-group">
+          <div class="d-node" style="border-color:var(--accent-purple);min-width:120px">
+            <div class="d-node-icon">🔐</div>
+            <div class="d-node-label">Auth</div>
+            <div class="d-node-sub">/login · /register</div>
+          </div>
+        </div>
+      </div>
+      <div class="d-connector"></div>
+
+      <!-- Level 1 pages -->
+      <div class="d-row">
+        <div class="d-child-group">
+          <div class="d-node" style="border-top:3px solid var(--accent)">
+            <div class="d-node-icon">🏠</div>
+            <div class="d-node-label">Dashboard</div>
+            <div class="d-node-sub">/dashboard</div>
+          </div>
+          <div class="d-child-v"></div>
+          <div class="d-child-sub">
+            <div class="d-subnode">Map overview</div>
+            <div class="d-subnode">KPI summary cards</div>
+            <div class="d-subnode">Live alert feed</div>
+            <div class="d-subnode">Recent readings</div>
+          </div>
+        </div>
+
+        <div class="d-child-group">
+          <div class="d-node" style="border-top:3px solid var(--accent-blue)">
+            <div class="d-node-icon">📍</div>
+            <div class="d-node-label">Locations</div>
+            <div class="d-node-sub">/locations</div>
+          </div>
+          <div class="d-child-v"></div>
+          <div class="d-child-sub">
+            <div class="d-subnode">Location list</div>
+            <div class="d-subnode">Detail: /locations/:id</div>
+            <div class="d-subnode">  ↳ Live readings</div>
+            <div class="d-subnode">  ↳ Historical charts</div>
+            <div class="d-subnode">  ↳ Location map</div>
+            <div class="d-subnode">  ↳ Alert history</div>
+          </div>
+        </div>
+
+        <div class="d-child-group">
+          <div class="d-node" style="border-top:3px solid var(--danger)">
+            <div class="d-node-icon">🔔</div>
+            <div class="d-node-label">Alerts</div>
+            <div class="d-node-sub">/alerts</div>
+          </div>
+          <div class="d-child-v"></div>
+          <div class="d-child-sub">
+            <div class="d-subnode">Active alerts</div>
+            <div class="d-subnode">Alert history</div>
+            <div class="d-subnode">Filter by severity</div>
+            <div class="d-subnode">Alert detail panel</div>
+          </div>
+        </div>
+
+        <div class="d-child-group">
+          <div class="d-node" style="border-top:3px solid var(--warning)">
+            <div class="d-node-icon">📤</div>
+            <div class="d-node-label">Historical Data</div>
+            <div class="d-node-sub">/historical</div>
+          </div>
+          <div class="d-child-v"></div>
+          <div class="d-child-sub">
+            <div class="d-subnode">Upload CSV / Excel</div>
+            <div class="d-subnode">Data validation</div>
+            <div class="d-subnode">Upload history</div>
+            <div class="d-subnode">Browse datasets</div>
+          </div>
+        </div>
+
+        <div class="d-child-group">
+          <div class="d-node" style="border-top:3px solid var(--accent-purple)">
+            <div class="d-node-icon">🤖</div>
+            <div class="d-node-label">Predictive Analytics</div>
+            <div class="d-node-sub">/predictive</div>
+          </div>
+          <div class="d-child-v"></div>
+          <div class="d-child-sub">
+            <div class="d-subnode">Forecast charts</div>
+            <div class="d-subnode">Risk heatmap</div>
+            <div class="d-subnode">Feature importance</div>
+            <div class="d-subnode">Model selector</div>
+          </div>
+        </div>
+
+        <div class="d-child-group">
+          <div class="d-node" style="border-top:3px solid var(--safe)">
+            <div class="d-node-icon">📊</div>
+            <div class="d-node-label">Statistics</div>
+            <div class="d-node-sub">/statistics</div>
+          </div>
+          <div class="d-child-v"></div>
+          <div class="d-child-sub">
+            <div class="d-subnode">Aggregate metrics</div>
+            <div class="d-subnode">Date range filter</div>
+            <div class="d-subnode">Distribution charts</div>
+            <div class="d-subnode">Export reports</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-connector"></div>
+
+      <!-- Account tier -->
+      <div class="d-row">
+        <div class="d-child-group">
+          <div class="d-node" style="min-width:120px">
+            <div class="d-node-icon">👤</div>
+            <div class="d-node-label">Account</div>
+            <div class="d-node-sub">/account</div>
+          </div>
+          <div class="d-child-v"></div>
+          <div class="d-child-sub">
+            <div class="d-subnode">Profile info</div>
+            <div class="d-subnode">Sensor assignments</div>
+            <div class="d-subnode">Notification prefs</div>
+            <div class="d-subnode">API keys</div>
+          </div>
+        </div>
+        <div class="d-child-group">
+          <div class="d-node" style="min-width:120px">
+            <div class="d-node-icon">⚙️</div>
+            <div class="d-node-label">Settings</div>
+            <div class="d-node-sub">/settings</div>
+          </div>
+          <div class="d-child-v"></div>
+          <div class="d-child-sub">
+            <div class="d-subnode">Alert thresholds</div>
+            <div class="d-subnode">Sensor management</div>
+            <div class="d-subnode">Data export config</div>
+            <div class="d-subnode">Display preferences</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Page Cards ── -->
+<h2 class="diagram-title">All Pages — Detailed Inventory</h2>
+<div class="sitemap-grid">
+
+  <div class="sm-section">
+    <div class="sm-section-header">
+      <div class="sm-section-num">1</div>
+      <div>
+        <div class="sm-section-title">Core Monitoring</div>
+        <div class="sm-section-desc">Primary pages users access daily</div>
+      </div>
+    </div>
+    <div class="sm-pages">
+      <a href="dashboard.html" class="sm-page-card" style="text-decoration:none">
+        <div class="sm-page-icon">🏠</div>
+        <div class="sm-page-name">Home Dashboard</div>
+        <div class="sm-page-url">/dashboard</div>
+        <div class="sm-page-desc">Overview map, KPIs, live alert feed, recent sensor readings across all locations.</div>
+        <div class="sm-sub-pages">
+          <div class="sm-sub-item">Interactive sensor map</div>
+          <div class="sm-sub-item">4 KPI summary cards</div>
+          <div class="sm-sub-item">Active alerts feed</div>
+          <div class="sm-sub-item">Readings table</div>
+        </div>
+      </a>
+      <a href="location-detail.html" class="sm-page-card" style="text-decoration:none">
+        <div class="sm-page-icon">📍</div>
+        <div class="sm-page-name">Location Detail</div>
+        <div class="sm-page-url">/locations/:id</div>
+        <div class="sm-page-desc">Full parameter breakdown, time-series charts, mini map, and alert history for a single sensor.</div>
+        <div class="sm-sub-pages">
+          <div class="sm-sub-item">5 parameter cards</div>
+          <div class="sm-sub-item">Line charts per parameter</div>
+          <div class="sm-sub-item">Location map pin</div>
+          <div class="sm-sub-item">Alert history table</div>
+        </div>
+      </a>
+      <a href="alerts.html" class="sm-page-card" style="text-decoration:none">
+        <div class="sm-page-icon">🔔</div>
+        <div class="sm-page-name">Alerts</div>
+        <div class="sm-page-url">/alerts</div>
+        <div class="sm-page-desc">Centralized alert management with filters, severity triage, acknowledgment, and detail panel.</div>
+        <div class="sm-sub-pages">
+          <div class="sm-sub-item">Filter tabs (All/Active/Resolved)</div>
+          <div class="sm-sub-item">Severity badge sorting</div>
+          <div class="sm-sub-item">Detail side panel</div>
+          <div class="sm-sub-item">Acknowledge action</div>
+        </div>
+      </a>
+    </div>
+  </div>
+
+  <div class="sm-section">
+    <div class="sm-section-header">
+      <div class="sm-section-num">2</div>
+      <div>
+        <div class="sm-section-title">Data & Analysis</div>
+        <div class="sm-section-desc">Data management, historical uploads, and ML-powered insights</div>
+      </div>
+    </div>
+    <div class="sm-pages">
+      <a href="historical.html" class="sm-page-card" style="text-decoration:none">
+        <div class="sm-page-icon">📤</div>
+        <div class="sm-page-name">Historical Data Upload</div>
+        <div class="sm-page-url">/historical</div>
+        <div class="sm-page-desc">Drag-and-drop CSV/Excel uploader with validation, preview, and dataset browsing.</div>
+        <div class="sm-sub-pages">
+          <div class="sm-sub-item">Drag & drop zone</div>
+          <div class="sm-sub-item">Data validation preview</div>
+          <div class="sm-sub-item">Upload history list</div>
+          <div class="sm-sub-item">Dataset browser</div>
+        </div>
+      </a>
+      <a href="predictive.html" class="sm-page-card" style="text-decoration:none">
+        <div class="sm-page-icon">🤖</div>
+        <div class="sm-page-name">Predictive Analytics</div>
+        <div class="sm-page-url">/predictive</div>
+        <div class="sm-page-desc">ML model forecasts, risk heatmap, confidence intervals, and feature importance visualization.</div>
+        <div class="sm-sub-pages">
+          <div class="sm-sub-item">Forecast horizon selector</div>
+          <div class="sm-sub-item">Parameter forecasts</div>
+          <div class="sm-sub-item">Risk heatmap grid</div>
+          <div class="sm-sub-item">Feature importance bars</div>
+        </div>
+      </a>
+      <a href="statistics.html" class="sm-page-card" style="text-decoration:none">
+        <div class="sm-page-icon">📊</div>
+        <div class="sm-page-name">Summary Statistics</div>
+        <div class="sm-page-url">/statistics</div>
+        <div class="sm-page-desc">Aggregate metrics with date range filtering, distribution histograms, cross-location comparisons, and CSV export.</div>
+        <div class="sm-sub-pages">
+          <div class="sm-sub-item">Date range picker</div>
+          <div class="sm-sub-item">Aggregate stat cards</div>
+          <div class="sm-sub-item">Distribution histograms</div>
+          <div class="sm-sub-item">Export to CSV/PDF</div>
+        </div>
+      </a>
+    </div>
+  </div>
+
+  <div class="sm-section">
+    <div class="sm-section-header">
+      <div class="sm-section-num">3</div>
+      <div>
+        <div class="sm-section-title">Account & Settings</div>
+        <div class="sm-section-desc">User management, preferences, and system configuration</div>
+      </div>
+    </div>
+    <div class="sm-pages">
+      <a href="account.html" class="sm-page-card" style="text-decoration:none">
+        <div class="sm-page-icon">👤</div>
+        <div class="sm-page-name">User Account</div>
+        <div class="sm-page-url">/account</div>
+        <div class="sm-page-desc">Profile management, sensor assignments, notification preferences, and API key access.</div>
+        <div class="sm-sub-pages">
+          <div class="sm-sub-item">Profile editor</div>
+          <div class="sm-sub-item">Assigned sensors</div>
+          <div class="sm-sub-item">Notification config</div>
+          <div class="sm-sub-item">API credentials</div>
+        </div>
+      </a>
+      <a href="settings.html" class="sm-page-card" style="text-decoration:none">
+        <div class="sm-page-icon">⚙️</div>
+        <div class="sm-page-name">Settings</div>
+        <div class="sm-page-url">/settings</div>
+        <div class="sm-page-desc">Alert threshold configuration, sensor management, data export settings, and display preferences.</div>
+        <div class="sm-sub-pages">
+          <div class="sm-sub-item">Alert thresholds per parameter</div>
+          <div class="sm-sub-item">Sensor add/remove</div>
+          <div class="sm-sub-item">Export schedule</div>
+          <div class="sm-sub-item">Theme & units</div>
+        </div>
+      </a>
+    </div>
+  </div>
+
+</div>
+
+<!-- Navigation flow note -->
+<div style="margin-top:var(--s12);padding:var(--s6);background:var(--bg-card);border-radius:var(--r-xl);border:1px solid var(--border-subtle)">
+  <h3 style="font-size:1rem;font-weight:600;margin-bottom:var(--s4)">Key Navigation Flows</h3>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:var(--s4)">
+    <div style="padding:var(--s4);background:var(--bg-surface);border-radius:var(--r-lg)">
+      <div style="font-size:0.8125rem;font-weight:600;color:var(--accent);margin-bottom:var(--s2)">🔍 Monitor Flow</div>
+      <div style="font-size:0.8125rem;color:var(--text-secondary);line-height:1.8">
+        Dashboard → Map click → Location Detail → Alert history → Alerts page
+      </div>
+    </div>
+    <div style="padding:var(--s4);background:var(--bg-surface);border-radius:var(--r-lg)">
+      <div style="font-size:0.8125rem;font-weight:600;color:var(--warning);margin-bottom:var(--s2)">🚨 Triage Flow</div>
+      <div style="font-size:0.8125rem;color:var(--text-secondary);line-height:1.8">
+        Notification → Alerts page → Detail panel → Location Detail → Acknowledge
+      </div>
+    </div>
+    <div style="padding:var(--s4);background:var(--bg-surface);border-radius:var(--r-lg)">
+      <div style="font-size:0.8125rem;font-weight:600;color:var(--accent-purple);margin-bottom:var(--s2)">📈 Analysis Flow</div>
+      <div style="font-size:0.8125rem;color:var(--text-secondary);line-height:1.8">
+        Historical Upload → Validate data → Statistics → Predictive Analytics → Export
+      </div>
+    </div>
+    <div style="padding:var(--s4);background:var(--bg-surface);border-radius:var(--r-lg)">
+      <div style="font-size:0.8125rem;font-weight:600;color:var(--safe);margin-bottom:var(--s2)">⚙️ Config Flow</div>
+      <div style="font-size:0.8125rem;color:var(--text-secondary);line-height:1.8">
+        Settings → Add sensor → Set thresholds → Account → Notifications → Save
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="assets/theme.js"></script>
+</body>
+</html>

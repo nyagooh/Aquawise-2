@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AquaWatch — Historical Data</title>
+<link rel="stylesheet" href="assets/shared.css">
+<style>
+.upload-zone {
+  border: 2px dashed var(--border-default);
+  border-radius: var(--r-2xl);
+  padding: var(--s12) var(--s8);
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--t-base);
+  background: var(--bg-surface);
+}
+.upload-zone:hover, .upload-zone.drag-over {
+  border-color: var(--accent);
+  background: var(--accent-glow);
+  box-shadow: var(--shadow-teal);
+}
+.upload-icon {
+  width: 64px; height: 64px;
+  border-radius: var(--r-2xl);
+  background: var(--accent-glow);
+  border: 1px solid rgba(59,130,246,0.3);
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto var(--s4);
+  transition: transform var(--t-base);
+}
+.upload-zone:hover .upload-icon { transform: translateY(-4px); }
+.upload-zone input { display: none; }
+.progress-wrap { display: flex; flex-direction: column; gap: var(--s2); padding: var(--s4) var(--s5); background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--r-xl); }
+.progress-bar { height: 8px; background: var(--border-subtle); border-radius: var(--r-full); overflow: hidden; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-blue)); border-radius: var(--r-full); transition: width 0.4s ease; animation: progressPulse 1.5s ease-in-out infinite; }
+@keyframes progressPulse { 0%,100%{opacity:1} 50%{opacity:0.7} }
+.preview-table { font-size: 0.8125rem; }
+.preview-table th { background: var(--bg-elevated); }
+.dataset-row { display: flex; align-items: center; gap: var(--s4); padding: var(--s4) var(--s5); border-bottom: 1px solid var(--border-subtle); transition: background var(--t-fast); }
+.dataset-row:hover { background: rgba(255,255,255,0.025); }
+.dataset-row:last-child { border-bottom: none; }
+.file-icon { width: 40px; height: 40px; border-radius: var(--r-lg); display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s6); }
+@media(max-width:860px){ .two-col { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div class="app-shell">
+<aside class="sidebar">
+  <div class="sidebar-logo"><svg width="28" height="28" viewBox="0 0 28 28" fill="none"><path d="M14 2C14 2 4 11 4 18A10 10 0 0024 18C24 11 14 2 14 2Z" fill="#3B82F6"/><path d="M14 9C14 9 9 14 9 18A5 5 0 0019 18C19 14 14 9 14 9Z" fill="rgba(7,23,40,0.5)"/></svg><span class="sidebar-logo-text">Aqua<span>Watch</span></span></div>
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Monitor</div>
+    <a href="dashboard.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard</a>
+    <a href="location-detail.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>Locations</a>
+    <a href="alerts.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>Alerts<span class="badge">3</span></a>
+    <div class="nav-section-label">Analyse</div>
+    <a href="historical.html" class="nav-item active"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Historical Data</a>
+    <a href="predictive.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Predictive Analytics</a>
+    <a href="statistics.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Statistics</a>
+    <div class="nav-section-label">Account</div>
+    <a href="account.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>My Account</a>
+    <a href="settings.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>Settings</a>
+  </nav>
+  <div class="sidebar-footer"><div class="user-chip"><div class="user-avatar">TL</div><div class="user-info"><div class="user-name">Tom Lee</div><div class="user-role">Field Researcher</div></div></div></div>
+</aside>
+
+<main class="main">
+  <div class="mobile-topbar"><span style="font-weight:700;font-size:1rem">Aqua<span style="color:var(--accent)">Watch</span></span></div>
+  <div class="topbar">
+    <div class="topbar-title">Historical Data</div>
+    <div class="topbar-actions">
+      <button class="btn btn-sm btn-secondary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download Template
+      </button>
+    </div>
+  </div>
+
+  <div class="page-content">
+
+    <!-- Upload Section -->
+    <div class="two-col">
+      <div>
+        <div class="upload-zone" id="drop-zone" onclick="document.getElementById('file-input').click()"
+          ondragover="event.preventDefault();this.classList.add('drag-over')"
+          ondragleave="this.classList.remove('drag-over')"
+          ondrop="handleDrop(event)">
+          <input type="file" id="file-input" accept=".csv,.xlsx,.xls" onchange="handleFile(this.files[0])">
+          <div class="upload-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </div>
+          <h3 style="font-size:1rem;font-weight:600;margin-bottom:var(--s2)">Drop your data file here</h3>
+          <p style="font-size:0.875rem;color:var(--text-secondary);margin-bottom:var(--s4)">or click to browse · Supports CSV, XLSX</p>
+          <div style="display:flex;justify-content:center;gap:var(--s3)">
+            <span class="badge badge-neutral">CSV</span>
+            <span class="badge badge-neutral">XLSX</span>
+            <span class="badge badge-neutral">XLS</span>
+          </div>
+          <p style="font-size:0.75rem;color:var(--text-muted);margin-top:var(--s4)">Max file size: 50 MB</p>
+        </div>
+
+        <!-- Upload Progress (shown during upload) -->
+        <div id="upload-progress" style="margin-top:var(--s4);display:none">
+          <div class="progress-wrap">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div style="display:flex;align-items:center;gap:var(--s3)">
+                <div style="font-size:1.25rem">📄</div>
+                <div>
+                  <div style="font-size:0.875rem;font-weight:600" id="upload-filename">water_quality_jan2024.csv</div>
+                  <div style="font-size:0.75rem;color:var(--text-muted)" id="upload-size">2.4 MB · Uploading…</div>
+                </div>
+              </div>
+              <button class="btn btn-sm btn-ghost" style="color:var(--danger)">Cancel</button>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+            <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--text-muted)">
+              <span id="progress-text">0%</span>
+              <span>Validating columns…</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Upload Format Guide -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            Expected Format
+          </div>
+          <button class="btn btn-sm btn-primary">Download Template</button>
+        </div>
+        <div class="card-body">
+          <p style="font-size:0.8125rem;color:var(--text-secondary);margin-bottom:var(--s4)">Your CSV/Excel file must contain these columns:</p>
+          <table class="preview-table">
+            <thead><tr><th>Column</th><th>Type</th><th>Example</th><th>Required</th></tr></thead>
+            <tbody>
+              <tr><td>timestamp</td><td><span class="badge badge-info">datetime</span></td><td class="mono">2024-01-15 08:30</td><td><span class="badge badge-danger">Yes</span></td></tr>
+              <tr><td>location_id</td><td><span class="badge badge-neutral">text</span></td><td class="mono">CRR-004</td><td><span class="badge badge-danger">Yes</span></td></tr>
+              <tr><td>ph</td><td><span class="badge badge-info">float</span></td><td class="mono">7.42</td><td><span class="badge badge-danger">Yes</span></td></tr>
+              <tr><td>turbidity</td><td><span class="badge badge-info">float</span></td><td class="mono">2.1</td><td><span class="badge badge-warning">Optional</span></td></tr>
+              <tr><td>dissolved_o2</td><td><span class="badge badge-info">float</span></td><td class="mono">8.3</td><td><span class="badge badge-warning">Optional</span></td></tr>
+              <tr><td>nitrates</td><td><span class="badge badge-info">float</span></td><td class="mono">12.4</td><td><span class="badge badge-warning">Optional</span></td></tr>
+              <tr><td>temperature</td><td><span class="badge badge-info">float</span></td><td class="mono">22.1</td><td><span class="badge badge-warning">Optional</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Data Preview (shown after upload) -->
+    <div class="card" id="data-preview" style="display:none">
+      <div class="card-header">
+        <div class="card-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          Data Preview — water_quality_jan2024.csv
+        </div>
+        <div class="card-actions">
+          <span class="badge badge-safe">✓ 847 valid rows</span>
+          <span class="badge badge-warning">3 warnings</span>
+          <button class="btn btn-sm btn-secondary">Back</button>
+          <button class="btn btn-sm btn-primary">Confirm Upload</button>
+        </div>
+      </div>
+      <div style="padding:var(--s4) var(--s6);background:var(--bg-surface);border-bottom:1px solid var(--border-subtle)">
+        <div style="display:flex;gap:var(--s6);flex-wrap:wrap">
+          <div style="font-size:0.8125rem"><span style="color:var(--text-muted)">Rows: </span><span style="font-weight:600;color:var(--text-primary)">847</span></div>
+          <div style="font-size:0.8125rem"><span style="color:var(--text-muted)">Columns: </span><span style="font-weight:600;color:var(--text-primary)">7</span></div>
+          <div style="font-size:0.8125rem"><span style="color:var(--text-muted)">Date range: </span><span style="font-weight:600;color:var(--text-primary)">Jan 1 – Jan 31, 2024</span></div>
+          <div style="font-size:0.8125rem"><span style="color:var(--text-muted)">Missing values: </span><span style="font-weight:600;color:var(--warning)">12 (1.4%)</span></div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="preview-table">
+          <thead><tr><th>#</th><th>timestamp</th><th>location_id</th><th>ph</th><th>turbidity</th><th>dissolved_o2</th><th>nitrates</th><th>temperature</th></tr></thead>
+          <tbody>
+            <tr><td style="color:var(--text-muted)">1</td><td class="mono">2024-01-01 06:00</td><td>CRR-004</td><td class="mono">7.2</td><td class="mono">2.1</td><td class="mono">6.8</td><td class="mono" style="color:var(--warning)">46.1</td><td class="mono">21.3</td></tr>
+            <tr><td style="color:var(--text-muted)">2</td><td class="mono">2024-01-01 06:15</td><td>CRR-004</td><td class="mono">7.3</td><td class="mono">2.0</td><td class="mono">7.0</td><td class="mono">44.2</td><td class="mono">21.4</td></tr>
+            <tr><td style="color:var(--text-muted)">3</td><td class="mono">2024-01-01 06:30</td><td>VAL-002</td><td class="mono">7.6</td><td class="mono">0.9</td><td class="mono" style="color:var(--danger)">—</td><td class="mono">6.1</td><td class="mono">18.2</td></tr>
+            <tr><td style="color:var(--text-muted)">4</td><td class="mono">2024-01-01 06:45</td><td>VAL-002</td><td class="mono">7.7</td><td class="mono">0.8</td><td class="mono">9.3</td><td class="mono">5.9</td><td class="mono">18.1</td></tr>
+            <tr><td style="color:var(--text-muted)">5</td><td class="mono">2024-01-01 07:00</td><td>ORG-006</td><td class="mono">8.0</td><td class="mono">1.1</td><td class="mono">8.5</td><td class="mono">9.0</td><td class="mono">19.7</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Uploaded Datasets -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Uploaded Datasets
+        </div>
+        <div class="card-actions">
+          <div class="search-box"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" placeholder="Search datasets…"></div>
+        </div>
+      </div>
+      <div>
+        <div class="dataset-row">
+          <div class="file-icon" style="background:rgba(59,130,246,0.1)">📊</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600;font-size:0.875rem;color:var(--text-primary)">water_quality_jan2024.csv</div>
+            <div style="font-size:0.75rem;color:var(--text-muted)">847 rows · 7 columns · Jan 1–31, 2024</div>
+          </div>
+          <span class="badge badge-safe">Processed</span>
+          <span style="font-size:0.75rem;color:var(--text-muted)">2.4 MB</span>
+          <span style="font-size:0.75rem;color:var(--text-muted)">Today</span>
+          <div style="display:flex;gap:var(--s2)">
+            <button class="btn btn-sm btn-ghost">View</button>
+            <button class="btn btn-sm btn-secondary">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="dataset-row">
+          <div class="file-icon" style="background:rgba(79,195,247,0.1)">📈</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600;font-size:0.875rem;color:var(--text-primary)">sensor_readings_q4_2023.xlsx</div>
+            <div style="font-size:0.75rem;color:var(--text-muted)">3,241 rows · 8 columns · Oct–Dec 2023</div>
+          </div>
+          <span class="badge badge-safe">Processed</span>
+          <span style="font-size:0.75rem;color:var(--text-muted)">8.7 MB</span>
+          <span style="font-size:0.75rem;color:var(--text-muted)">3 days ago</span>
+          <div style="display:flex;gap:var(--s2)"><button class="btn btn-sm btn-ghost">View</button><button class="btn btn-sm btn-secondary"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button></div>
+        </div>
+        <div class="dataset-row">
+          <div class="file-icon" style="background:rgba(245,158,11,0.1)">⚠️</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600;font-size:0.875rem;color:var(--text-primary)">field_samples_crocodile.csv</div>
+            <div style="font-size:0.75rem;color:var(--text-muted)">128 rows · 5 columns · Mar 2023</div>
+          </div>
+          <span class="badge badge-warning">12 Warnings</span>
+          <span style="font-size:0.75rem;color:var(--text-muted)">0.3 MB</span>
+          <span style="font-size:0.75rem;color:var(--text-muted)">1 week ago</span>
+          <div style="display:flex;gap:var(--s2)"><button class="btn btn-sm btn-ghost">Review</button><button class="btn btn-sm btn-secondary"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <nav class="bottom-nav">
+    <a href="dashboard.html" class="bottom-nav-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Home</a>
+    <a href="location-detail.html" class="bottom-nav-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>Locations</a>
+    <a href="alerts.html" class="bottom-nav-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>Alerts</a>
+    <a href="statistics.html" class="bottom-nav-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Stats</a>
+    <a href="account.html" class="bottom-nav-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Account</a>
+  </nav>
+</main>
+</div>
+<script>
+function handleFile(file) {
+  if (!file) return;
+  const prog = document.getElementById('upload-progress');
+  prog.style.display = 'block';
+  document.getElementById('upload-filename').textContent = file.name;
+  document.getElementById('upload-size').textContent = (file.size/1024/1024).toFixed(1) + ' MB · Uploading…';
+  let pct = 0;
+  const iv = setInterval(() => {
+    pct += Math.random() * 15;
+    if (pct >= 100) { pct = 100; clearInterval(iv);
+      document.getElementById('upload-size').textContent = 'Upload complete — validating…';
+      setTimeout(() => { prog.style.display = 'none'; document.getElementById('data-preview').style.display = 'block'; }, 800);
+    }
+    document.getElementById('progress-fill').style.width = pct + '%';
+    document.getElementById('progress-text').textContent = Math.floor(pct) + '%';
+  }, 200);
+}
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('drag-over');
+  handleFile(e.dataTransfer.files[0]);
+}
+</script>
+<script src="assets/theme.js"></script>
+</body>
+</html>

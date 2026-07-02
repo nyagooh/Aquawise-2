@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AquaWatch — Dashboard</title>
+<link rel="stylesheet" href="assets/shared.css">
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+#main-map { height: 380px; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s6); }
+@media(max-width:860px){ .two-col { grid-template-columns:1fr; } }
+.location-row {
+  display: flex; align-items: center; gap: var(--s4);
+  padding: var(--s4) var(--s6);
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer; transition: background var(--t-fast);
+}
+.location-row:hover { background: rgba(255,255,255,0.03); }
+.location-row:last-child { border-bottom: none; }
+.loc-name { font-size: 0.875rem; font-weight: 600; color: var(--text-primary); }
+.loc-region { font-size: 0.75rem; color: var(--text-muted); }
+.loc-readings { display: flex; gap: var(--s4); margin-left: auto; }
+.loc-reading { text-align: right; }
+.loc-reading-val { font-family: var(--font-mono); font-size: 0.875rem; font-weight: 500; }
+.loc-reading-lbl { font-size: 0.625rem; color: var(--text-muted); text-transform: uppercase; }
+.sensor-pulse {
+  width: 10px; height: 10px; border-radius: 50%;
+  position: relative;
+}
+.sensor-pulse::after {
+  content: ''; position: absolute;
+  inset: -4px; border-radius: 50%;
+  animation: pulse 2s ease-out infinite;
+}
+.sensor-pulse.safe { background: var(--safe); }
+.sensor-pulse.safe::after { border: 2px solid var(--safe); }
+.sensor-pulse.warn { background: var(--warning); }
+.sensor-pulse.warn::after { border: 2px solid var(--warning); }
+.sensor-pulse.danger { background: var(--danger); }
+.sensor-pulse.danger::after { border: 2px solid var(--danger); }
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+.map-legend {
+  position: absolute; bottom: 12px; left: 12px; z-index: 1000;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-lg);
+  padding: var(--s3) var(--s4);
+  backdrop-filter: blur(8px);
+  display: flex; flex-direction: column; gap: var(--s2);
+}
+.map-legend-item { display: flex; align-items: center; gap: var(--s2); font-size: 0.6875rem; color: var(--text-secondary); }
+.sparkline-wrap { height: 40px; }
+.last-updated { font-size: 0.6875rem; color: var(--text-muted); display: flex; align-items: center; gap: var(--s1); }
+.live-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent);
+  animation: blink 1.5s ease-in-out infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+<!-- ── Sidebar ── -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+      <path d="M14 2C14 2 4 11 4 18A10 10 0 0024 18C24 11 14 2 14 2Z" fill="#3B82F6"/>
+      <path d="M14 9C14 9 9 14 9 18A5 5 0 0019 18C19 14 14 9 14 9Z" fill="rgba(7,23,40,0.5)"/>
+    </svg>
+    <span class="sidebar-logo-text">Aqua<span>Watch</span></span>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Monitor</div>
+    <a href="dashboard.html" class="nav-item active">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Dashboard
+    </a>
+    <a href="location-detail.html" class="nav-item">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+      Locations
+    </a>
+    <a href="alerts.html" class="nav-item">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+      Alerts
+      <span class="badge">3</span>
+    </a>
+    <div class="nav-section-label">Analyse</div>
+    <a href="historical.html" class="nav-item">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Historical Data
+    </a>
+    <a href="predictive.html" class="nav-item">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+      Predictive Analytics
+    </a>
+    <a href="statistics.html" class="nav-item">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      Statistics
+    </a>
+    <div class="nav-section-label">Account</div>
+    <a href="account.html" class="nav-item">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      My Account
+    </a>
+    <a href="settings.html" class="nav-item">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      Settings
+    </a>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="user-chip">
+      <div class="user-avatar">TL</div>
+      <div class="user-info">
+        <div class="user-name">Tom Lee</div>
+        <div class="user-role">Field Researcher</div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- ── Main ── -->
+<main class="main">
+  <!-- Mobile top bar -->
+  <div class="mobile-topbar">
+    <svg width="24" height="24" viewBox="0 0 28 28" fill="none"><path d="M14 2C14 2 4 11 4 18A10 10 0 0024 18C24 11 14 2 14 2Z" fill="#3B82F6"/></svg>
+    <span style="font-weight:700;font-size:1rem">Aqua<span style="color:var(--accent)">Watch</span></span>
+    <div style="margin-left:auto;display:flex;gap:var(--s3)">
+      <button class="icon-btn"><div class="dot"></div><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg></button>
+    </div>
+  </div>
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="topbar-title">
+      <span style="color:var(--text-muted);font-weight:400">Good morning,</span> Tom 👋
+    </div>
+    <div class="last-updated"><div class="live-dot"></div> Live · Updated just now</div>
+    <div class="topbar-actions">
+      <button class="icon-btn" data-tooltip="Notifications">
+        <div class="dot"></div>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+      </button>
+      <button class="icon-btn" data-tooltip="Refresh">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+      </button>
+      <div class="user-avatar" style="cursor:pointer">TL</div>
+    </div>
+  </div>
+
+  <div class="page-content">
+
+    <!-- KPIs -->
+    <div class="kpi-grid">
+      <div class="kpi-card kpi-accent">
+        <div class="kpi-header">
+          <div>
+            <div class="kpi-label">Total Locations</div>
+            <div class="kpi-value accent">8</div>
+            <div class="kpi-sub">4 provinces</div>
+          </div>
+          <div class="kpi-icon" style="background:var(--accent-glow)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          </div>
+        </div>
+      </div>
+      <div class="kpi-card kpi-safe">
+        <div class="kpi-header">
+          <div>
+            <div class="kpi-label">Safe</div>
+            <div class="kpi-value safe">5</div>
+            <div class="kpi-sub">within all thresholds</div>
+          </div>
+          <div class="kpi-icon" style="background:var(--safe-bg)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--safe)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+        </div>
+      </div>
+      <div class="kpi-card kpi-warn">
+        <div class="kpi-header">
+          <div>
+            <div class="kpi-label">Warnings</div>
+            <div class="kpi-value warn">2</div>
+            <div class="kpi-sub">elevated readings</div>
+          </div>
+          <div class="kpi-icon" style="background:var(--warning-bg)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </div>
+        </div>
+      </div>
+      <div class="kpi-card kpi-danger">
+        <div class="kpi-header">
+          <div>
+            <div class="kpi-label">Critical</div>
+            <div class="kpi-value danger">1</div>
+            <div class="kpi-sub">immediate attention</div>
+          </div>
+          <div class="kpi-icon" style="background:var(--danger-bg)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Map -->
+    <div class="card" style="overflow:hidden">
+      <div class="card-header">
+        <div class="card-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
+          Live Sensor Map
+        </div>
+        <div class="card-actions">
+          <button class="btn btn-sm btn-secondary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+            Filter
+          </button>
+          <button class="btn btn-sm btn-ghost">Satellite</button>
+          <button class="btn btn-sm btn-ghost">Terrain</button>
+        </div>
+      </div>
+      <div style="position:relative">
+        <div id="main-map" class="map-container" style="border-radius:0;border:none"></div>
+        <div class="map-legend">
+          <div class="map-legend-item"><span class="status-dot dot-safe"></span>Safe</div>
+          <div class="map-legend-item"><span class="status-dot dot-warning"></span>Warning</div>
+          <div class="map-legend-item"><span class="status-dot dot-danger"></span>Critical</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom two columns -->
+    <div class="two-col">
+      <!-- Recent Alerts -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+            Active Alerts
+          </div>
+          <a href="alerts.html" class="btn btn-sm btn-ghost">View all →</a>
+        </div>
+        <div class="alert-item">
+          <div class="alert-icon-wrap alert-icon-danger">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </div>
+          <div class="alert-meta">
+            <div class="alert-title">Nitrates exceed limit</div>
+            <div class="alert-desc">Crocodile River — 78.3 mg/L</div>
+            <div class="alert-time">2 min ago</div>
+          </div>
+          <span class="badge badge-danger">Critical</span>
+        </div>
+        <div class="alert-item">
+          <div class="alert-icon-wrap alert-icon-warning">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          </div>
+          <div class="alert-meta">
+            <div class="alert-title">Low dissolved oxygen</div>
+            <div class="alert-desc">Olifants River — 4.2 mg/L</div>
+            <div class="alert-time">18 min ago</div>
+          </div>
+          <span class="badge badge-warning">Warning</span>
+        </div>
+        <div class="alert-item">
+          <div class="alert-icon-wrap alert-icon-warning">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          </div>
+          <div class="alert-meta">
+            <div class="alert-title">High turbidity</div>
+            <div class="alert-desc">Limpopo River — 4.8 NTU</div>
+            <div class="alert-time">1 hr ago</div>
+          </div>
+          <span class="badge badge-warning">Warning</span>
+        </div>
+      </div>
+
+      <!-- 24hr Trend mini chart -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/></svg>
+            Network Trend (24h)
+          </div>
+          <div class="card-actions">
+            <select class="form-control" style="width:auto;padding:4px 8px;font-size:0.75rem">
+              <option>pH avg</option>
+              <option>Turbidity avg</option>
+              <option>DO avg</option>
+            </select>
+          </div>
+        </div>
+        <div class="card-body">
+          <canvas id="trend-chart" height="160"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sensor Readings Table -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
+          Latest Sensor Readings
+        </div>
+        <div class="card-actions">
+          <div class="search-box" style="width:200px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" placeholder="Search location…">
+          </div>
+          <button class="btn btn-sm btn-secondary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export
+          </button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Location</th>
+              <th>Status</th>
+              <th>pH</th>
+              <th>Turbidity (NTU)</th>
+              <th>DO (mg/L)</th>
+              <th>Nitrates (mg/L)</th>
+              <th>Temp (°C)</th>
+              <th>Last Update</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="readings-table">
+            <tr>
+              <td><div style="display:flex;align-items:center;gap:var(--s3)"><div class="sensor-pulse danger"></div><div><div class="loc-name">Crocodile River</div><div class="loc-region">Limpopo Province</div></div></div></td>
+              <td><span class="badge badge-danger">Critical</span></td>
+              <td class="mono" style="color:var(--safe)">7.1</td>
+              <td class="mono" style="color:var(--safe)">2.1</td>
+              <td class="mono" style="color:var(--safe)">6.8</td>
+              <td class="mono" style="color:var(--danger)">78.3</td>
+              <td class="mono">22.4</td>
+              <td style="color:var(--text-muted);font-size:0.8125rem">2 min ago</td>
+              <td><a href="location-detail.html" class="btn btn-sm btn-secondary">View</a></td>
+            </tr>
+            <tr>
+              <td><div style="display:flex;align-items:center;gap:var(--s3)"><div class="sensor-pulse warn"></div><div><div class="loc-name">Limpopo River</div><div class="loc-region">Limpopo Province</div></div></div></td>
+              <td><span class="badge badge-warning">Warning</span></td>
+              <td class="mono" style="color:var(--safe)">7.4</td>
+              <td class="mono" style="color:var(--warning)">4.8</td>
+              <td class="mono" style="color:var(--safe)">7.2</td>
+              <td class="mono" style="color:var(--safe)">12.1</td>
+              <td class="mono">24.1</td>
+              <td style="color:var(--text-muted);font-size:0.8125rem">5 min ago</td>
+              <td><a href="location-detail.html" class="btn btn-sm btn-secondary">View</a></td>
+            </tr>
+            <tr>
+              <td><div style="display:flex;align-items:center;gap:var(--s3)"><div class="sensor-pulse warn"></div><div><div class="loc-name">Olifants River</div><div class="loc-region">Mpumalanga</div></div></div></td>
+              <td><span class="badge badge-warning">Warning</span></td>
+              <td class="mono" style="color:var(--safe)">7.8</td>
+              <td class="mono" style="color:var(--safe)">1.9</td>
+              <td class="mono" style="color:var(--warning)">4.2</td>
+              <td class="mono" style="color:var(--safe)">8.4</td>
+              <td class="mono">26.7</td>
+              <td style="color:var(--text-muted);font-size:0.8125rem">18 min ago</td>
+              <td><a href="location-detail.html" class="btn btn-sm btn-secondary">View</a></td>
+            </tr>
+            <tr>
+              <td><div style="display:flex;align-items:center;gap:var(--s3)"><div class="sensor-pulse safe"></div><div><div class="loc-name">Vaal Dam</div><div class="loc-region">Gauteng / Free State</div></div></div></td>
+              <td><span class="badge badge-safe">Safe</span></td>
+              <td class="mono" style="color:var(--safe)">7.6</td>
+              <td class="mono" style="color:var(--safe)">0.8</td>
+              <td class="mono" style="color:var(--safe)">9.1</td>
+              <td class="mono" style="color:var(--safe)">6.3</td>
+              <td class="mono">18.2</td>
+              <td style="color:var(--text-muted);font-size:0.8125rem">12 min ago</td>
+              <td><a href="location-detail.html" class="btn btn-sm btn-secondary">View</a></td>
+            </tr>
+            <tr>
+              <td><div style="display:flex;align-items:center;gap:var(--s3)"><div class="sensor-pulse safe"></div><div><div class="loc-name">Orange River</div><div class="loc-region">Northern Cape</div></div></div></td>
+              <td><span class="badge badge-safe">Safe</span></td>
+              <td class="mono" style="color:var(--safe)">8.1</td>
+              <td class="mono" style="color:var(--safe)">1.2</td>
+              <td class="mono" style="color:var(--safe)">8.7</td>
+              <td class="mono" style="color:var(--safe)">9.0</td>
+              <td class="mono">19.8</td>
+              <td style="color:var(--text-muted);font-size:0.8125rem">8 min ago</td>
+              <td><a href="location-detail.html" class="btn btn-sm btn-secondary">View</a></td>
+            </tr>
+            <tr>
+              <td><div style="display:flex;align-items:center;gap:var(--s3)"><div class="sensor-pulse safe"></div><div><div class="loc-name">Umgeni River</div><div class="loc-region">KwaZulu-Natal</div></div></div></td>
+              <td><span class="badge badge-safe">Safe</span></td>
+              <td class="mono" style="color:var(--safe)">7.3</td>
+              <td class="mono" style="color:var(--safe)">1.7</td>
+              <td class="mono" style="color:var(--safe)">8.3</td>
+              <td class="mono" style="color:var(--safe)">11.2</td>
+              <td class="mono">21.5</td>
+              <td style="color:var(--text-muted);font-size:0.8125rem">3 min ago</td>
+              <td><a href="location-detail.html" class="btn btn-sm btn-secondary">View</a></td>
+            </tr>
+            <tr>
+              <td><div style="display:flex;align-items:center;gap:var(--s3)"><div class="sensor-pulse safe"></div><div><div class="loc-name">Berg River</div><div class="loc-region">Western Cape</div></div></div></td>
+              <td><span class="badge badge-safe">Safe</span></td>
+              <td class="mono" style="color:var(--safe)">7.9</td>
+              <td class="mono" style="color:var(--safe)">0.6</td>
+              <td class="mono" style="color:var(--safe)">10.4</td>
+              <td class="mono" style="color:var(--safe)">4.8</td>
+              <td class="mono">15.3</td>
+              <td style="color:var(--text-muted);font-size:0.8125rem">7 min ago</td>
+              <td><a href="location-detail.html" class="btn btn-sm btn-secondary">View</a></td>
+            </tr>
+            <tr>
+              <td><div style="display:flex;align-items:center;gap:var(--s3)"><div class="sensor-pulse safe"></div><div><div class="loc-name">Breede River</div><div class="loc-region">Western Cape</div></div></div></td>
+              <td><span class="badge badge-safe">Safe</span></td>
+              <td class="mono" style="color:var(--safe)">7.5</td>
+              <td class="mono" style="color:var(--safe)">1.1</td>
+              <td class="mono" style="color:var(--safe)">9.8</td>
+              <td class="mono" style="color:var(--safe)">7.1</td>
+              <td class="mono">16.9</td>
+              <td style="color:var(--text-muted);font-size:0.8125rem">15 min ago</td>
+              <td><a href="location-detail.html" class="btn btn-sm btn-secondary">View</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /page-content -->
+
+  <!-- Mobile bottom nav -->
+  <nav class="bottom-nav">
+    <a href="dashboard.html" class="bottom-nav-item active">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Home
+    </a>
+    <a href="location-detail.html" class="bottom-nav-item">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+      Locations
+    </a>
+    <a href="alerts.html" class="bottom-nav-item">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+      Alerts
+    </a>
+    <a href="statistics.html" class="bottom-nav-item">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      Stats
+    </a>
+    <a href="account.html" class="bottom-nav-item">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      Account
+    </a>
+  </nav>
+</main>
+</div><!-- /app-shell -->
+
+<script>
+// ── Leaflet Map ──────────────────────────────────────────────
+const sensors = [
+  { name: 'Crocodile River', lat: -24.18, lng: 31.5,  status: 'danger',  ph: 7.1, turb: 2.1, do_: 6.8, nit: 78.3 },
+  { name: 'Limpopo River',   lat: -22.2,  lng: 29.8,  status: 'warning', ph: 7.4, turb: 4.8, do_: 7.2, nit: 12.1 },
+  { name: 'Olifants River',  lat: -24.5,  lng: 30.9,  status: 'warning', ph: 7.8, turb: 1.9, do_: 4.2, nit: 8.4 },
+  { name: 'Vaal Dam',        lat: -26.9,  lng: 28.1,  status: 'safe',    ph: 7.6, turb: 0.8, do_: 9.1, nit: 6.3 },
+  { name: 'Orange River',    lat: -28.7,  lng: 17.7,  status: 'safe',    ph: 8.1, turb: 1.2, do_: 8.7, nit: 9.0 },
+  { name: 'Umgeni River',    lat: -29.7,  lng: 30.9,  status: 'safe',    ph: 7.3, turb: 1.7, do_: 8.3, nit: 11.2 },
+  { name: 'Berg River',      lat: -33.4,  lng: 18.9,  status: 'safe',    ph: 7.9, turb: 0.6, do_: 10.4, nit: 4.8 },
+  { name: 'Breede River',    lat: -33.9,  lng: 20.4,  status: 'safe',    ph: 7.5, turb: 1.1, do_: 9.8, nit: 7.1 },
+];
+const colorMap = { safe: '#22C55E', warning: '#F59E0B', danger: '#EF4444' };
+
+const map = L.map('main-map', { zoomControl: true, scrollWheelZoom: false }).setView([-29, 25], 5);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '© OpenStreetMap, © CARTO', maxZoom: 19
+}).addTo(map);
+
+sensors.forEach(s => {
+  const col = colorMap[s.status];
+  const icon = L.divIcon({
+    className: '',
+    html: `<div style="width:16px;height:16px;border-radius:50%;background:${col};border:2px solid white;box-shadow:0 0 10px ${col};"></div>`,
+    iconSize: [16, 16], iconAnchor: [8, 8]
+  });
+  L.marker([s.lat, s.lng], { icon }).addTo(map)
+    .bindPopup(`
+      <div style="min-width:180px">
+        <div style="font-weight:700;font-size:0.9rem;margin-bottom:8px;color:#F1F5F9">${s.name}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:0.8rem">
+          <div><span style="color:#64748B">pH</span> <span style="font-family:monospace;color:#F1F5F9">${s.ph}</span></div>
+          <div><span style="color:#64748B">Turbidity</span> <span style="font-family:monospace;color:#F1F5F9">${s.turb}</span></div>
+          <div><span style="color:#64748B">DO</span> <span style="font-family:monospace;color:#F1F5F9">${s.do_}</span></div>
+          <div><span style="color:#64748B">Nitrates</span> <span style="font-family:monospace;color:${s.nit > 45 ? '#EF4444' : '#F1F5F9'}">${s.nit}</span></div>
+        </div>
+        <a href="location-detail.html" style="display:block;margin-top:10px;padding:6px 12px;background:#3B82F6;color:#070B17;border-radius:6px;text-align:center;font-weight:600;font-size:0.8rem;text-decoration:none">View Detail →</a>
+      </div>
+    `);
+});
+
+// ── Trend Chart ──────────────────────────────────────────────
+const hours = Array.from({length:24},(_,i) => `${i}:00`);
+const phData = [7.4,7.3,7.2,7.4,7.5,7.6,7.8,7.9,7.7,7.6,7.5,7.4,7.3,7.2,7.4,7.5,7.6,7.7,7.6,7.5,7.4,7.3,7.4,7.4];
+
+new Chart(document.getElementById('trend-chart'), {
+  type: 'line',
+  data: {
+    labels: hours,
+    datasets: [{
+      data: phData,
+      borderColor: '#3B82F6',
+      backgroundColor: 'rgba(59,130,246,0.08)',
+      borderWidth: 2,
+      pointRadius: 0,
+      pointHoverRadius: 4,
+      fill: true,
+      tension: 0.4,
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#15243F',
+        borderColor: '#1F2D4D',
+        borderWidth: 1,
+        titleColor: '#94A3B8',
+        bodyColor: '#F1F5F9',
+      }
+    },
+    scales: {
+      x: {
+        grid: { color: 'rgba(31,45,77,0.3)' },
+        ticks: { color: '#64748B', maxTicksLimit: 8, font: { size: 10 } },
+      },
+      y: {
+        grid: { color: 'rgba(31,45,77,0.3)' },
+        ticks: { color: '#64748B', font: { size: 10 } },
+        min: 6.8, max: 8.2,
+      }
+    }
+  }
+});
+</script>
+<script src="assets/theme.js"></script>
+</body>
+</html>

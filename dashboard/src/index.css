@@ -1,0 +1,60 @@
+@import '@fontsource/geist-sans/400.css';
+@import '@fontsource/geist-sans/500.css';
+@import '@fontsource/geist-sans/600.css';
+@import '@fontsource/geist-sans/700.css';
+@import '@fontsource/geist-sans/800.css';
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body, #root { height: 100%; margin: 0; }
+  body {
+    font-family: 'Geist Sans', 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: #E8EEF8;
+    color: #0F172A;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .dark body {
+    background: #1A2332;
+    color: #E2E8F0;
+  }
+}
+
+.card {
+  background: #FFFFFF;
+  border-radius: 20px;
+  border: 1px solid rgba(37,99,235,0.08);
+  box-shadow: 0 1px 3px rgba(37,99,235,0.04), 0 6px 20px rgba(37,99,235,0.04);
+  transition: box-shadow 0.3s ease, transform 0.3s ease, border-color 0.3s ease;
+}
+.card:hover {
+  border-color: rgba(37,99,235,0.14);
+  box-shadow: 0 8px 28px rgba(37,99,235,0.1), 0 20px 48px rgba(37,99,235,0.06);
+  transform: translateY(-2px);
+}
+.dark .card {
+  background: #212B3D;
+  border: 1px solid rgba(59,130,246,0.1);
+  box-shadow: 0 1px 3px rgba(15,23,42,0.2), 0 6px 20px rgba(15,23,42,0.15);
+}
+.dark .card:hover {
+  border-color: rgba(59,130,246,0.2);
+  box-shadow: 0 8px 28px rgba(15,23,42,0.3), 0 20px 48px rgba(15,23,42,0.2);
+  transform: translateY(-2px);
+}
+
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #B0C4DE; border-radius: 99px; }
+.dark ::-webkit-scrollbar-thumb { background: #293650; }
+
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.2} }
+.live-dot { animation: pulse 2s ease-in-out infinite; }
+section { scroll-margin-top: 24px; }

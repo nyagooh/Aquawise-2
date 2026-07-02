@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AquaWatch — Statistics</title>
+<link rel="stylesheet" href="assets/shared.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s6); }
+@media(max-width:860px){ .stats-grid { grid-template-columns: 1fr; } }
+.date-bar { display: flex; align-items: center; gap: var(--s4); flex-wrap: wrap; }
+.stat-table td:not(:first-child) { font-family: var(--font-mono); }
+.range-btn { padding: var(--s2) var(--s3); border-radius: var(--r-md); border: 1px solid var(--border-default); color: var(--text-secondary); font-size: 0.8125rem; cursor:pointer; transition: all var(--t-fast); background:none; }
+.range-btn:hover, .range-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
+</style>
+</head>
+<body>
+<div class="app-shell">
+<aside class="sidebar">
+  <div class="sidebar-logo"><svg width="28" height="28" viewBox="0 0 28 28" fill="none"><path d="M14 2C14 2 4 11 4 18A10 10 0 0024 18C24 11 14 2 14 2Z" fill="#3B82F6"/><path d="M14 9C14 9 9 14 9 18A5 5 0 0019 18C19 14 14 9 14 9Z" fill="rgba(7,23,40,0.5)"/></svg><span class="sidebar-logo-text">Aqua<span>Watch</span></span></div>
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Monitor</div>
+    <a href="dashboard.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard</a>
+    <a href="location-detail.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>Locations</a>
+    <a href="alerts.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>Alerts<span class="badge">3</span></a>
+    <div class="nav-section-label">Analyse</div>
+    <a href="historical.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Historical Data</a>
+    <a href="predictive.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Predictive Analytics</a>
+    <a href="statistics.html" class="nav-item active"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Statistics</a>
+    <div class="nav-section-label">Account</div>
+    <a href="account.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>My Account</a>
+    <a href="settings.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>Settings</a>
+  </nav>
+  <div class="sidebar-footer"><div class="user-chip"><div class="user-avatar">TL</div><div class="user-info"><div class="user-name">Tom Lee</div><div class="user-role">Field Researcher</div></div></div></div>
+</aside>
+<main class="main">
+  <div class="mobile-topbar"><span style="font-weight:700;font-size:1rem">Aqua<span style="color:var(--accent)">Watch</span></span></div>
+  <div class="topbar">
+    <div class="topbar-title">Summary Statistics</div>
+    <div class="topbar-actions">
+      <button class="btn btn-sm btn-secondary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export CSV
+      </button>
+      <button class="btn btn-sm btn-primary">Export PDF Report</button>
+    </div>
+  </div>
+  <div class="page-content">
+
+    <!-- Date filter -->
+    <div class="card">
+      <div class="card-body" style="display:flex;align-items:center;gap:var(--s4);flex-wrap:wrap">
+        <div style="font-size:0.8125rem;font-weight:600;color:var(--text-muted)">Period:</div>
+        <div style="display:flex;gap:var(--s2)">
+          <button class="range-btn">7d</button>
+          <button class="range-btn">30d</button>
+          <button class="range-btn active">90d</button>
+          <button class="range-btn">1yr</button>
+          <button class="range-btn">All</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:var(--s2);margin-left:auto">
+          <input type="date" class="form-control" style="width:auto;padding:6px 12px;font-size:0.8125rem" value="2024-01-20">
+          <span style="color:var(--text-muted)">→</span>
+          <input type="date" class="form-control" style="width:auto;padding:6px 12px;font-size:0.8125rem" value="2024-04-20">
+        </div>
+        <select class="form-control" style="width:auto;padding:6px 12px;font-size:0.8125rem">
+          <option>All Locations</option><option>Limpopo Province</option><option>Western Cape</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpi-grid">
+      <div class="kpi-card kpi-accent"><div class="kpi-header"><div><div class="kpi-label">Total Readings</div><div class="kpi-value accent">12,847</div><div class="kpi-sub">last 90 days</div></div></div></div>
+      <div class="kpi-card kpi-safe"><div class="kpi-header"><div><div class="kpi-label">Safety Rate</div><div class="kpi-value safe">87.4%</div><div class="kpi-sub">readings within limits</div></div></div></div>
+      <div class="kpi-card kpi-warn"><div class="kpi-header"><div><div class="kpi-label">Alerts Generated</div><div class="kpi-value warn">47</div><div class="kpi-sub">this period</div></div></div></div>
+      <div class="kpi-card kpi-danger"><div class="kpi-header"><div><div class="kpi-label">Critical Events</div><div class="kpi-value danger">8</div><div class="kpi-sub">exceeded thresholds</div></div></div></div>
+    </div>
+
+    <!-- Charts -->
+    <div class="stats-grid">
+      <div class="card">
+        <div class="card-header"><div class="card-title">pH Distribution</div><span style="font-size:0.75rem;color:var(--text-muted)">All locations · 90 days</span></div>
+        <div class="card-body"><canvas id="hist-ph" height="200"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Nitrates by Location</div><span style="font-size:0.75rem;color:var(--text-muted)">Mean values</span></div>
+        <div class="card-body"><canvas id="bar-nitrates" height="200"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Safety Compliance Over Time</div></div>
+        <div class="card-body"><canvas id="safety-line" height="160"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Parameter Correlation</div><span style="font-size:0.75rem;color:var(--text-muted)">Scatter: Turbidity vs Nitrates</span></div>
+        <div class="card-body"><canvas id="scatter" height="160"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Summary table -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Parameter Summary Table</div>
+        <div class="card-actions">
+          <button class="btn btn-sm btn-secondary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export
+          </button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="stat-table">
+          <thead><tr><th>Parameter</th><th>Unit</th><th>Min</th><th>Max</th><th>Mean</th><th>Std Dev</th><th>Threshold</th><th>Exceedances</th><th>Compliance</th></tr></thead>
+          <tbody>
+            <tr><td>pH</td><td style="color:var(--text-muted)">—</td><td>6.2</td><td>9.1</td><td>7.5</td><td>0.42</td><td>6.5–8.5</td><td style="color:var(--warning)">89</td><td><span class="badge badge-safe">93.1%</span></td></tr>
+            <tr><td>Turbidity</td><td style="color:var(--text-muted)">NTU</td><td>0.2</td><td>8.7</td><td>1.9</td><td>1.21</td><td>&lt; 5</td><td style="color:var(--warning)">142</td><td><span class="badge badge-safe">88.9%</span></td></tr>
+            <tr><td>Dissolved Oxygen</td><td style="color:var(--text-muted)">mg/L</td><td>3.1</td><td>12.4</td><td>7.8</td><td>1.54</td><td>≥ 5.0</td><td style="color:var(--warning)">201</td><td><span class="badge badge-warning">84.4%</span></td></tr>
+            <tr><td>Nitrates</td><td style="color:var(--text-muted)">mg/L</td><td>2.1</td><td>81.4</td><td>18.3</td><td>14.7</td><td>&lt; 45</td><td style="color:var(--danger)">387</td><td><span class="badge badge-danger">69.9%</span></td></tr>
+            <tr><td>Temperature</td><td style="color:var(--text-muted)">°C</td><td>11.2</td><td>31.8</td><td>21.4</td><td>4.3</td><td>15–30</td><td style="color:var(--warning)">95</td><td><span class="badge badge-safe">92.6%</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <nav class="bottom-nav">
+    <a href="dashboard.html" class="bottom-nav-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Home</a>
+    <a href="location-detail.html" class="bottom-nav-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>Locations</a>
+    <a href="alerts.html" class="bottom-nav-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>Alerts</a>
+    <a href="statistics.html" class="bottom-nav-item active"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Stats</a>
+    <a href="account.html" class="bottom-nav-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Account</a>
+  </nav>
+</main>
+</div>
+<script>
+const chartOpts = (yLabel) => ({
+  responsive:true,
+  plugins:{ legend:{display:false}, tooltip:{backgroundColor:'#15243F',borderColor:'#1F2D4D',borderWidth:1,titleColor:'#94A3B8',bodyColor:'#F1F5F9'} },
+  scales:{ x:{grid:{color:'rgba(31,45,77,0.3)'},ticks:{color:'#64748B',font:{size:10}}}, y:{grid:{color:'rgba(31,45,77,0.3)'},ticks:{color:'#64748B',font:{size:10}}} }
+});
+
+// pH histogram
+new Chart(document.getElementById('hist-ph'), { type:'bar', data:{ labels:['6.0–6.5','6.5–7.0','7.0–7.5','7.5–8.0','8.0–8.5','8.5–9.0'], datasets:[{data:[45,312,1840,2100,980,210], backgroundColor:'rgba(59,130,246,0.5)', borderColor:'#3B82F6', borderWidth:1, borderRadius:4}] }, options:{...chartOpts('Count'), plugins:{legend:{display:false}}} });
+
+// Nitrates bar
+new Chart(document.getElementById('bar-nitrates'), { type:'bar', data:{
+  labels:['CRR','LIM','OLI','VAL','ORG','UMG','BRG','BRD'],
+  datasets:[{
+    data:[61.2,18.4,10.1,7.8,9.3,12.0,5.1,7.5],
+    backgroundColor:['rgba(239,68,68,0.7)','rgba(245,158,11,0.7)','rgba(34,197,94,0.5)','rgba(34,197,94,0.5)','rgba(34,197,94,0.5)','rgba(34,197,94,0.5)','rgba(34,197,94,0.5)','rgba(34,197,94,0.5)'],
+    borderRadius:4
+  }]
+}, options:{...chartOpts('mg/L')} });
+
+// Safety compliance line
+const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+new Chart(document.getElementById('safety-line'), { type:'line', data:{ labels:months, datasets:[
+  {label:'pH',data:[96,95,94,93,95,94,93,96,97,95,94,93],borderColor:'#60A5FA',borderWidth:2,pointRadius:3,fill:false,tension:0.3},
+  {label:'Nitrates',data:[82,79,75,72,78,80,77,74,73,71,70,70],borderColor:'#EF4444',borderWidth:2,borderDash:[4,3],pointRadius:3,fill:false,tension:0.3},
+  {label:'DO',data:[92,91,88,87,89,90,88,91,93,92,91,90],borderColor:'#22C55E',borderWidth:2,pointRadius:3,fill:false,tension:0.3}
+]}, options:{responsive:true,plugins:{legend:{labels:{color:'#94A3B8',font:{size:11}}},tooltip:{backgroundColor:'#15243F',borderColor:'#1F2D4D',borderWidth:1,titleColor:'#94A3B8',bodyColor:'#F1F5F9'}}, scales:{x:{grid:{color:'rgba(31,45,77,0.3)'},ticks:{color:'#64748B'}},y:{grid:{color:'rgba(31,45,77,0.3)'},ticks:{color:'#64748B'},min:60,max:100}}} });
+
+// Scatter
+const pts = Array.from({length:60},()=>({ x: Math.random()*6, y: Math.random()*80 }));
+new Chart(document.getElementById('scatter'), { type:'scatter', data:{ datasets:[{data:pts,backgroundColor:'rgba(59,130,246,0.5)',pointRadius:5}] }, options:{responsive:true,plugins:{legend:{display:false},tooltip:{backgroundColor:'#15243F',borderColor:'#1F2D4D',borderWidth:1,titleColor:'#94A3B8',bodyColor:'#F1F5F9'}},scales:{x:{grid:{color:'rgba(31,45,77,0.3)'},ticks:{color:'#64748B'},title:{display:true,text:'Turbidity (NTU)',color:'#64748B'}},y:{grid:{color:'rgba(31,45,77,0.3)'},ticks:{color:'#64748B'},title:{display:true,text:'Nitrates (mg/L)',color:'#64748B'}}}} });
+</script>
+<script src="assets/theme.js"></script>
+</body>
+</html>

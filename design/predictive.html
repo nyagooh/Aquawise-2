@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AquaWatch — Predictive Analytics</title>
+<link rel="stylesheet" href="assets/shared.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+.analytics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s6); }
+@media(max-width:860px){ .analytics-grid { grid-template-columns: 1fr; } }
+.risk-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
+.risk-cell {
+  aspect-ratio: 1;
+  border-radius: var(--r-sm);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.6875rem; font-weight: 600; cursor: pointer;
+  transition: transform var(--t-fast);
+}
+.risk-cell:hover { transform: scale(1.15); z-index: 1; }
+.risk-low    { background: rgba(34,197,94,0.3);  color: var(--safe); border: 1px solid rgba(34,197,94,0.4); }
+.risk-med    { background: rgba(245,158,11,0.3); color: var(--warning); border: 1px solid rgba(245,158,11,0.4); }
+.risk-high   { background: rgba(239,68,68,0.3);  color: var(--danger); border: 1px solid rgba(239,68,68,0.4); }
+.risk-labels { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin-bottom: 4px; }
+.risk-label { font-size: 0.625rem; color: var(--text-muted); text-align: center; }
+.insight-card {
+  display: flex; align-items: flex-start; gap: var(--s4);
+  padding: var(--s4);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-xl);
+  transition: border-color var(--t-fast);
+}
+.insight-card:hover { border-color: var(--accent); }
+.insight-icon { width: 40px; height: 40px; border-radius: var(--r-lg); display:flex;align-items:center;justify-content:center;flex-shrink:0; }
+.feature-bar-wrap { display: flex; align-items: center; gap: var(--s3); }
+.feature-bar { flex: 1; height: 8px; background: var(--border-subtle); border-radius: var(--r-full); overflow: hidden; }
+.feature-fill { height: 100%; border-radius: var(--r-full); background: linear-gradient(90deg, var(--accent), var(--accent-blue)); }
+.model-chip {
+  display: inline-flex; align-items: center; gap: var(--s2);
+  padding: var(--s2) var(--s4);
+  border-radius: var(--r-full);
+  font-size: 0.8125rem; font-weight: 500;
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  cursor: pointer; transition: all var(--t-fast);
+}
+.model-chip.active { background: var(--accent-glow); color: var(--accent); border-color: rgba(59,130,246,0.4); }
+</style>
+</head>
+<body>
+<div class="app-shell">
+<aside class="sidebar">
+  <div class="sidebar-logo"><svg width="28" height="28" viewBox="0 0 28 28" fill="none"><path d="M14 2C14 2 4 11 4 18A10 10 0 0024 18C24 11 14 2 14 2Z" fill="#3B82F6"/><path d="M14 9C14 9 9 14 9 18A5 5 0 0019 18C19 14 14 9 14 9Z" fill="rgba(7,23,40,0.5)"/></svg><span class="sidebar-logo-text">Aqua<span>Watch</span></span></div>
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Monitor</div>
+    <a href="dashboard.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard</a>
+    <a href="location-detail.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>Locations</a>
+    <a href="alerts.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>Alerts<span class="badge">3</span></a>
+    <div class="nav-section-label">Analyse</div>
+    <a href="historical.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Historical Data</a>
+    <a href="predictive.html" class="nav-item active"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Predictive Analytics</a>
+    <a href="statistics.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Statistics</a>
+    <div class="nav-section-label">Account</div>
+    <a href="account.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>My Account</a>
+    <a href="settings.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>Settings</a>
+  </nav>
+  <div class="sidebar-footer"><div class="user-chip"><div class="user-avatar">TL</div><div class="user-info"><div class="user-name">Tom Lee</div><div class="user-role">Field Researcher</div></div></div></div>
+</aside>
+
+<main class="main">
+  <div class="mobile-topbar"><span style="font-weight:700;font-size:1rem">Aqua<span style="color:var(--accent)">Watch</span></span></div>
+  <div class="topbar">
+    <div class="topbar-title">Predictive Analytics</div>
+    <div class="topbar-actions">
+      <span style="font-size:0.75rem;color:var(--text-muted)">Model: Random Forest · R² 0.58</span>
+      <button class="btn btn-sm btn-secondary">Retrain Model</button>
+      <button class="btn btn-sm btn-primary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export Forecast
+      </button>
+    </div>
+  </div>
+
+  <div class="page-content">
+
+    <!-- Controls -->
+    <div class="card">
+      <div class="card-body" style="display:flex;align-items:center;gap:var(--s4);flex-wrap:wrap">
+        <div style="font-size:0.8125rem;color:var(--text-muted);font-weight:600">Model:</div>
+        <div style="display:flex;gap:var(--s2);flex-wrap:wrap">
+          <div class="model-chip active">🌲 Random Forest</div>
+          <div class="model-chip">📈 Linear Regression</div>
+          <div class="model-chip">🧠 Neural Network</div>
+          <div class="model-chip">📊 Gradient Boost</div>
+        </div>
+        <div style="width:1px;height:28px;background:var(--border-subtle);margin:0 var(--s2)"></div>
+        <div style="font-size:0.8125rem;color:var(--text-muted);font-weight:600">Horizon:</div>
+        <div class="tabs"><button class="tab-btn">7 days</button><button class="tab-btn active">14 days</button><button class="tab-btn">30 days</button></div>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:var(--s3)">
+          <select class="form-control" style="width:auto;padding:6px 12px;font-size:0.8125rem">
+            <option>All Locations</option>
+            <option>Crocodile River</option>
+            <option>Limpopo River</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Forecast Chart -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/></svg>
+          14-Day Nitrates Forecast — Crocodile River
+        </div>
+        <div class="card-actions">
+          <div class="chart-tabs" style="display:flex;gap:4px">
+            <button class="chart-tab active" style="font-size:0.75rem">Nitrates</button>
+            <button class="chart-tab" style="font-size:0.75rem">pH</button>
+            <button class="chart-tab" style="font-size:0.75rem">DO</button>
+            <button class="chart-tab" style="font-size:0.75rem">Turbidity</button>
+          </div>
+        </div>
+      </div>
+      <div class="card-body">
+        <canvas id="forecast-chart" height="180"></canvas>
+        <div style="display:flex;gap:var(--s6);margin-top:var(--s4);flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:var(--s2);font-size:0.75rem;color:var(--text-secondary)"><span style="width:20px;height:2px;background:var(--accent-blue);display:inline-block"></span>Historical</div>
+          <div style="display:flex;align-items:center;gap:var(--s2);font-size:0.75rem;color:var(--text-secondary)"><span style="width:20px;height:2px;background:var(--accent-purple);display:inline-block"></span>Forecast</div>
+          <div style="display:flex;align-items:center;gap:var(--s2);font-size:0.75rem;color:var(--text-secondary)"><span style="width:20px;height:6px;background:rgba(156,137,226,0.15);display:inline-block;border-radius:2px"></span>Confidence (95%)</div>
+          <div style="display:flex;align-items:center;gap:var(--s2);font-size:0.75rem;color:var(--text-secondary)"><span style="width:20px;height:2px;background:var(--danger);display:inline-block;border-top:2px dashed var(--danger)"></span>Safety limit (45)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="analytics-grid">
+      <!-- Risk Heatmap -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+            14-Day Risk Heatmap
+          </div>
+          <span style="font-size:0.75rem;color:var(--text-muted)">All Locations × All Parameters</span>
+        </div>
+        <div class="card-body">
+          <!-- Y labels + grid -->
+          <div style="display:flex;gap:var(--s3)">
+            <div style="display:flex;flex-direction:column;gap:4px;justify-content:space-around;padding-top:24px">
+              <div style="font-size:0.625rem;color:var(--text-muted);text-align:right;width:60px;white-space:nowrap">pH</div>
+              <div style="font-size:0.625rem;color:var(--text-muted);text-align:right;width:60px;white-space:nowrap">Turbidity</div>
+              <div style="font-size:0.625rem;color:var(--text-muted);text-align:right;width:60px;white-space:nowrap">DO</div>
+              <div style="font-size:0.625rem;color:var(--text-muted);text-align:right;width:60px;white-space:nowrap">Nitrates</div>
+            </div>
+            <div style="flex:1">
+              <div class="risk-labels">
+                <div class="risk-label">CRR</div><div class="risk-label">LIM</div><div class="risk-label">OLI</div>
+                <div class="risk-label">VAL</div><div class="risk-label">ORG</div><div class="risk-label">UMG</div>
+                <div class="risk-label">BRG</div><div class="risk-label">BRD</div>
+              </div>
+              <!-- pH row -->
+              <div class="risk-grid" style="margin-bottom:4px">
+                <div class="risk-cell risk-low">L</div><div class="risk-cell risk-low">L</div><div class="risk-cell risk-low">L</div>
+                <div class="risk-cell risk-low">L</div><div class="risk-cell risk-low">L</div><div class="risk-cell risk-low">L</div>
+                <div class="risk-cell risk-low">L</div><div class="risk-cell risk-low">L</div>
+              </div>
+              <!-- Turbidity row -->
+              <div class="risk-grid" style="margin-bottom:4px">
+                <div class="risk-cell risk-low">L</div><div class="risk-cell risk-med">M</div><div class="risk-cell risk-low">L</div>
+                <div class="risk-cell risk-low">L</div><div class="risk-cell risk-low">L</div><div class="risk-cell risk-low">L</div>
+                <div class="risk-cell risk-low">L</div><div class="risk-cell risk-low">L</div>
+              </div>
+              <!-- DO row -->
+              <div class="risk-grid" style="margin-bottom:4px">
+                <div class="risk-cell risk-low">L</div><div class="risk-cell risk-low">L</div><div class="risk-cell risk-med">M</div>
+                <div class="risk-cell risk-low">L</div><div class="risk-cell risk-low">L</div><div class="risk-cell risk-low">L</div>
+                <div class="risk-cell risk-low">L</div><div class="risk-cell risk-low">L</div>
+              </div>
+              <!-- Nitrates row -->
+              <div class="risk-grid">
+                <div class="risk-cell risk-high">H</div><div class="risk-cell risk-med">M</div><div class="risk-cell risk-low">L</div>
+                <div class="risk-cell risk-low">L</div><div class="risk-cell risk-low">L</div><div class="risk-cell risk-low">L</div>
+                <div class="risk-cell risk-low">L</div><div class="risk-cell risk-low">L</div>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;gap:var(--s4);margin-top:var(--s4)">
+            <div style="display:flex;align-items:center;gap:var(--s2);font-size:0.6875rem;color:var(--text-muted)"><span class="status-dot dot-safe"></span>Low risk</div>
+            <div style="display:flex;align-items:center;gap:var(--s2);font-size:0.6875rem;color:var(--text-muted)"><span class="status-dot dot-warning"></span>Medium risk</div>
+            <div style="display:flex;align-items:center;gap:var(--s2);font-size:0.6875rem;color:var(--text-muted)"><span class="status-dot dot-danger"></span>High risk</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Feature Importance -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            Feature Importance
+          </div>
+          <span style="font-size:0.75rem;color:var(--text-muted)">Random Forest · Nitrates</span>
+        </div>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:var(--s4)">
+          <div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:var(--s2);font-size:0.8125rem">
+              <span style="color:var(--text-secondary)">SWIR22</span>
+              <span style="font-family:var(--font-mono);color:var(--accent)">31.4%</span>
+            </div>
+            <div class="feature-bar-wrap"><div class="feature-bar"><div class="feature-fill" style="width:31.4%"></div></div></div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:var(--s2);font-size:0.8125rem">
+              <span style="color:var(--text-secondary)">NDMI</span>
+              <span style="font-family:var(--font-mono);color:var(--accent)">24.8%</span>
+            </div>
+            <div class="feature-bar-wrap"><div class="feature-bar"><div class="feature-fill" style="width:24.8%"></div></div></div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:var(--s2);font-size:0.8125rem">
+              <span style="color:var(--text-secondary)">PET</span>
+              <span style="font-family:var(--font-mono);color:var(--accent)">18.2%</span>
+            </div>
+            <div class="feature-bar-wrap"><div class="feature-bar"><div class="feature-fill" style="width:18.2%"></div></div></div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:var(--s2);font-size:0.8125rem">
+              <span style="color:var(--text-secondary)">MNDWI</span>
+              <span style="font-family:var(--font-mono);color:var(--accent)">14.1%</span>
+            </div>
+            <div class="feature-bar-wrap"><div class="feature-bar"><div class="feature-fill" style="width:14.1%"></div></div></div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:var(--s2);font-size:0.8125rem">
+              <span style="color:var(--text-secondary)">NIR</span>
+              <span style="font-family:var(--font-mono);color:var(--accent)">7.4%</span>
+            </div>
+            <div class="feature-bar-wrap"><div class="feature-bar"><div class="feature-fill" style="width:7.4%"></div></div></div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:var(--s2);font-size:0.8125rem">
+              <span style="color:var(--text-secondary)">Green Band</span>
+              <span style="font-family:var(--font-mono);color:var(--accent)">4.1%</span>
+            </div>
+            <div class="feature-bar-wrap"><div class="feature-bar"><div class="feature-fill" style="width:4.1%"></div></div></div>
+          </div>
+          <div style="padding:var(--s3);background:var(--bg-surface);border-radius:var(--r-lg);margin-top:var(--s2)">
+            <div style="font-size:0.75rem;color:var(--text-muted)">Model performance</div>
+            <div style="display:flex;gap:var(--s6);margin-top:var(--s2)">
+              <div><div style="font-family:var(--font-mono);font-size:1rem;font-weight:700;color:var(--accent)">0.58</div><div style="font-size:0.6875rem;color:var(--text-muted)">R² (test)</div></div>
+              <div><div style="font-family:var(--font-mono);font-size:1rem;font-weight:700;color:var(--text-primary)">35.2</div><div style="font-size:0.6875rem;color:var(--text-muted)">RMSE</div></div>
+              <div><div style="font-family:var(--font-mono);font-size:1rem;font-weight:700;color:var(--accent)">0.91</div><div style="font-size:0.6875rem;color:var(--text-muted)">R² (train)</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Insights -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">🤖 AI Insights</div>
+        <span style="font-size:0.75rem;color:var(--text-muted)">Generated from 14-day forecast</span>
+      </div>
+      <div class="card-body" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:var(--s4)">
+        <div class="insight-card">
+          <div class="insight-icon" style="background:var(--danger-bg)">⚠️</div>
+          <div>
+            <div style="font-weight:600;font-size:0.875rem;margin-bottom:4px">Nitrate spike predicted</div>
+            <div style="font-size:0.8125rem;color:var(--text-secondary)">Crocodile River nitrates likely to remain above 45 mg/L for the next 4–7 days. Recommend immediate investigation.</div>
+          </div>
+        </div>
+        <div class="insight-card">
+          <div class="insight-icon" style="background:var(--warning-bg)">📉</div>
+          <div>
+            <div style="font-weight:600;font-size:0.875rem;margin-bottom:4px">DO recovery expected</div>
+            <div style="font-size:0.8125rem;color:var(--text-secondary)">Olifants River dissolved oxygen predicted to recover above 5.0 mg/L within 3 days based on temperature trend.</div>
+          </div>
+        </div>
+        <div class="insight-card">
+          <div class="insight-icon" style="background:var(--safe-bg)">✅</div>
+          <div>
+            <div style="font-weight:600;font-size:0.875rem;margin-bottom:4px">Network stable</div>
+            <div style="font-size:0.8125rem;color:var(--text-secondary)">5 of 8 locations forecast to remain within all safe thresholds for the full 14-day period.</div>
+          </div>
+        </div>
+        <div class="insight-card">
+          <div class="insight-icon" style="background:var(--info-bg)">🌡️</div>
+          <div>
+            <div style="font-weight:600;font-size:0.875rem;margin-bottom:4px">Seasonal pattern detected</div>
+            <div style="font-size:0.8125rem;color:var(--text-secondary)">Model detects PET (evapotranspiration) as the top seasonal predictor for nitrate levels across Limpopo basin.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <nav class="bottom-nav">
+    <a href="dashboard.html" class="bottom-nav-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Home</a>
+    <a href="location-detail.html" class="bottom-nav-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>Locations</a>
+    <a href="alerts.html" class="bottom-nav-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>Alerts</a>
+    <a href="statistics.html" class="bottom-nav-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Stats</a>
+    <a href="account.html" class="bottom-nav-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Account</a>
+  </nav>
+</main>
+</div>
+
+<script>
+// Forecast Chart
+const labels = ['Apr 14','Apr 15','Apr 16','Apr 17','Apr 18','Apr 19','Apr 20','Apr 21','Apr 22','Apr 23','Apr 24','Apr 25','Apr 26','Apr 27','Apr 28','Apr 29','Apr 30','May 1','May 2','May 3','May 4'];
+const hist  = [42,45,58,71,65,72,78,null,null,null,null,null,null,null,null,null,null,null,null,null,null];
+const fore  = [null,null,null,null,null,null,78,81,76,74,69,65,60,55,52,48,46,43,41,40,38];
+const upper = [null,null,null,null,null,null,78,90,87,83,78,73,68,62,58,54,51,48,45,43,42];
+const lower = [null,null,null,null,null,null,78,72,65,65,60,57,52,48,46,42,41,38,37,37,34];
+const thr   = Array(21).fill(45);
+
+new Chart(document.getElementById('forecast-chart'), {
+  type:'line',
+  data:{
+    labels,
+    datasets:[
+      { label:'Historical', data:hist, borderColor:'#60A5FA', borderWidth:2.5, pointRadius:4, pointBackgroundColor:'#60A5FA', fill:false, spanGaps:false },
+      { label:'Forecast',   data:fore, borderColor:'#8B5CF6', borderWidth:2.5, borderDash:[6,3], pointRadius:3, pointBackgroundColor:'#8B5CF6', fill:false, spanGaps:false },
+      { label:'Upper CI',   data:upper, borderColor:'transparent', backgroundColor:'rgba(156,137,226,0.12)', fill:'+1', pointRadius:0, spanGaps:false },
+      { label:'Lower CI',   data:lower, borderColor:'transparent', backgroundColor:'transparent', fill:false, pointRadius:0, spanGaps:false },
+      { label:'Safety Limit',data:thr, borderColor:'rgba(239,68,68,0.6)', borderWidth:1.5, borderDash:[4,4], pointRadius:0, fill:false },
+    ]
+  },
+  options:{
+    responsive:true,
+    plugins:{
+      legend:{display:false},
+      tooltip:{backgroundColor:'#15243F',borderColor:'#1F2D4D',borderWidth:1,titleColor:'#94A3B8',bodyColor:'#F1F5F9',
+        filter:i => i.datasetIndex < 2
+      }
+    },
+    scales:{
+      x:{ grid:{color:'rgba(31,45,77,0.3)'}, ticks:{color:'#64748B',maxTicksLimit:10,font:{size:10}} },
+      y:{ grid:{color:'rgba(31,45,77,0.3)'}, ticks:{color:'#64748B'}, min:20, max:100 }
+    }
+  }
+});
+</script>
+<script src="assets/theme.js"></script>
+</body>
+</html>

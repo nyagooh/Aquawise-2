@@ -1,0 +1,1077 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AquaWatch — Design Deliverable</title>
+<link rel="stylesheet" href="assets/shared.css">
+<style>
+body {
+  background: var(--bg-base);
+  min-height: 100vh;
+  padding: 0;
+  margin: 0;
+  font-family: var(--font);
+  color: var(--text-primary);
+}
+
+/* ── Hero ── */
+.hero {
+  background:
+    radial-gradient(900px 500px at 20% 10%, rgba(59,130,246,0.18), transparent 60%),
+    radial-gradient(800px 400px at 90% 0%, rgba(139,92,246,0.10), transparent 55%),
+    linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-base) 100%);
+  border-bottom: 1px solid var(--border-default);
+  padding: var(--s16) var(--s10) var(--s12);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -120px; left: 50%; transform: translateX(-50%);
+  width: 600px; height: 600px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(59,130,246,0.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+.hero-logo {
+  display: flex; align-items: center; justify-content: center;
+  gap: var(--s4);
+  margin-bottom: var(--s6);
+}
+.hero-title {
+  font-size: 3rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+  margin-bottom: var(--s4);
+}
+.hero-title span { color: var(--accent); }
+.hero-sub {
+  font-size: 1.125rem;
+  color: var(--text-secondary);
+  max-width: 600px;
+  margin: 0 auto var(--s8);
+  line-height: 1.6;
+}
+.hero-meta {
+  display: flex; align-items: center; justify-content: center;
+  gap: var(--s6); flex-wrap: wrap;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+.hero-meta-item {
+  display: flex; align-items: center; gap: var(--s2);
+}
+.hero-meta-item svg { color: var(--accent); }
+
+/* ── Deliverable cards ── */
+.deliverables {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: var(--s12) var(--s8);
+}
+.section-label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+  margin-bottom: var(--s4);
+}
+.section-title {
+  font-size: 1.375rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: var(--s2);
+}
+.section-desc {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  margin-bottom: var(--s8);
+  max-width: 640px;
+  line-height: 1.6;
+}
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--s5);
+  margin-bottom: var(--s12);
+}
+.del-card {
+  background: var(--surface-tint), var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-xl);
+  overflow: hidden;
+  box-shadow:
+    inset 0 1px 0 var(--rim-highlight),
+    var(--shadow-card);
+  transition: border-color var(--t-fast), box-shadow var(--t-fast), transform var(--t-fast);
+  text-decoration: none;
+  display: flex;
+  flex-direction: column;
+}
+.del-card:hover {
+  border-color: var(--border-strong);
+  box-shadow:
+    inset 0 1px 0 var(--rim-highlight-strong),
+    var(--shadow-lg);
+  transform: translateY(-2px);
+}
+.del-card-preview {
+  height: 160px;
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3.5rem;
+}
+.del-card-body {
+  padding: var(--s5);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.del-card-tag {
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: var(--s2);
+}
+.del-card-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--s2);
+}
+.del-card-desc {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  flex: 1;
+  margin-bottom: var(--s4);
+}
+.del-card-features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin-bottom: var(--s4);
+}
+.del-card-feature {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-full);
+  padding: 2px 8px;
+}
+.del-card-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.del-card-link {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+}
+.del-card:hover .del-card-link {
+  gap: var(--s2);
+}
+
+/* Screen mockup */
+.screen-mock {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+.mock-topbar {
+  height: 24px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  gap: 4px;
+}
+.mock-dot { width: 5px; height: 5px; border-radius: 50%; }
+.mock-body {
+  display: flex;
+  height: calc(100% - 24px);
+}
+.mock-sidebar {
+  width: 40px;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-subtle);
+  padding: 6px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mock-nav-dot { width: 32px; height: 5px; border-radius: 2px; background: var(--border-default); }
+.mock-nav-dot.active { background: var(--accent); width: 24px; }
+.mock-content {
+  flex: 1;
+  padding: 6px;
+  background: var(--bg-base);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mock-kpi-row { display: flex; gap: 4px; }
+.mock-kpi { flex: 1; height: 20px; border-radius: 4px; background: var(--bg-card); border: 1px solid var(--border-subtle); }
+.mock-kpi.accent { border-top: 2px solid var(--accent); }
+.mock-kpi.safe   { border-top: 2px solid var(--safe); }
+.mock-kpi.warn   { border-top: 2px solid var(--warning); }
+.mock-kpi.danger { border-top: 2px solid var(--danger); }
+.mock-map { flex: 1; border-radius: 6px; background: var(--bg-elevated); border: 1px solid var(--border-subtle); position: relative; overflow: hidden; }
+.mock-map::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 1px, transparent 1px, transparent 20px),
+              repeating-linear-gradient(90deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 1px, transparent 1px, transparent 20px);
+}
+.mock-dot-pin {
+  position: absolute;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid white;
+}
+.mock-row { display: flex; gap: 4px; }
+.mock-half { flex: 1; height: 36px; border-radius: 4px; background: var(--bg-card); border: 1px solid var(--border-subtle); }
+.mock-line-chart {
+  position: relative;
+  overflow: hidden;
+}
+.mock-line-chart::after {
+  content: '';
+  position: absolute;
+  bottom: 4px; left: 4px; right: 4px;
+  height: 24px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 30'%3E%3Cpolyline points='0,25 15,20 30,22 45,10 60,15 75,8 100,12' fill='none' stroke='%233B82F6' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat center/contain;
+}
+.mock-bar-chart {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+  padding: 4px;
+}
+.mock-bar { width: 8px; border-radius: 2px 2px 0 0; background: rgba(59,130,246,0.5); }
+.mock-alert-row { height: 12px; border-radius: 3px; background: var(--bg-surface); border: 1px solid var(--border-subtle); margin-bottom: 3px; display: flex; align-items: center; gap: 4px; padding: 0 4px; }
+.mock-alert-row .dot { width: 4px; height: 4px; border-radius: 50%; flex-shrink: 0; }
+.mock-form { display: flex; flex-direction: column; gap: 4px; }
+.mock-input { height: 10px; border-radius: 2px; background: var(--bg-surface); border: 1px solid var(--border-subtle); }
+.mock-upload { flex: 1; border: 1.5px dashed var(--accent); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 0.5rem; color: var(--accent); }
+.mock-forecast {
+  position: relative;
+  overflow: hidden;
+}
+.mock-forecast::after {
+  content: '';
+  position: absolute;
+  bottom: 4px; left: 4px; right: 4px;
+  height: 24px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 30'%3E%3Cpolyline points='0,8 20,10 40,14 50,18' fill='none' stroke='%2360A5FA' stroke-width='1.5'/%3E%3Cpolyline points='50,18 60,22 70,20 80,17 100,14' fill='none' stroke='%238B5CF6' stroke-width='1.5' stroke-dasharray='3,2'/%3E%3Cline x1='0' y1='20' x2='100' y2='20' stroke='%23EF4444' stroke-width='0.8' stroke-dasharray='3,2'/%3E%3C/svg%3E") no-repeat center/contain;
+}
+
+/* ── Design Specs Section ── */
+.specs-section {
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-subtle);
+  padding: var(--s12) var(--s8);
+}
+.specs-inner { max-width: 1100px; margin: 0 auto; }
+.specs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--s5);
+  margin-top: var(--s8);
+}
+.spec-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-xl);
+  padding: var(--s5);
+}
+.spec-icon { font-size: 1.5rem; margin-bottom: var(--s3); }
+.spec-title { font-size: 0.875rem; font-weight: 700; margin-bottom: var(--s2); }
+.spec-items { display: flex; flex-direction: column; gap: var(--s1); }
+.spec-item { font-size: 0.75rem; color: var(--text-secondary); display: flex; align-items: center; gap: var(--s2); }
+.spec-item::before { content: '·'; color: var(--accent); font-size: 1rem; line-height: 1; }
+
+/* ── Color palette row ── */
+.palette { display: flex; gap: 6px; flex-wrap: wrap; margin-top: var(--s4); }
+.pal-swatch {
+  width: 28px; height: 28px;
+  border-radius: var(--r-md);
+  border: 1px solid rgba(255,255,255,0.08);
+  cursor: pointer;
+  transition: transform var(--t-fast);
+}
+.pal-swatch:hover { transform: scale(1.2); }
+
+/* ── Footer ── */
+.footer {
+  background: var(--bg-base);
+  border-top: 1px solid var(--border-subtle);
+  padding: var(--s8) var(--s10);
+  text-align: center;
+}
+.footer-note { font-size: 0.8125rem; color: var(--text-muted); line-height: 1.8; }
+.footer-links { display: flex; justify-content: center; gap: var(--s6); flex-wrap: wrap; margin-top: var(--s4); }
+.footer-links a { font-size: 0.8125rem; color: var(--text-secondary); transition: color var(--t-fast); }
+.footer-links a:hover { color: var(--accent); }
+
+@media (max-width: 700px) {
+  .hero { padding: var(--s10) var(--s5) var(--s8); }
+  .hero-title { font-size: 2rem; }
+  .deliverables { padding: var(--s8) var(--s5); }
+  .cards-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── Hero ── -->
+<div class="hero">
+  <div class="hero-logo">
+    <svg width="52" height="52" viewBox="0 0 52 52" fill="none">
+      <circle cx="26" cy="26" r="26" fill="rgba(59,130,246,0.08)"/>
+      <path d="M26 8C26 8 12 20 12 30A14 14 0 0040 30C40 20 26 8 26 8Z" fill="#3B82F6"/>
+      <path d="M26 18C26 18 18 25 18 30A8 8 0 0034 30C34 25 26 18 26 18Z" fill="rgba(7,23,40,0.5)"/>
+    </svg>
+    <div>
+      <div style="font-size:2rem;font-weight:800;letter-spacing:-0.03em">Aqua<span style="color:var(--accent)">Watch</span></div>
+      <div style="font-size:0.75rem;color:var(--text-muted);letter-spacing:0.06em;text-transform:uppercase">Water Quality Monitoring</div>
+    </div>
+  </div>
+
+  <h1 class="hero-title">Complete Design <span>Deliverable</span></h1>
+  <p class="hero-sub">
+    Full UI/UX design system for the AquaWatch ESP32-based water quality monitoring platform —
+    including sitemap, wireframes, style guide, and interactive visual mockups for every page.
+  </p>
+
+  <div style="display:flex;justify-content:center;gap:var(--s4);flex-wrap:wrap;margin-bottom:var(--s8)">
+    <a href="dashboard.html" class="btn btn-primary btn-lg">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      View Live Mockups
+    </a>
+    <a href="sitemap.html" class="btn btn-secondary btn-lg">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
+      Sitemap
+    </a>
+    <a href="style-guide.html" class="btn btn-secondary btn-lg">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 011.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+      Style Guide
+    </a>
+  </div>
+
+  <div class="hero-meta">
+    <div class="hero-meta-item">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      11 pages + style guide + sitemap
+    </div>
+    <div class="hero-meta-item">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+      Mobile responsive (breakpoints at 900px, 480px)
+    </div>
+    <div class="hero-meta-item">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
+      Interactive Leaflet map
+    </div>
+    <div class="hero-meta-item">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/></svg>
+      Live Chart.js visualisations
+    </div>
+    <div class="hero-meta-item">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      Dark-mode first design
+    </div>
+  </div>
+</div>
+
+<!-- ── Main deliverables ── -->
+<div class="deliverables">
+
+  <!-- Foundations -->
+  <div class="section-label">01 — Foundations</div>
+  <h2 class="section-title">Design System & Architecture</h2>
+  <p class="section-desc">The foundational documents that govern all design decisions: how the application is structured, and the complete visual language used across every screen.</p>
+
+  <div class="cards-grid">
+
+    <!-- Sitemap -->
+    <a href="sitemap.html" class="del-card">
+      <div class="del-card-preview" style="background:linear-gradient(135deg,#0B1224,#15243F)">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px;opacity:0.9">
+          <div style="padding:8px 16px;background:linear-gradient(135deg,rgba(59,130,246,0.3),rgba(79,195,247,0.3));border:1px solid var(--accent);border-radius:8px;font-size:0.6875rem;font-weight:700;color:var(--accent)">AquaWatch</div>
+          <div style="width:1.5px;height:16px;background:var(--border-default)"></div>
+          <div style="display:flex;gap:6px">
+            <div style="padding:4px 8px;background:var(--bg-elevated);border:1px solid var(--border-default);border-radius:6px;font-size:0.5625rem;color:var(--text-secondary);border-top:2px solid var(--accent)">Dashboard</div>
+            <div style="padding:4px 8px;background:var(--bg-elevated);border:1px solid var(--border-default);border-radius:6px;font-size:0.5625rem;color:var(--text-secondary);border-top:2px solid var(--accent-blue)">Locations</div>
+            <div style="padding:4px 8px;background:var(--bg-elevated);border:1px solid var(--border-default);border-radius:6px;font-size:0.5625rem;color:var(--text-secondary);border-top:2px solid var(--danger)">Alerts</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <div style="padding:4px 8px;background:var(--bg-elevated);border:1px solid var(--border-default);border-radius:6px;font-size:0.5625rem;color:var(--text-secondary);border-top:2px solid var(--warning)">Historical</div>
+            <div style="padding:4px 8px;background:var(--bg-elevated);border:1px solid var(--border-default);border-radius:6px;font-size:0.5625rem;color:var(--text-secondary);border-top:2px solid var(--accent-purple)">Predictive</div>
+          </div>
+        </div>
+      </div>
+      <div class="del-card-body">
+        <div class="del-card-tag" style="color:var(--accent)">Architecture</div>
+        <div class="del-card-title">Sitemap & Navigation Flows</div>
+        <div class="del-card-desc">Complete page hierarchy with all 11 pages mapped, parent-child relationships, and key user navigation flows: Monitor, Triage, Analysis, and Configuration.</div>
+        <div class="del-card-features">
+          <span class="del-card-feature">11 pages</span>
+          <span class="del-card-feature">4 nav flows</span>
+          <span class="del-card-feature">Hierarchy diagram</span>
+          <span class="del-card-feature">URL routes</span>
+        </div>
+        <div class="del-card-cta">
+          <span class="badge badge-info">Foundation</span>
+          <span class="del-card-link">Open →</span>
+        </div>
+      </div>
+    </a>
+
+    <!-- Style Guide -->
+    <a href="style-guide.html" class="del-card">
+      <div class="del-card-preview" style="background:linear-gradient(135deg,#0B1224,#15243F)">
+        <div style="display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding:12px;width:100%">
+          <div style="display:flex;gap:5px">
+            <div style="width:24px;height:24px;border-radius:6px;background:#3B82F6;box-shadow:0 0 8px rgba(59,130,246,0.4)"></div>
+            <div style="width:24px;height:24px;border-radius:6px;background:#60A5FA"></div>
+            <div style="width:24px;height:24px;border-radius:6px;background:#8B5CF6"></div>
+            <div style="width:24px;height:24px;border-radius:6px;background:#22C55E"></div>
+            <div style="width:24px;height:24px;border-radius:6px;background:#F59E0B"></div>
+            <div style="width:24px;height:24px;border-radius:6px;background:#EF4444"></div>
+          </div>
+          <div>
+            <div style="font-size:1.25rem;font-weight:700;letter-spacing:-0.02em;color:#F1F5F9;line-height:1">Heading / 700</div>
+            <div style="font-size:0.75rem;color:#94A3B8;margin-top:2px">Body regular · 14px</div>
+            <div style="font-family:monospace;font-size:0.75rem;color:#3B82F6;margin-top:2px">7.42 mg/L · mono</div>
+          </div>
+          <div style="display:flex;gap:5px;align-items:center">
+            <div style="padding:4px 10px;background:#3B82F6;border-radius:5px;font-size:0.5625rem;font-weight:700;color:#070B17">Primary</div>
+            <div style="padding:4px 10px;border:1px solid #1F2D4D;border-radius:5px;font-size:0.5625rem;color:#94A3B8">Secondary</div>
+            <div style="padding:4px 10px;border-radius:5px;font-size:0.5625rem;color:#94A3B8">Ghost</div>
+          </div>
+        </div>
+      </div>
+      <div class="del-card-body">
+        <div class="del-card-tag" style="color:var(--accent)">Design System</div>
+        <div class="del-card-title">Style Guide</div>
+        <div class="del-card-desc">Full visual language: color system with semantic tokens, typography scale, spacing grid, border radius, shadows, buttons, badges, form elements, icons, and component patterns.</div>
+        <div class="del-card-features">
+          <span class="del-card-feature">Color tokens</span>
+          <span class="del-card-feature">Typography scale</span>
+          <span class="del-card-feature">8pt spacing grid</span>
+          <span class="del-card-feature">Components</span>
+          <span class="del-card-feature">Iconography</span>
+        </div>
+        <div class="del-card-cta">
+          <span class="badge badge-info">Foundation</span>
+          <span class="del-card-link">Open →</span>
+        </div>
+      </div>
+    </a>
+
+  </div>
+
+  <!-- Core Pages -->
+  <div class="section-label">02 — Core Monitoring Pages</div>
+  <h2 class="section-title">Daily-Use Screens</h2>
+  <p class="section-desc">The pages users access most frequently: the at-a-glance dashboard, drilling into individual sensor locations, and managing the alert queue.</p>
+
+  <div class="cards-grid">
+
+    <!-- Dashboard -->
+    <a href="dashboard.html" class="del-card">
+      <div class="del-card-preview" style="background:var(--bg-base);padding:0">
+        <div class="screen-mock">
+          <div class="mock-topbar">
+            <div class="mock-dot" style="background:#EF4444"></div>
+            <div class="mock-dot" style="background:#F59E0B"></div>
+            <div class="mock-dot" style="background:#22C55E"></div>
+            <div style="flex:1;height:5px;background:var(--border-subtle);border-radius:2px;margin:0 6px"></div>
+            <div style="width:16px;height:5px;background:var(--border-default);border-radius:2px"></div>
+          </div>
+          <div class="mock-body">
+            <div class="mock-sidebar">
+              <div style="width:32px;height:6px;background:linear-gradient(90deg,var(--accent),var(--accent-blue));border-radius:2px;margin-bottom:4px"></div>
+              <div class="mock-nav-dot active"></div>
+              <div class="mock-nav-dot"></div>
+              <div class="mock-nav-dot"></div>
+              <div class="mock-nav-dot"></div>
+              <div class="mock-nav-dot"></div>
+              <div class="mock-nav-dot"></div>
+            </div>
+            <div class="mock-content">
+              <div class="mock-kpi-row">
+                <div class="mock-kpi accent"></div>
+                <div class="mock-kpi safe"></div>
+                <div class="mock-kpi warn"></div>
+                <div class="mock-kpi danger"></div>
+              </div>
+              <div class="mock-map" style="height:55px">
+                <div class="mock-dot-pin" style="background:#22C55E;top:30%;left:35%"></div>
+                <div class="mock-dot-pin" style="background:#EF4444;top:20%;left:55%"></div>
+                <div class="mock-dot-pin" style="background:#F59E0B;top:40%;left:25%"></div>
+                <div class="mock-dot-pin" style="background:#22C55E;top:55%;left:60%"></div>
+                <div class="mock-dot-pin" style="background:#22C55E;top:65%;left:40%"></div>
+              </div>
+              <div class="mock-row">
+                <div class="mock-half mock-line-chart"></div>
+                <div class="mock-half" style="display:flex;flex-direction:column;gap:2px;padding:4px">
+                  <div class="mock-alert-row"><div class="dot" style="background:var(--danger)"></div><div style="flex:1;height:3px;background:var(--border-default);border-radius:1px"></div></div>
+                  <div class="mock-alert-row"><div class="dot" style="background:var(--warning)"></div><div style="flex:1;height:3px;background:var(--border-default);border-radius:1px"></div></div>
+                  <div class="mock-alert-row"><div class="dot" style="background:var(--warning)"></div><div style="flex:1;height:3px;background:var(--border-default);border-radius:1px"></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="del-card-body">
+        <div class="del-card-tag" style="color:var(--accent)">Wireframe + Visual Mockup</div>
+        <div class="del-card-title">Home Dashboard</div>
+        <div class="del-card-desc">Network overview with interactive Leaflet map (all 8 sensors, click-for-detail), 4 KPI cards, 24h trend chart, live alert feed, and full sensor readings table with export.</div>
+        <div class="del-card-features">
+          <span class="del-card-feature">Interactive map</span>
+          <span class="del-card-feature">Live KPIs</span>
+          <span class="del-card-feature">Alert feed</span>
+          <span class="del-card-feature">Readings table</span>
+          <span class="del-card-feature">Trend chart</span>
+        </div>
+        <div class="del-card-cta">
+          <span class="badge badge-safe">Live</span>
+          <span class="del-card-link">Open →</span>
+        </div>
+      </div>
+    </a>
+
+    <!-- Location Detail -->
+    <a href="location-detail.html" class="del-card">
+      <div class="del-card-preview" style="background:var(--bg-base);padding:0">
+        <div class="screen-mock">
+          <div class="mock-topbar">
+            <div class="mock-dot" style="background:#EF4444"></div>
+            <div class="mock-dot" style="background:#F59E0B"></div>
+            <div class="mock-dot" style="background:#22C55E"></div>
+            <div style="height:5px;flex:1;background:var(--border-subtle);border-radius:2px;margin:0 6px"></div>
+          </div>
+          <div class="mock-body">
+            <div class="mock-sidebar">
+              <div style="width:32px;height:6px;background:var(--accent);border-radius:2px;margin-bottom:4px"></div>
+              <div class="mock-nav-dot"></div>
+              <div class="mock-nav-dot active"></div>
+              <div class="mock-nav-dot"></div>
+              <div class="mock-nav-dot"></div>
+            </div>
+            <div class="mock-content">
+              <div style="display:flex;gap:4px;margin-bottom:3px">
+                <div style="width:28px;height:28px;border-radius:6px;background:var(--danger-bg);border:1px solid rgba(239,68,68,0.3);display:flex;align-items:center;justify-content:center;font-size:0.875rem">📍</div>
+                <div style="flex:1">
+                  <div style="height:6px;background:var(--text-primary);border-radius:2px;opacity:0.7;width:60%;margin-bottom:3px"></div>
+                  <div style="height:4px;background:var(--border-default);border-radius:2px;width:40%"></div>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:3px;margin-bottom:3px">
+                <div style="height:22px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border-subtle);border-left:2px solid var(--safe)"></div>
+                <div style="height:22px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border-subtle);border-left:2px solid var(--safe)"></div>
+                <div style="height:22px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border-subtle);border-left:2px solid var(--safe)"></div>
+                <div style="height:22px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border-subtle);border-left:2px solid var(--danger)"></div>
+                <div style="height:22px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border-subtle);border-left:2px solid var(--safe)"></div>
+              </div>
+              <div class="mock-row">
+                <div class="mock-half mock-line-chart" style="flex:2"></div>
+                <div class="mock-half" style="background:var(--bg-elevated);border:1px solid var(--border-subtle)"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="del-card-body">
+        <div class="del-card-tag" style="color:var(--accent-blue)">Wireframe + Visual Mockup</div>
+        <div class="del-card-title">Location Detail</div>
+        <div class="del-card-desc">Deep-dive per sensor: 5 parameter cards with live meters, switchable time-series charts (pH/Turbidity/DO/Nitrates), mini location map, sensor metadata, and full alert history.</div>
+        <div class="del-card-features">
+          <span class="del-card-feature">5 param cards</span>
+          <span class="del-card-feature">Switchable charts</span>
+          <span class="del-card-feature">Mini map</span>
+          <span class="del-card-feature">Alert history</span>
+          <span class="del-card-feature">Threshold lines</span>
+        </div>
+        <div class="del-card-cta">
+          <span class="badge badge-safe">Live</span>
+          <span class="del-card-link">Open →</span>
+        </div>
+      </div>
+    </a>
+
+    <!-- Alerts -->
+    <a href="alerts.html" class="del-card">
+      <div class="del-card-preview" style="background:var(--bg-base);padding:0">
+        <div class="screen-mock">
+          <div class="mock-topbar">
+            <div class="mock-dot" style="background:#EF4444"></div><div class="mock-dot" style="background:#F59E0B"></div><div class="mock-dot" style="background:#22C55E"></div>
+            <div style="height:5px;flex:1;background:var(--border-subtle);border-radius:2px;margin:0 6px"></div>
+          </div>
+          <div class="mock-body">
+            <div class="mock-sidebar">
+              <div style="width:32px;height:6px;background:var(--accent);border-radius:2px;margin-bottom:4px"></div>
+              <div class="mock-nav-dot"></div>
+              <div class="mock-nav-dot"></div>
+              <div class="mock-nav-dot active"></div>
+            </div>
+            <div class="mock-content">
+              <div style="display:flex;gap:3px;margin-bottom:3px">
+                <div style="height:8px;border-radius:4px;background:var(--danger-bg);border:1px solid rgba(239,68,68,0.3);flex:1;display:flex;align-items:center;justify-content:center;font-size:0.4rem;color:var(--danger);font-weight:700">1</div>
+                <div style="height:8px;border-radius:4px;background:var(--warning-bg);border:1px solid rgba(245,158,11,0.3);flex:1;display:flex;align-items:center;justify-content:center;font-size:0.4rem;color:var(--warning);font-weight:700">2</div>
+                <div style="height:8px;border-radius:4px;background:var(--bg-elevated);border:1px solid var(--border-subtle);flex:1"></div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 140px;gap:4px;flex:1">
+                <div style="display:flex;flex-direction:column;gap:3px">
+                  <div class="mock-alert-row" style="height:16px;border-left:2px solid var(--danger)"><div class="dot" style="background:var(--danger)"></div><div style="flex:1;display:flex;flex-direction:column;gap:2px"><div style="height:3px;background:var(--text-primary);border-radius:1px;opacity:0.6;width:70%"></div><div style="height:2px;background:var(--border-default);border-radius:1px;width:50%"></div></div></div>
+                  <div class="mock-alert-row" style="height:16px;border-left:2px solid var(--warning)"><div class="dot" style="background:var(--warning)"></div><div style="flex:1;display:flex;flex-direction:column;gap:2px"><div style="height:3px;background:var(--text-primary);border-radius:1px;opacity:0.5;width:65%"></div><div style="height:2px;background:var(--border-default);border-radius:1px;width:45%"></div></div></div>
+                  <div class="mock-alert-row" style="height:16px;border-left:2px solid var(--warning)"><div class="dot" style="background:var(--warning)"></div><div style="flex:1"></div></div>
+                  <div class="mock-alert-row" style="height:16px;opacity:0.4"><div class="dot" style="background:var(--text-muted)"></div><div style="flex:1"></div></div>
+                </div>
+                <div style="background:var(--danger-bg);border:1px solid rgba(239,68,68,0.2);border-radius:6px;padding:5px;display:flex;flex-direction:column;gap:3px">
+                  <div style="height:4px;background:var(--danger);border-radius:1px;width:50%"></div>
+                  <div style="height:3px;background:var(--border-default);border-radius:1px;width:90%"></div>
+                  <div style="height:3px;background:var(--border-default);border-radius:1px;width:70%"></div>
+                  <div style="height:8px;background:var(--accent);border-radius:3px;margin-top:4px"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="del-card-body">
+        <div class="del-card-tag" style="color:var(--danger)">Wireframe + Visual Mockup</div>
+        <div class="del-card-title">Alerts</div>
+        <div class="del-card-desc">Centralised alert triage with severity stats, filter tabs (All/Active/Resolved), location/parameter filters, and a persistent detail side panel with acknowledge workflow.</div>
+        <div class="del-card-features">
+          <span class="del-card-feature">Alert feed</span>
+          <span class="del-card-feature">Detail panel</span>
+          <span class="del-card-feature">Filter & search</span>
+          <span class="del-card-feature">Acknowledge flow</span>
+        </div>
+        <div class="del-card-cta">
+          <span class="badge badge-safe">Live</span>
+          <span class="del-card-link">Open →</span>
+        </div>
+      </div>
+    </a>
+
+  </div>
+
+  <!-- Data Pages -->
+  <div class="section-label">03 — Data & Analysis</div>
+  <h2 class="section-title">Upload, Forecast & Insights</h2>
+  <p class="section-desc">Pages for enriching the platform with historical field data, running ML-driven forecasts, and reviewing aggregate performance statistics across all sensors.</p>
+
+  <div class="cards-grid">
+
+    <!-- Historical -->
+    <a href="historical.html" class="del-card">
+      <div class="del-card-preview" style="background:var(--bg-base);padding:0">
+        <div class="screen-mock">
+          <div class="mock-topbar"><div class="mock-dot" style="background:#EF4444"></div><div class="mock-dot" style="background:#F59E0B"></div><div class="mock-dot" style="background:#22C55E"></div><div style="height:5px;flex:1;background:var(--border-subtle);border-radius:2px;margin:0 6px"></div></div>
+          <div class="mock-body">
+            <div class="mock-sidebar"><div style="width:32px;height:6px;background:var(--accent);border-radius:2px;margin-bottom:4px"></div><div class="mock-nav-dot"></div><div class="mock-nav-dot"></div><div class="mock-nav-dot"></div><div class="mock-nav-dot active"></div></div>
+            <div class="mock-content">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;flex:1">
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <div class="mock-upload" style="flex:1">↑ Drop file</div>
+                </div>
+                <div class="mock-half" style="height:auto;display:flex;flex-direction:column;gap:3px;padding:5px">
+                  <div style="height:4px;background:var(--border-default);border-radius:1px;width:80%"></div>
+                  <div style="height:3px;background:var(--border-subtle);border-radius:1px;width:60%"></div>
+                  <div style="height:3px;background:var(--border-subtle);border-radius:1px;width:70%"></div>
+                  <div style="height:3px;background:var(--border-subtle);border-radius:1px;width:50%"></div>
+                  <div style="height:3px;background:var(--border-subtle);border-radius:1px;width:65%"></div>
+                  <div style="height:3px;background:var(--border-subtle);border-radius:1px;width:55%"></div>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:3px;margin-top:3px">
+                <div style="height:12px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border-subtle);display:flex;align-items:center;gap:4px;padding:0 4px"><div style="font-size:0.5rem">📊</div><div style="flex:1;height:3px;background:var(--border-default);border-radius:1px"></div><div style="width:20px;height:4px;background:var(--safe-bg);border-radius:2px"></div></div>
+                <div style="height:12px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border-subtle);display:flex;align-items:center;gap:4px;padding:0 4px"><div style="font-size:0.5rem">📈</div><div style="flex:1;height:3px;background:var(--border-default);border-radius:1px"></div><div style="width:20px;height:4px;background:var(--safe-bg);border-radius:2px"></div></div>
+                <div style="height:12px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border-subtle);display:flex;align-items:center;gap:4px;padding:0 4px"><div style="font-size:0.5rem">⚠️</div><div style="flex:1;height:3px;background:var(--border-default);border-radius:1px"></div><div style="width:30px;height:4px;background:var(--warning-bg);border-radius:2px"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="del-card-body">
+        <div class="del-card-tag" style="color:var(--warning)">Wireframe + Visual Mockup</div>
+        <div class="del-card-title">Historical Data Upload</div>
+        <div class="del-card-desc">Drag-and-drop CSV/Excel uploader with live progress bar, column validation, data preview table with row-level error highlighting, and an uploaded dataset library.</div>
+        <div class="del-card-features">
+          <span class="del-card-feature">Drag & drop</span>
+          <span class="del-card-feature">Progress bar</span>
+          <span class="del-card-feature">Data validation</span>
+          <span class="del-card-feature">Preview table</span>
+          <span class="del-card-feature">Dataset library</span>
+        </div>
+        <div class="del-card-cta">
+          <span class="badge badge-safe">Live + Interactive</span>
+          <span class="del-card-link">Open →</span>
+        </div>
+      </div>
+    </a>
+
+    <!-- Predictive -->
+    <a href="predictive.html" class="del-card">
+      <div class="del-card-preview" style="background:var(--bg-base);padding:0">
+        <div class="screen-mock">
+          <div class="mock-topbar"><div class="mock-dot" style="background:#EF4444"></div><div class="mock-dot" style="background:#F59E0B"></div><div class="mock-dot" style="background:#22C55E"></div><div style="height:5px;flex:1;background:var(--border-subtle);border-radius:2px;margin:0 6px"></div></div>
+          <div class="mock-body">
+            <div class="mock-sidebar"><div style="width:32px;height:6px;background:var(--accent);border-radius:2px;margin-bottom:4px"></div><div class="mock-nav-dot"></div><div class="mock-nav-dot"></div><div class="mock-nav-dot"></div><div class="mock-nav-dot"></div><div class="mock-nav-dot active"></div></div>
+            <div class="mock-content">
+              <div style="height:8px;background:var(--bg-card);border-radius:4px;border:1px solid var(--border-subtle);margin-bottom:4px"></div>
+              <div class="mock-half mock-forecast" style="height:50px;width:100%"></div>
+              <div class="mock-row" style="margin-top:3px">
+                <div style="flex:1;height:45px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border-subtle);padding:4px;display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(4,1fr);gap:2px">
+                  <div style="border-radius:2px;background:rgba(239,68,68,0.5)"></div>
+                  <div style="border-radius:2px;background:rgba(245,158,11,0.4)"></div>
+                  <div style="border-radius:2px;background:rgba(34,197,94,0.3)"></div>
+                  <div style="border-radius:2px;background:rgba(34,197,94,0.3)"></div>
+                  <div style="border-radius:2px;background:rgba(34,197,94,0.3)"></div>
+                  <div style="border-radius:2px;background:rgba(34,197,94,0.3)"></div>
+                  <div style="border-radius:2px;background:rgba(34,197,94,0.3)"></div>
+                  <div style="border-radius:2px;background:rgba(34,197,94,0.3)"></div>
+                  <div style="border-radius:2px;background:rgba(34,197,94,0.3)"></div>
+                  <div style="border-radius:2px;background:rgba(34,197,94,0.3)"></div>
+                  <div style="border-radius:2px;background:rgba(245,158,11,0.4)"></div>
+                  <div style="border-radius:2px;background:rgba(34,197,94,0.3)"></div>
+                </div>
+                <div style="flex:1;height:45px;border-radius:4px;background:var(--bg-card);border:1px solid var(--border-subtle);padding:4px;display:flex;flex-direction:column;gap:2px">
+                  <div style="height:3px;background:var(--accent);border-radius:1px;width:80%"></div>
+                  <div style="height:3px;background:var(--accent-blue);border-radius:1px;width:60%"></div>
+                  <div style="height:3px;background:var(--accent-purple);border-radius:1px;width:45%"></div>
+                  <div style="height:3px;background:var(--warning);border-radius:1px;width:35%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="del-card-body">
+        <div class="del-card-tag" style="color:var(--accent-purple)">Wireframe + Visual Mockup</div>
+        <div class="del-card-title">Predictive Analytics</div>
+        <div class="del-card-desc">14-day ML forecasts with confidence bands and safety-limit threshold lines, a risk heatmap (8 locations × 4 parameters), feature importance ranking, and AI-generated insights.</div>
+        <div class="del-card-features">
+          <span class="del-card-feature">Forecast chart</span>
+          <span class="del-card-feature">Confidence bands</span>
+          <span class="del-card-feature">Risk heatmap</span>
+          <span class="del-card-feature">Feature importance</span>
+          <span class="del-card-feature">AI insights</span>
+        </div>
+        <div class="del-card-cta">
+          <span class="badge badge-safe">Live</span>
+          <span class="del-card-link">Open →</span>
+        </div>
+      </div>
+    </a>
+
+    <!-- Statistics -->
+    <a href="statistics.html" class="del-card">
+      <div class="del-card-preview" style="background:var(--bg-base);padding:0">
+        <div class="screen-mock">
+          <div class="mock-topbar"><div class="mock-dot" style="background:#EF4444"></div><div class="mock-dot" style="background:#F59E0B"></div><div class="mock-dot" style="background:#22C55E"></div><div style="height:5px;flex:1;background:var(--border-subtle);border-radius:2px;margin:0 6px"></div></div>
+          <div class="mock-body">
+            <div class="mock-sidebar"><div style="width:32px;height:6px;background:var(--accent);border-radius:2px;margin-bottom:4px"></div><div class="mock-nav-dot"></div><div class="mock-nav-dot"></div><div class="mock-nav-dot"></div><div class="mock-nav-dot"></div><div class="mock-nav-dot"></div><div class="mock-nav-dot active"></div></div>
+            <div class="mock-content">
+              <div class="mock-kpi-row" style="margin-bottom:3px">
+                <div class="mock-kpi accent"></div>
+                <div class="mock-kpi safe"></div>
+                <div class="mock-kpi warn"></div>
+                <div class="mock-kpi danger"></div>
+              </div>
+              <div class="mock-row">
+                <div class="mock-half mock-bar-chart">
+                  <div class="mock-bar" style="height:20px"></div>
+                  <div class="mock-bar" style="height:30px"></div>
+                  <div class="mock-bar" style="height:28px"></div>
+                  <div class="mock-bar" style="height:22px"></div>
+                  <div class="mock-bar" style="height:15px"></div>
+                  <div class="mock-bar" style="height:10px"></div>
+                </div>
+                <div class="mock-half mock-line-chart"></div>
+              </div>
+              <div class="mock-row" style="margin-top:3px">
+                <div class="mock-half mock-line-chart"></div>
+                <div class="mock-half mock-bar-chart">
+                  <div class="mock-bar" style="height:22px;background:rgba(239,68,68,0.5)"></div>
+                  <div class="mock-bar" style="height:14px;background:rgba(245,158,11,0.5)"></div>
+                  <div class="mock-bar" style="height:8px"></div>
+                  <div class="mock-bar" style="height:7px"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="del-card-body">
+        <div class="del-card-tag" style="color:var(--safe)">Wireframe + Visual Mockup</div>
+        <div class="del-card-title">Summary Statistics</div>
+        <div class="del-card-desc">Date-range filtered aggregate view: KPIs (total readings, safety rate, alerts), pH distribution histogram, nitrates by location bar chart, compliance trend, turbidity scatter, and a summary table with CSV/PDF export.</div>
+        <div class="del-card-features">
+          <span class="del-card-feature">Date range picker</span>
+          <span class="del-card-feature">4 chart types</span>
+          <span class="del-card-feature">Summary table</span>
+          <span class="del-card-feature">CSV export</span>
+          <span class="del-card-feature">PDF report</span>
+        </div>
+        <div class="del-card-cta">
+          <span class="badge badge-safe">Live</span>
+          <span class="del-card-link">Open →</span>
+        </div>
+      </div>
+    </a>
+
+  </div>
+
+  <!-- Account pages -->
+  <div class="section-label">04 — Account & Configuration</div>
+  <h2 class="section-title">User Management & Settings</h2>
+  <p class="section-desc">Personal account management, sensor assignments, alert threshold configuration, and system preferences — enabling each user to tailor the platform to their workflow.</p>
+
+  <div class="cards-grid">
+
+    <a href="account.html" class="del-card">
+      <div class="del-card-preview" style="background:linear-gradient(135deg,var(--bg-surface),var(--bg-card));display:flex;align-items:center;justify-content:center;gap:var(--s5)">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
+          <div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent-purple));display:flex;align-items:center;justify-content:center;font-size:1.125rem;font-weight:700;color:#070B17">TL</div>
+          <div style="text-align:center">
+            <div style="font-size:0.75rem;font-weight:700;color:var(--text-primary)">Tom Lee</div>
+            <div style="font-size:0.5625rem;color:var(--text-muted)">Field Researcher</div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px;min-width:100px">
+          <div style="height:7px;background:var(--bg-elevated);border-radius:2px;width:90%"></div>
+          <div style="height:7px;background:var(--bg-elevated);border-radius:2px;width:70%"></div>
+          <div style="height:7px;background:var(--bg-elevated);border-radius:2px;width:80%"></div>
+          <div style="height:18px;background:var(--accent);border-radius:4px;margin-top:4px;opacity:0.8"></div>
+        </div>
+      </div>
+      <div class="del-card-body">
+        <div class="del-card-tag" style="color:var(--text-muted)">Wireframe + Visual Mockup</div>
+        <div class="del-card-title">User Account</div>
+        <div class="del-card-desc">Tabbed account management: profile editor, assigned sensor list, notification preferences (email/push/digest toggles), API key management with usage, and security (password + 2FA).</div>
+        <div class="del-card-features">
+          <span class="del-card-feature">Profile editor</span>
+          <span class="del-card-feature">Sensor assignments</span>
+          <span class="del-card-feature">Notification prefs</span>
+          <span class="del-card-feature">API key</span>
+          <span class="del-card-feature">2FA setup</span>
+        </div>
+        <div class="del-card-cta">
+          <span class="badge badge-safe">Live + Interactive</span>
+          <span class="del-card-link">Open →</span>
+        </div>
+      </div>
+    </a>
+
+    <a href="settings.html" class="del-card">
+      <div class="del-card-preview" style="background:linear-gradient(135deg,var(--bg-surface),var(--bg-card));padding:12px">
+        <div style="display:flex;flex-direction:column;gap:6px;width:100%">
+          <div style="font-size:0.5625rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted)">Alert Thresholds</div>
+          <div style="display:grid;grid-template-columns:1fr 40px 40px 40px;gap:4px;align-items:center">
+            <div style="height:5px;background:var(--border-default);border-radius:1px;width:60%"></div>
+            <div style="height:14px;background:var(--bg-surface);border:1px solid var(--border-default);border-radius:3px"></div>
+            <div style="height:14px;background:var(--bg-surface);border:1px solid var(--border-default);border-radius:3px"></div>
+            <div style="height:14px;background:var(--bg-surface);border:1px solid rgba(239,68,68,0.4);border-radius:3px"></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 40px 40px 40px;gap:4px;align-items:center">
+            <div style="height:5px;background:var(--border-default);border-radius:1px;width:55%"></div>
+            <div style="height:14px;background:var(--bg-surface);border:1px solid var(--border-default);border-radius:3px"></div>
+            <div style="height:14px;background:var(--bg-surface);border:1px solid var(--border-default);border-radius:3px"></div>
+            <div style="height:14px;background:var(--bg-surface);border:1px solid rgba(239,68,68,0.4);border-radius:3px"></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 40px 40px 40px;gap:4px;align-items:center">
+            <div style="height:5px;background:var(--border-default);border-radius:1px;width:70%"></div>
+            <div style="height:14px;background:var(--bg-surface);border:1px solid var(--border-default);border-radius:3px"></div>
+            <div style="height:14px;background:var(--bg-surface);border:1px solid rgba(255,255,255,0.1);border-radius:3px;opacity:0.3"></div>
+            <div style="height:14px;background:var(--bg-surface);border:1px solid rgba(239,68,68,0.4);border-radius:3px"></div>
+          </div>
+          <div style="height:14px;background:var(--accent);border-radius:4px;margin-top:3px;opacity:0.85;width:60%"></div>
+        </div>
+      </div>
+      <div class="del-card-body">
+        <div class="del-card-tag" style="color:var(--text-muted)">Wireframe + Visual Mockup</div>
+        <div class="del-card-title">Settings</div>
+        <div class="del-card-desc">System configuration: per-parameter alert thresholds (warning/critical), sensor add/remove/rename with update-rate control, automated export scheduling, and display preferences (theme, units, map style).</div>
+        <div class="del-card-features">
+          <span class="del-card-feature">Alert thresholds</span>
+          <span class="del-card-feature">Sensor CRUD</span>
+          <span class="del-card-feature">Export schedule</span>
+          <span class="del-card-feature">Theme & units</span>
+        </div>
+        <div class="del-card-cta">
+          <span class="badge badge-safe">Live + Interactive</span>
+          <span class="del-card-link">Open →</span>
+        </div>
+      </div>
+    </a>
+
+  </div>
+</div>
+
+<!-- ── Design Specifications ── -->
+<div class="specs-section">
+  <div class="specs-inner">
+    <div class="section-label">Design Specifications</div>
+    <h2 class="section-title">Technical Design Decisions</h2>
+    <p class="section-desc">Key decisions baked into every page of this deliverable.</p>
+
+    <div class="specs-grid">
+
+      <div class="spec-card">
+        <div class="spec-icon">🎨</div>
+        <div class="spec-title">Color System</div>
+        <div class="spec-items">
+          <div class="spec-item">Deep navy dark-mode base (#070B17)</div>
+          <div class="spec-item">Teal accent (#3B82F6) — water theme</div>
+          <div class="spec-item">Semantic status: green / amber / red</div>
+          <div class="spec-item">All values as CSS custom properties</div>
+        </div>
+        <div class="palette">
+          <div class="pal-swatch" style="background:#070B17" title="#070B17 Base"></div>
+          <div class="pal-swatch" style="background:#0B1224" title="#0B1224 Surface"></div>
+          <div class="pal-swatch" style="background:#0F1A30" title="#0F1A30 Card"></div>
+          <div class="pal-swatch" style="background:#3B82F6;box-shadow:0 0 8px rgba(59,130,246,0.4)" title="#3B82F6 Accent"></div>
+          <div class="pal-swatch" style="background:#60A5FA" title="#60A5FA Blue"></div>
+          <div class="pal-swatch" style="background:#22C55E" title="#22C55E Safe"></div>
+          <div class="pal-swatch" style="background:#F59E0B" title="#F59E0B Warning"></div>
+          <div class="pal-swatch" style="background:#EF4444" title="#EF4444 Danger"></div>
+        </div>
+      </div>
+
+      <div class="spec-card">
+        <div class="spec-icon">✍️</div>
+        <div class="spec-title">Typography</div>
+        <div class="spec-items">
+          <div class="spec-item">Inter — all UI text (Google Fonts)</div>
+          <div class="spec-item">JetBrains Mono — sensor values</div>
+          <div class="spec-item">Scale: 10 / 11 / 12 / 13 / 14 / 16 / 18 / 24 / 32 / 40px</div>
+          <div class="spec-item">Weights: 400, 500, 600, 700, 800</div>
+          <div class="spec-item">Tabular nums for sensor readings</div>
+        </div>
+      </div>
+
+      <div class="spec-card">
+        <div class="spec-icon">📐</div>
+        <div class="spec-title">Layout System</div>
+        <div class="spec-items">
+          <div class="spec-item">240px fixed sidebar (desktop)</div>
+          <div class="spec-item">64px top bar</div>
+          <div class="spec-item">8-point spacing grid (4px base unit)</div>
+          <div class="spec-item">CSS Grid + Flexbox layouts</div>
+          <div class="spec-item">max-width: 1200px content area</div>
+        </div>
+      </div>
+
+      <div class="spec-card">
+        <div class="spec-icon">📱</div>
+        <div class="spec-title">Responsive Breakpoints</div>
+        <div class="spec-items">
+          <div class="spec-item">Desktop: sidebar nav + top bar</div>
+          <div class="spec-item">≤ 900px: sidebar hidden, bottom nav</div>
+          <div class="spec-item">≤ 480px: single-column layouts</div>
+          <div class="spec-item">Mobile-first touch targets (≥ 44px)</div>
+          <div class="spec-item">Bottom nav: 5 key destinations</div>
+        </div>
+      </div>
+
+      <div class="spec-card">
+        <div class="spec-icon">🗺️</div>
+        <div class="spec-title">Map (Leaflet.js)</div>
+        <div class="spec-items">
+          <div class="spec-item">CartoDB Dark base tiles</div>
+          <div class="spec-item">Color-coded sensor markers</div>
+          <div class="spec-item">Click-to-popup with live readings</div>
+          <div class="spec-item">Deep-link to location detail</div>
+          <div class="spec-item">Mini map on location detail page</div>
+        </div>
+      </div>
+
+      <div class="spec-card">
+        <div class="spec-icon">📊</div>
+        <div class="spec-title">Charts (Chart.js 4)</div>
+        <div class="spec-items">
+          <div class="spec-item">Line charts — time series + forecasts</div>
+          <div class="spec-item">Bar charts — distributions + comparisons</div>
+          <div class="spec-item">Scatter — correlation analysis</div>
+          <div class="spec-item">Dark-themed tooltips + grid lines</div>
+          <div class="spec-item">Confidence interval fills</div>
+        </div>
+      </div>
+
+      <div class="spec-card">
+        <div class="spec-icon">♿</div>
+        <div class="spec-title">Accessibility</div>
+        <div class="spec-items">
+          <div class="spec-item">WCAG 2.1 AA contrast ratios</div>
+          <div class="spec-item">Status never colour-only (dot + label)</div>
+          <div class="spec-item">Focus rings on all interactive elements</div>
+          <div class="spec-item">Semantic HTML (nav, main, section)</div>
+          <div class="spec-item">data-tooltip on icon-only buttons</div>
+        </div>
+      </div>
+
+      <div class="spec-card">
+        <div class="spec-icon">⚡</div>
+        <div class="spec-title">Interactions</div>
+        <div class="spec-items">
+          <div class="spec-item">150ms micro-interactions (hover, focus)</div>
+          <div class="spec-item">250ms card lifts and reveals</div>
+          <div class="spec-item">Pulsing sensor dots (CSS animation)</div>
+          <div class="spec-item">Progress bar simulation on upload</div>
+          <div class="spec-item">Tab switching — account &amp; settings</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ── Footer ── -->
+<div class="footer">
+  <div class="footer-note">
+    AquaWatch Design Deliverable — ESP32 Water Quality Monitoring Platform<br>
+    All mockups are fully interactive HTML/CSS/JS. Open any page in a modern browser with an internet connection for live maps and charts.
+  </div>
+  <div class="footer-links">
+    <a href="sitemap.html">Sitemap</a>
+    <a href="style-guide.html">Style Guide</a>
+    <a href="dashboard.html">Dashboard</a>
+    <a href="location-detail.html">Location Detail</a>
+    <a href="alerts.html">Alerts</a>
+    <a href="historical.html">Historical Data</a>
+    <a href="predictive.html">Predictive Analytics</a>
+    <a href="statistics.html">Statistics</a>
+    <a href="account.html">Account</a>
+    <a href="settings.html">Settings</a>
+  </div>
+</div>
+
+<script src="assets/theme.js"></script>
+</body>
+</html>

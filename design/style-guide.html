@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AquaWatch — Style Guide</title>
+<link rel="stylesheet" href="assets/shared.css">
+<style>
+body { background: var(--bg-base); padding: var(--s8) var(--s10); max-width: 1200px; margin: 0 auto; }
+h1 { font-size: 2rem; font-weight: 700; margin-bottom: var(--s2); letter-spacing: -0.02em; }
+.page-subtitle { color: var(--text-secondary); margin-bottom: var(--s12); }
+
+/* Section */
+.sg-section { margin-bottom: var(--s12); }
+.sg-section-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--s2);
+  padding-bottom: var(--s3);
+  border-bottom: 2px solid var(--accent);
+  display: inline-block;
+}
+.sg-section-desc { font-size: 0.875rem; color: var(--text-secondary); margin-bottom: var(--s6); }
+
+/* Color swatches */
+.swatch-grid { display: flex; flex-wrap: wrap; gap: var(--s4); }
+.swatch {
+  display: flex; flex-direction: column;
+  width: 140px;
+}
+.swatch-block {
+  height: 64px;
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.swatch-info {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-top: none;
+  border-radius: 0 0 var(--r-lg) var(--r-lg);
+  padding: var(--s3);
+}
+.swatch-name { font-size: 0.75rem; font-weight: 600; color: var(--text-primary); margin-bottom: 2px; }
+.swatch-hex { font-size: 0.6875rem; font-family: var(--font-mono); color: var(--text-muted); }
+.swatch-token { font-size: 0.6rem; font-family: var(--font-mono); color: var(--text-muted); margin-top: 2px; word-break: break-all; }
+
+/* Typography */
+.type-row { margin-bottom: var(--s6); padding-bottom: var(--s6); border-bottom: 1px solid var(--border-subtle); }
+.type-meta { font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-muted); margin-top: var(--s2); }
+
+/* Spacing */
+.spacing-row { display: flex; flex-wrap: wrap; gap: var(--s4); align-items: flex-end; }
+.spacing-item { display: flex; flex-direction: column; align-items: center; gap: var(--s2); }
+.spacing-block { background: var(--accent); opacity: 0.7; border-radius: var(--r-sm); width: 32px; }
+.spacing-label { font-size: 0.6875rem; font-family: var(--font-mono); color: var(--text-muted); }
+
+/* Radius */
+.radius-row { display: flex; flex-wrap: wrap; gap: var(--s4); align-items: center; }
+.radius-item { display: flex; flex-direction: column; align-items: center; gap: var(--s2); }
+.radius-block { width: 64px; height: 64px; background: var(--bg-elevated); border: 2px solid var(--accent); }
+.radius-label { font-size: 0.6875rem; font-family: var(--font-mono); color: var(--text-muted); }
+
+/* Component rows */
+.comp-row { display: flex; flex-wrap: wrap; gap: var(--s4); align-items: center; margin-bottom: var(--s5); }
+.comp-label { font-size: 0.75rem; color: var(--text-muted); min-width: 90px; }
+
+/* Form demo */
+.form-demo { max-width: 480px; display: flex; flex-direction: column; gap: var(--s4); }
+
+/* Icon grid */
+.icon-grid { display: flex; flex-wrap: wrap; gap: var(--s4); }
+.icon-item {
+  display: flex; flex-direction: column; align-items: center; gap: var(--s2);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-lg);
+  padding: var(--s4);
+  width: 80px;
+  transition: all var(--t-fast);
+}
+.icon-item:hover { border-color: var(--accent); }
+.icon-item svg { color: var(--accent); }
+.icon-name { font-size: 0.5625rem; text-align: center; color: var(--text-muted); font-family: var(--font-mono); }
+
+/* Back nav */
+.back-nav { margin-bottom: var(--s8); }
+.nav-links { display: flex; gap: var(--s4); flex-wrap: wrap; margin-top: var(--s3); }
+.nav-links a {
+  padding: var(--s2) var(--s4); border-radius: var(--r-md);
+  border: 1px solid var(--border-default); color: var(--text-secondary);
+  font-size: 0.8125rem; transition: all var(--t-fast);
+}
+.nav-links a:hover { border-color: var(--accent); color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="back-nav">
+  <h1>🎨 AquaWatch Design System</h1>
+  <p class="page-subtitle">Comprehensive style guide — colors, typography, components, and patterns</p>
+  <div class="nav-links">
+    <a href="index.html">← Design Index</a>
+    <a href="sitemap.html">Sitemap</a>
+    <a href="dashboard.html">Dashboard Mockup →</a>
+  </div>
+</div>
+
+<!-- ── Brand ── -->
+<div class="sg-section">
+  <div class="sg-section-title">Brand</div>
+  <p class="sg-section-desc">AquaWatch is a professional environmental monitoring platform. The visual identity communicates reliability, clarity, and scientific precision — using deep navy as the foundation and teal as an energizing water-themed accent.</p>
+  <div style="display:flex;align-items:center;gap:var(--s6);flex-wrap:wrap;padding:var(--s8);background:var(--bg-surface);border-radius:var(--r-2xl);border:1px solid var(--border-subtle)">
+    <div style="display:flex;align-items:center;gap:var(--s3)">
+      <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+        <path d="M20 4 C20 4 8 16 8 24 A12 12 0 0 0 32 24 C32 16 20 4 20 4Z" fill="#3B82F6"/>
+        <path d="M20 12 C20 12 13 20 13 25 A7 7 0 0 0 27 25 C27 20 20 12 20 12Z" fill="rgba(7,23,40,0.4)"/>
+      </svg>
+      <div>
+        <div style="font-size:1.5rem;font-weight:700;letter-spacing:-0.02em">Aqua<span style="color:var(--accent)">Watch</span></div>
+        <div style="font-size:0.75rem;color:var(--text-muted)">Water Quality Monitoring</div>
+      </div>
+    </div>
+    <div style="width:1px;height:48px;background:var(--border-subtle)"></div>
+    <div style="display:flex;flex-direction:column;gap:var(--s2)">
+      <div style="font-size:0.75rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.06em">Tagline</div>
+      <div style="font-size:1rem;font-style:italic;color:var(--text-secondary)">"Monitor. Predict. Protect."</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Colors ── -->
+<div class="sg-section">
+  <div class="sg-section-title">Color System</div>
+  <p class="sg-section-desc">Semantic color tokens. Always use tokens, never hardcode hex values in components.</p>
+
+  <p style="font-size:0.8125rem;font-weight:600;color:var(--text-secondary);margin-bottom:var(--s4)">Background Scale</p>
+  <div class="swatch-grid" style="margin-bottom:var(--s8)">
+    <div class="swatch">
+      <div class="swatch-block" style="background:#070B17"></div>
+      <div class="swatch-info"><div class="swatch-name">Base</div><div class="swatch-hex">#070B17</div><div class="swatch-token">--bg-base</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-block" style="background:#0B1224"></div>
+      <div class="swatch-info"><div class="swatch-name">Surface</div><div class="swatch-hex">#0B1224</div><div class="swatch-token">--bg-surface</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-block" style="background:#0F1A30"></div>
+      <div class="swatch-info"><div class="swatch-name">Card</div><div class="swatch-hex">#0F1A30</div><div class="swatch-token">--bg-card</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-block" style="background:#15243F"></div>
+      <div class="swatch-info"><div class="swatch-name">Elevated</div><div class="swatch-hex">#15243F</div><div class="swatch-token">--bg-elevated</div></div>
+    </div>
+  </div>
+
+  <p style="font-size:0.8125rem;font-weight:600;color:var(--text-secondary);margin-bottom:var(--s4)">Accent & Brand</p>
+  <div class="swatch-grid" style="margin-bottom:var(--s8)">
+    <div class="swatch">
+      <div class="swatch-block" style="background:#3B82F6;box-shadow:0 0 20px rgba(59,130,246,0.4)"></div>
+      <div class="swatch-info"><div class="swatch-name">TechBlue Primary</div><div class="swatch-hex">#3B82F6</div><div class="swatch-token">--accent</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-block" style="background:#2563EB"></div>
+      <div class="swatch-info"><div class="swatch-name">TechBlue Dim</div><div class="swatch-hex">#2563EB</div><div class="swatch-token">--accent-dim</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-block" style="background:#60A5FA"></div>
+      <div class="swatch-info"><div class="swatch-name">Sky Blue</div><div class="swatch-hex">#60A5FA</div><div class="swatch-token">--accent-blue</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-block" style="background:#8B5CF6"></div>
+      <div class="swatch-info"><div class="swatch-name">Violet</div><div class="swatch-hex">#8B5CF6</div><div class="swatch-token">--accent-purple</div></div>
+    </div>
+  </div>
+
+  <p style="font-size:0.8125rem;font-weight:600;color:var(--text-secondary);margin-bottom:var(--s4)">Semantic Status Colors</p>
+  <div class="swatch-grid" style="margin-bottom:var(--s8)">
+    <div class="swatch">
+      <div class="swatch-block" style="background:#22C55E;box-shadow:0 0 16px rgba(34,197,94,0.3)"></div>
+      <div class="swatch-info"><div class="swatch-name">Safe</div><div class="swatch-hex">#22C55E</div><div class="swatch-token">--safe</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-block" style="background:#F59E0B;box-shadow:0 0 16px rgba(245,158,11,0.3)"></div>
+      <div class="swatch-info"><div class="swatch-name">Warning</div><div class="swatch-hex">#F59E0B</div><div class="swatch-token">--warning</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-block" style="background:#EF4444;box-shadow:0 0 16px rgba(239,68,68,0.3)"></div>
+      <div class="swatch-info"><div class="swatch-name">Danger</div><div class="swatch-hex">#EF4444</div><div class="swatch-token">--danger</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-block" style="background:#3B82F6"></div>
+      <div class="swatch-info"><div class="swatch-name">Info</div><div class="swatch-hex">#3B82F6</div><div class="swatch-token">--info</div></div>
+    </div>
+  </div>
+
+  <p style="font-size:0.8125rem;font-weight:600;color:var(--text-secondary);margin-bottom:var(--s4)">Text Scale</p>
+  <div class="swatch-grid">
+    <div class="swatch">
+      <div class="swatch-block" style="background:#F1F5F9"></div>
+      <div class="swatch-info"><div class="swatch-name">Primary</div><div class="swatch-hex">#F1F5F9</div><div class="swatch-token">--text-primary</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-block" style="background:#94A3B8"></div>
+      <div class="swatch-info"><div class="swatch-name">Secondary</div><div class="swatch-hex">#94A3B8</div><div class="swatch-token">--text-secondary</div></div>
+    </div>
+    <div class="swatch">
+      <div class="swatch-block" style="background:#64748B"></div>
+      <div class="swatch-info"><div class="swatch-name">Muted</div><div class="swatch-hex">#64748B</div><div class="swatch-token">--text-muted</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Typography ── -->
+<div class="sg-section">
+  <div class="sg-section-title">Typography</div>
+  <p class="sg-section-desc">Two typefaces: <strong>Inter</strong> for all UI text, <strong>JetBrains Mono</strong> for sensor values, code, and tokens.</p>
+
+  <div class="type-row">
+    <div style="font-size:2.5rem;font-weight:700;letter-spacing:-0.03em;line-height:1.1">Display — 40px / 700</div>
+    <div class="type-meta">font-size: 2.5rem · font-weight: 700 · letter-spacing: -0.03em · Use: page hero titles</div>
+  </div>
+  <div class="type-row">
+    <div style="font-size:2rem;font-weight:700;letter-spacing:-0.02em">Heading 1 — 32px / 700</div>
+    <div class="type-meta">font-size: 2rem · font-weight: 700 · letter-spacing: -0.02em · Use: page headings</div>
+  </div>
+  <div class="type-row">
+    <div style="font-size:1.5rem;font-weight:600;letter-spacing:-0.01em">Heading 2 — 24px / 600</div>
+    <div class="type-meta">font-size: 1.5rem · font-weight: 600 · Use: section headings</div>
+  </div>
+  <div class="type-row">
+    <div style="font-size:1.125rem;font-weight:600">Heading 3 — 18px / 600</div>
+    <div class="type-meta">font-size: 1.125rem · font-weight: 600 · Use: card titles, subsections</div>
+  </div>
+  <div class="type-row">
+    <div style="font-size:1rem;font-weight:500">Body Large — 16px / 500</div>
+    <div class="type-meta">font-size: 1rem · font-weight: 500 · Use: primary body text</div>
+  </div>
+  <div class="type-row">
+    <div style="font-size:0.875rem;color:var(--text-secondary)">Body — 14px / 400 · Secondary text providing supporting details and descriptions.</div>
+    <div class="type-meta">font-size: 0.875rem · font-weight: 400 · color: --text-secondary</div>
+  </div>
+  <div class="type-row">
+    <div style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted)">LABEL — 12px / 600 UPPERCASE</div>
+    <div class="type-meta">font-size: 0.75rem · font-weight: 600 · text-transform: uppercase · Use: table headers, section labels</div>
+  </div>
+  <div class="type-row" style="border:none">
+    <div style="font-family:var(--font-mono);font-size:1.5rem;font-weight:500;color:var(--accent)">7.42 mg/L</div>
+    <div class="type-meta">font-family: JetBrains Mono · Use: sensor readings, numeric values, code snippets</div>
+  </div>
+</div>
+
+<!-- ── Spacing ── -->
+<div class="sg-section">
+  <div class="sg-section-title">Spacing Scale</div>
+  <p class="sg-section-desc">8-point grid. All spacing values are multiples of 4px. Use tokens, not arbitrary values.</p>
+  <div class="spacing-row">
+    <div class="spacing-item"><div class="spacing-block" style="height:4px"></div><div class="spacing-label">s1<br>4px</div></div>
+    <div class="spacing-item"><div class="spacing-block" style="height:8px"></div><div class="spacing-label">s2<br>8px</div></div>
+    <div class="spacing-item"><div class="spacing-block" style="height:12px"></div><div class="spacing-label">s3<br>12px</div></div>
+    <div class="spacing-item"><div class="spacing-block" style="height:16px"></div><div class="spacing-label">s4<br>16px</div></div>
+    <div class="spacing-item"><div class="spacing-block" style="height:20px"></div><div class="spacing-label">s5<br>20px</div></div>
+    <div class="spacing-item"><div class="spacing-block" style="height:24px"></div><div class="spacing-label">s6<br>24px</div></div>
+    <div class="spacing-item"><div class="spacing-block" style="height:32px"></div><div class="spacing-label">s8<br>32px</div></div>
+    <div class="spacing-item"><div class="spacing-block" style="height:40px"></div><div class="spacing-label">s10<br>40px</div></div>
+    <div class="spacing-item"><div class="spacing-block" style="height:48px"></div><div class="spacing-label">s12<br>48px</div></div>
+    <div class="spacing-item"><div class="spacing-block" style="height:64px"></div><div class="spacing-label">s16<br>64px</div></div>
+  </div>
+</div>
+
+<!-- ── Border Radius ── -->
+<div class="sg-section">
+  <div class="sg-section-title">Border Radius</div>
+  <div class="radius-row">
+    <div class="radius-item"><div class="radius-block" style="border-radius:var(--r-sm)"></div><div class="radius-label">r-sm<br>4px</div></div>
+    <div class="radius-item"><div class="radius-block" style="border-radius:var(--r-md)"></div><div class="radius-label">r-md<br>8px</div></div>
+    <div class="radius-item"><div class="radius-block" style="border-radius:var(--r-lg)"></div><div class="radius-label">r-lg<br>12px</div></div>
+    <div class="radius-item"><div class="radius-block" style="border-radius:var(--r-xl)"></div><div class="radius-label">r-xl<br>16px</div></div>
+    <div class="radius-item"><div class="radius-block" style="border-radius:var(--r-2xl)"></div><div class="radius-label">r-2xl<br>24px</div></div>
+    <div class="radius-item"><div class="radius-block" style="border-radius:var(--r-full);width:64px"></div><div class="radius-label">r-full<br>9999px</div></div>
+  </div>
+</div>
+
+<!-- ── Buttons ── -->
+<div class="sg-section">
+  <div class="sg-section-title">Buttons</div>
+  <div class="comp-row">
+    <span class="comp-label">Primary</span>
+    <button class="btn btn-primary btn-sm">Small</button>
+    <button class="btn btn-primary">Default</button>
+    <button class="btn btn-primary btn-lg">Large</button>
+    <button class="btn btn-primary" style="opacity:0.4;cursor:not-allowed">Disabled</button>
+  </div>
+  <div class="comp-row">
+    <span class="comp-label">Secondary</span>
+    <button class="btn btn-secondary btn-sm">Small</button>
+    <button class="btn btn-secondary">Default</button>
+    <button class="btn btn-secondary btn-lg">Large</button>
+  </div>
+  <div class="comp-row">
+    <span class="comp-label">Ghost</span>
+    <button class="btn btn-ghost">Ghost</button>
+  </div>
+  <div class="comp-row">
+    <span class="comp-label">Danger</span>
+    <button class="btn btn-danger">Delete</button>
+  </div>
+  <div class="comp-row">
+    <span class="comp-label">Warning</span>
+    <button class="btn btn-warning">Acknowledge</button>
+  </div>
+  <div class="comp-row">
+    <span class="comp-label">With icon</span>
+    <button class="btn btn-primary">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Add Sensor
+    </button>
+    <button class="btn btn-secondary">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Export
+    </button>
+  </div>
+</div>
+
+<!-- ── Badges ── -->
+<div class="sg-section">
+  <div class="sg-section-title">Badges & Status</div>
+  <div class="comp-row">
+    <span class="comp-label">Severity</span>
+    <span class="badge badge-safe"><span class="status-dot dot-safe"></span>Safe</span>
+    <span class="badge badge-warning"><span class="status-dot dot-warning"></span>Warning</span>
+    <span class="badge badge-danger"><span class="status-dot dot-danger"></span>Critical</span>
+    <span class="badge badge-info">Info</span>
+    <span class="badge badge-neutral">Offline</span>
+  </div>
+  <div class="comp-row">
+    <span class="comp-label">Status dots</span>
+    <span class="status-dot dot-safe"></span>
+    <span class="status-dot dot-warning"></span>
+    <span class="status-dot dot-danger"></span>
+    <span class="status-dot dot-offline"></span>
+  </div>
+</div>
+
+<!-- ── Forms ── -->
+<div class="sg-section">
+  <div class="sg-section-title">Form Elements</div>
+  <div class="form-demo">
+    <div class="form-group">
+      <label class="form-label required">Sensor Name</label>
+      <input type="text" class="form-control" placeholder="e.g. Limpopo River Station A" value="">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Location</label>
+      <select class="form-control">
+        <option>Limpopo River</option>
+        <option>Vaal Dam</option>
+        <option>Orange River</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notes</label>
+      <textarea class="form-control" rows="3" placeholder="Optional notes about this sensor..."></textarea>
+    </div>
+    <div style="display:flex;gap:var(--s3)">
+      <button class="btn btn-primary">Save Changes</button>
+      <button class="btn btn-secondary">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Cards ── -->
+<div class="sg-section">
+  <div class="sg-section-title">Card Components</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:var(--s4)">
+    <!-- KPI Card examples -->
+    <div class="kpi-card kpi-safe">
+      <div class="kpi-header">
+        <div>
+          <div class="kpi-label">Safe Locations</div>
+          <div class="kpi-value safe">5</div>
+          <div class="kpi-sub">of 8 active sensors</div>
+        </div>
+        <div class="kpi-icon" style="background:var(--safe-bg)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--safe)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+      </div>
+    </div>
+    <div class="kpi-card kpi-warn">
+      <div class="kpi-header">
+        <div>
+          <div class="kpi-label">Warnings</div>
+          <div class="kpi-value warn">2</div>
+          <div class="kpi-sub">elevated readings</div>
+        </div>
+        <div class="kpi-icon" style="background:var(--warning-bg)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+      </div>
+    </div>
+    <div class="kpi-card kpi-danger">
+      <div class="kpi-header">
+        <div>
+          <div class="kpi-label">Critical</div>
+          <div class="kpi-value danger">1</div>
+          <div class="kpi-sub">immediate action needed</div>
+        </div>
+        <div class="kpi-icon" style="background:var(--danger-bg)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        </div>
+      </div>
+    </div>
+    <div class="kpi-card kpi-accent">
+      <div class="kpi-header">
+        <div>
+          <div class="kpi-label">Total Locations</div>
+          <div class="kpi-value accent">8</div>
+          <div class="kpi-sub">across 4 provinces</div>
+        </div>
+        <div class="kpi-icon" style="background:var(--accent-glow)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Alert Items ── -->
+<div class="sg-section">
+  <div class="sg-section-title">Alert Components</div>
+  <div class="card">
+    <div class="alert-item">
+      <div class="alert-icon-wrap alert-icon-danger">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </div>
+      <div class="alert-meta">
+        <div class="alert-title">Critical: Nitrates exceed safe limit</div>
+        <div class="alert-desc">Crocodile River — 78.3 mg/L detected (limit: 45 mg/L)</div>
+        <div class="alert-time">2 minutes ago</div>
+      </div>
+      <div class="alert-right">
+        <span class="badge badge-danger">Critical</span>
+        <button class="btn btn-sm btn-secondary">View</button>
+      </div>
+    </div>
+    <div class="alert-item">
+      <div class="alert-icon-wrap alert-icon-warning">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      </div>
+      <div class="alert-meta">
+        <div class="alert-title">Warning: Low dissolved oxygen</div>
+        <div class="alert-desc">Olifants River — 4.2 mg/L (threshold: 5.0 mg/L)</div>
+        <div class="alert-time">18 minutes ago</div>
+      </div>
+      <div class="alert-right">
+        <span class="badge badge-warning">Warning</span>
+        <button class="btn btn-sm btn-secondary">View</button>
+      </div>
+    </div>
+    <div class="alert-item">
+      <div class="alert-icon-wrap alert-icon-info">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      </div>
+      <div class="alert-meta">
+        <div class="alert-title">Info: Sensor Vaal-03 came online</div>
+        <div class="alert-desc">Connection restored after 4-hour maintenance window</div>
+        <div class="alert-time">1 hour ago</div>
+      </div>
+      <div class="alert-right">
+        <span class="badge badge-info">Info</span>
+        <button class="btn btn-sm btn-ghost">Dismiss</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Meter / Progress ── -->
+<div class="sg-section">
+  <div class="sg-section-title">Parameter Meters</div>
+  <div style="max-width:400px;display:flex;flex-direction:column;gap:var(--s5)">
+    <div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:var(--s2)">
+        <span style="font-size:0.8125rem;color:var(--text-secondary)">pH</span>
+        <span style="font-size:0.8125rem;font-family:var(--font-mono);color:var(--safe)">7.4 <span style="color:var(--text-muted)">(safe)</span></span>
+      </div>
+      <div class="meter-bar"><div class="meter-fill safe" style="width:74%"></div></div>
+      <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:0.6875rem;color:var(--text-muted)"><span>0</span><span>6.5–8.5 safe</span><span>14</span></div>
+    </div>
+    <div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:var(--s2)">
+        <span style="font-size:0.8125rem;color:var(--text-secondary)">Turbidity</span>
+        <span style="font-size:0.8125rem;font-family:var(--font-mono);color:var(--warning)">4.1 NTU <span style="color:var(--text-muted)">(warning)</span></span>
+      </div>
+      <div class="meter-bar"><div class="meter-fill warning" style="width:82%"></div></div>
+    </div>
+    <div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:var(--s2)">
+        <span style="font-size:0.8125rem;color:var(--text-secondary)">Nitrates</span>
+        <span style="font-size:0.8125rem;font-family:var(--font-mono);color:var(--danger)">78.3 mg/L <span style="color:var(--text-muted)">(critical)</span></span>
+      </div>
+      <div class="meter-bar"><div class="meter-fill danger" style="width:95%"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Iconography ── -->
+<div class="sg-section">
+  <div class="sg-section-title">Iconography</div>
+  <p class="sg-section-desc">18×18px SVG icons, 2px stroke-width, Feather Icons style. Color inherits from parent.</p>
+  <div class="icon-grid">
+    <!-- Dashboard -->
+    <div class="icon-item">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      <span class="icon-name">dashboard</span>
+    </div>
+    <!-- Location -->
+    <div class="icon-item">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+      <span class="icon-name">location</span>
+    </div>
+    <!-- Alert -->
+    <div class="icon-item">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+      <span class="icon-name">alert</span>
+    </div>
+    <!-- Upload -->
+    <div class="icon-item">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <span class="icon-name">upload</span>
+    </div>
+    <!-- Chart -->
+    <div class="icon-item">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      <span class="icon-name">statistics</span>
+    </div>
+    <!-- Analytics -->
+    <div class="icon-item">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+      <span class="icon-name">predictive</span>
+    </div>
+    <!-- Settings -->
+    <div class="icon-item">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      <span class="icon-name">settings</span>
+    </div>
+    <!-- User -->
+    <div class="icon-item">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      <span class="icon-name">user</span>
+    </div>
+    <!-- Water drop -->
+    <div class="icon-item">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 C12 2 5 10 5 15 A7 7 0 0 0 19 15 C19 10 12 2 12 2Z"/></svg>
+      <span class="icon-name">water</span>
+    </div>
+    <!-- Sensor -->
+    <div class="icon-item">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
+      <span class="icon-name">sensor</span>
+    </div>
+    <!-- Download -->
+    <div class="icon-item">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      <span class="icon-name">download</span>
+    </div>
+    <!-- Filter -->
+    <div class="icon-item">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+      <span class="icon-name">filter</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── Tabs ── -->
+<div class="sg-section">
+  <div class="sg-section-title">Tab Navigation</div>
+  <div style="max-width:400px">
+    <div class="tabs">
+      <button class="tab-btn active">All</button>
+      <button class="tab-btn">Active</button>
+      <button class="tab-btn">Resolved</button>
+      <button class="tab-btn">History</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/theme.js"></script>
+</body>
+</html>

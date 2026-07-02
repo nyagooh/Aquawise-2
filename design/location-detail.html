@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AquaWatch — Location Detail</title>
+<link rel="stylesheet" href="assets/shared.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+#mini-map { height: 200px; border-radius: var(--r-lg); overflow: hidden; }
+.param-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--s4); }
+.param-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-xl);
+  padding: var(--s4) var(--s5);
+  transition: all var(--t-fast);
+}
+.param-card:hover { border-color: var(--border-default); }
+.param-card.danger { border-left: 3px solid var(--danger); background: rgba(239,68,68,0.04); }
+.param-card.warning { border-left: 3px solid var(--warning); background: rgba(245,158,11,0.04); }
+.param-card.safe { border-left: 3px solid var(--safe); }
+.param-name { font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: var(--s1); }
+.param-value { font-family: var(--font-mono); font-size: 1.75rem; font-weight: 700; line-height: 1; margin-bottom: var(--s2); }
+.param-value.safe { color: var(--safe); }
+.param-value.warning { color: var(--warning); }
+.param-value.danger { color: var(--danger); }
+.param-unit { font-size: 0.75rem; color: var(--text-muted); font-family: var(--font); font-weight: 400; }
+.param-range { font-size: 0.6875rem; color: var(--text-muted); margin-top: var(--s1); }
+.chart-tabs { display: flex; gap: var(--s1); margin-bottom: var(--s4); }
+.chart-tab {
+  padding: 4px 12px; border-radius: var(--r-full);
+  font-size: 0.75rem; font-weight: 500;
+  color: var(--text-muted);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  cursor: pointer; transition: all var(--t-fast);
+}
+.chart-tab.active { background: var(--accent-glow); color: var(--accent); border-color: rgba(59,130,246,0.3); }
+.layout-3col { display: grid; grid-template-columns: 1fr 1fr 300px; gap: var(--s6); }
+@media(max-width:1100px){ .layout-3col { grid-template-columns: 1fr 1fr; } }
+@media(max-width:760px){ .layout-3col { grid-template-columns: 1fr; } }
+.info-row { display: flex; align-items: center; gap: var(--s3); padding: var(--s3) 0; border-bottom: 1px solid var(--border-subtle); }
+.info-row:last-child { border-bottom: none; }
+.info-label { font-size: 0.75rem; color: var(--text-muted); min-width: 100px; }
+.info-val { font-size: 0.875rem; color: var(--text-primary); font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+<!-- Sidebar (same as dashboard) -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><path d="M14 2C14 2 4 11 4 18A10 10 0 0024 18C24 11 14 2 14 2Z" fill="#3B82F6"/><path d="M14 9C14 9 9 14 9 18A5 5 0 0019 18C19 14 14 9 14 9Z" fill="rgba(7,23,40,0.5)"/></svg>
+    <span class="sidebar-logo-text">Aqua<span>Watch</span></span>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Monitor</div>
+    <a href="dashboard.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard</a>
+    <a href="location-detail.html" class="nav-item active"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>Locations</a>
+    <a href="alerts.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>Alerts<span class="badge">3</span></a>
+    <div class="nav-section-label">Analyse</div>
+    <a href="historical.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Historical Data</a>
+    <a href="predictive.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Predictive Analytics</a>
+    <a href="statistics.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Statistics</a>
+    <div class="nav-section-label">Account</div>
+    <a href="account.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>My Account</a>
+    <a href="settings.html" class="nav-item"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>Settings</a>
+  </nav>
+  <div class="sidebar-footer"><div class="user-chip"><div class="user-avatar">TL</div><div class="user-info"><div class="user-name">Tom Lee</div><div class="user-role">Field Researcher</div></div></div></div>
+</aside>
+
+<main class="main">
+  <div class="mobile-topbar">
+    <a href="dashboard.html" style="color:var(--text-secondary)">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+    </a>
+    <span style="font-weight:600;font-size:0.9375rem">Crocodile River</span>
+    <div style="margin-left:auto"><span class="badge badge-danger">Critical</span></div>
+  </div>
+
+  <div class="topbar">
+    <div class="topbar-breadcrumb">
+      <a href="dashboard.html" class="btn btn-sm btn-ghost" style="padding:4px 8px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+      </a>
+      <a href="dashboard.html" style="color:var(--text-secondary);font-size:0.875rem">Dashboard</a>
+      <span class="crumb-sep">›</span>
+      <span style="color:var(--text-secondary);font-size:0.875rem">Locations</span>
+      <span class="crumb-sep">›</span>
+      <span class="crumb-current">Crocodile River</span>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn btn-sm btn-secondary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export
+      </button>
+      <button class="btn btn-sm btn-warning">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+        Acknowledge Alert
+      </button>
+    </div>
+  </div>
+
+  <div class="page-content">
+
+    <!-- Location Header -->
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:var(--s4)">
+      <div style="display:flex;align-items:flex-start;gap:var(--s4)">
+        <div style="width:52px;height:52px;border-radius:var(--r-xl);background:var(--danger-bg);border:1px solid rgba(239,68,68,0.3);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        </div>
+        <div>
+          <h1 style="font-size:1.375rem;font-weight:700;letter-spacing:-0.01em;margin-bottom:4px">Crocodile River</h1>
+          <div style="display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap">
+            <span style="font-size:0.8125rem;color:var(--text-muted)">📍 Limpopo Province, South Africa</span>
+            <span class="badge badge-danger"><span class="status-dot dot-danger"></span>Critical</span>
+            <span style="font-size:0.75rem;color:var(--text-muted);font-family:var(--font-mono)">-24.1800°, 31.5000°</span>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:var(--s1)">
+        <div style="font-size:0.75rem;color:var(--text-muted)">Sensor ID</div>
+        <div style="font-family:var(--font-mono);font-size:0.875rem;color:var(--accent)">ESP32-CRR-004</div>
+        <div style="font-size:0.75rem;color:var(--text-muted)">Updated 2 min ago</div>
+      </div>
+    </div>
+
+    <!-- Parameter Cards -->
+    <div class="param-grid">
+      <div class="param-card safe">
+        <div class="param-name">pH</div>
+        <div class="param-value safe">7.1 <span class="param-unit">pH</span></div>
+        <div class="meter-bar" style="margin:8px 0"><div class="meter-fill safe" style="width:71%"></div></div>
+        <div class="param-range">Safe: 6.5 – 8.5</div>
+      </div>
+      <div class="param-card safe">
+        <div class="param-name">Turbidity</div>
+        <div class="param-value safe">2.1 <span class="param-unit">NTU</span></div>
+        <div class="meter-bar" style="margin:8px 0"><div class="meter-fill safe" style="width:42%"></div></div>
+        <div class="param-range">Limit: &lt; 5 NTU</div>
+      </div>
+      <div class="param-card safe">
+        <div class="param-name">Dissolved Oxygen</div>
+        <div class="param-value safe">6.8 <span class="param-unit">mg/L</span></div>
+        <div class="meter-bar" style="margin:8px 0"><div class="meter-fill safe" style="width:68%"></div></div>
+        <div class="param-range">Min: 5.0 mg/L</div>
+      </div>
+      <div class="param-card danger">
+        <div class="param-name">Nitrates</div>
+        <div class="param-value danger">78.3 <span class="param-unit">mg/L</span></div>
+        <div class="meter-bar" style="margin:8px 0"><div class="meter-fill danger" style="width:95%"></div></div>
+        <div class="param-range" style="color:var(--danger)">⚠ Exceeds 45 mg/L limit</div>
+      </div>
+      <div class="param-card safe">
+        <div class="param-name">Temperature</div>
+        <div class="param-value safe">22.4 <span class="param-unit">°C</span></div>
+        <div class="meter-bar" style="margin:8px 0"><div class="meter-fill safe" style="width:56%"></div></div>
+        <div class="param-range">Normal: 15–30°C</div>
+      </div>
+    </div>
+
+    <!-- Charts + Sidebar -->
+    <div class="layout-3col">
+      <!-- Charts -->
+      <div class="card" style="grid-column:1/3">
+        <div class="card-header">
+          <div class="card-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/></svg>
+            Parameter Trends
+          </div>
+          <div class="card-actions">
+            <div class="chart-tabs">
+              <button class="chart-tab active" onclick="switchChart(this,'nitrates')">Nitrates</button>
+              <button class="chart-tab" onclick="switchChart(this,'ph')">pH</button>
+              <button class="chart-tab" onclick="switchChart(this,'do')">DO</button>
+              <button class="chart-tab" onclick="switchChart(this,'turb')">Turbidity</button>
+            </div>
+            <select class="form-control" style="width:auto;padding:4px 10px;font-size:0.75rem">
+              <option>Last 7 days</option>
+              <option>Last 30 days</option>
+              <option>Last 90 days</option>
+            </select>
+          </div>
+        </div>
+        <div class="card-body">
+          <canvas id="param-chart" height="200"></canvas>
+        </div>
+      </div>
+
+      <!-- Info + Mini Map (right column) -->
+      <div style="display:flex;flex-direction:column;gap:var(--s4)">
+        <!-- Location info -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Location Info</div>
+          </div>
+          <div class="card-body" style="padding:var(--s4) var(--s5)">
+            <div class="info-row">
+              <span class="info-label">River System</span>
+              <span class="info-val">Crocodile (Limpopo)</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Province</span>
+              <span class="info-val">Limpopo</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Installed</span>
+              <span class="info-val">12 Jan 2024</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Sensor Model</span>
+              <span class="info-val">ESP32-WROOM-32</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Update Rate</span>
+              <span class="info-val">Every 15 min</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Battery</span>
+              <span class="info-val" style="color:var(--warning)">⚠ 23%</span>
+            </div>
+          </div>
+        </div>
+        <!-- Mini Map -->
+        <div class="card" style="overflow:hidden">
+          <div class="card-header">
+            <div class="card-title">Map</div>
+            <button class="btn btn-sm btn-ghost">Fullscreen</button>
+          </div>
+          <div id="mini-map"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Alert History -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+          Alert History (This Location)
+        </div>
+        <div class="card-actions">
+          <div class="tabs">
+            <button class="tab-btn active">All</button>
+            <button class="tab-btn">Active</button>
+            <button class="tab-btn">Resolved</button>
+          </div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Parameter</th><th>Value</th><th>Threshold</th><th>Severity</th><th>Triggered</th><th>Resolved</th><th>Action</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Nitrates</td>
+              <td class="mono" style="color:var(--danger)">78.3 mg/L</td>
+              <td class="mono">45 mg/L</td>
+              <td><span class="badge badge-danger">Critical</span></td>
+              <td style="color:var(--text-muted)">2 min ago</td>
+              <td style="color:var(--text-muted)">—</td>
+              <td><button class="btn btn-sm btn-warning">Acknowledge</button></td>
+            </tr>
+            <tr>
+              <td>Nitrates</td>
+              <td class="mono" style="color:var(--danger)">62.1 mg/L</td>
+              <td class="mono">45 mg/L</td>
+              <td><span class="badge badge-danger">Critical</span></td>
+              <td style="color:var(--text-muted)">3 days ago</td>
+              <td style="color:var(--safe)">3 days ago</td>
+              <td><button class="btn btn-sm btn-ghost">Details</button></td>
+            </tr>
+            <tr>
+              <td>Turbidity</td>
+              <td class="mono" style="color:var(--warning)">5.4 NTU</td>
+              <td class="mono">5 NTU</td>
+              <td><span class="badge badge-warning">Warning</span></td>
+              <td style="color:var(--text-muted)">1 week ago</td>
+              <td style="color:var(--safe)">1 week ago</td>
+              <td><button class="btn btn-sm btn-ghost">Details</button></td>
+            </tr>
+            <tr>
+              <td>pH</td>
+              <td class="mono" style="color:var(--warning)">8.6 pH</td>
+              <td class="mono">8.5 pH</td>
+              <td><span class="badge badge-warning">Warning</span></td>
+              <td style="color:var(--text-muted)">2 weeks ago</td>
+              <td style="color:var(--safe)">2 weeks ago</td>
+              <td><button class="btn btn-sm btn-ghost">Details</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /page-content -->
+
+  <nav class="bottom-nav">
+    <a href="dashboard.html" class="bottom-nav-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Home</a>
+    <a href="location-detail.html" class="bottom-nav-item active"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>Locations</a>
+    <a href="alerts.html" class="bottom-nav-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>Alerts</a>
+    <a href="statistics.html" class="bottom-nav-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Stats</a>
+    <a href="account.html" class="bottom-nav-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Account</a>
+  </nav>
+</main>
+</div>
+
+<script>
+// Mini Map
+const miniMap = L.map('mini-map', { zoomControl: false, dragging: false, scrollWheelZoom: false }).setView([-24.18, 31.5], 9);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '' }).addTo(miniMap);
+L.circleMarker([-24.18, 31.5], { radius: 10, color: '#EF4444', fillColor: '#EF4444', fillOpacity: 0.9, weight: 2 }).addTo(miniMap);
+
+// Parameter Chart
+const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const datasets = {
+  nitrates: { data:[42,45,58,71,65,72,78], color:'#EF4444', label:'Nitrates (mg/L)', threshold:45 },
+  ph:       { data:[7.4,7.3,7.2,7.1,7.3,7.5,7.1], color:'#22C55E', label:'pH', threshold:null },
+  do:       { data:[7.1,7.0,6.9,6.8,6.7,6.9,6.8], color:'#60A5FA', label:'DO (mg/L)', threshold:5 },
+  turb:     { data:[1.8,2.0,2.3,2.5,2.2,2.4,2.1], color:'#F59E0B', label:'Turbidity (NTU)', threshold:5 },
+};
+
+let chart = buildChart('nitrates');
+
+function buildChart(key) {
+  const d = datasets[key];
+  const ctx = document.getElementById('param-chart');
+  if (window._paramChart) window._paramChart.destroy();
+  window._paramChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: days,
+      datasets: [{
+        label: d.label,
+        data: d.data,
+        borderColor: d.color,
+        backgroundColor: d.color + '18',
+        borderWidth: 2.5,
+        pointRadius: 5,
+        pointBackgroundColor: d.color,
+        pointBorderColor: '#0F1A30',
+        pointBorderWidth: 2,
+        fill: true,
+        tension: 0.3,
+      },
+      ...(d.threshold ? [{
+        label: 'Threshold',
+        data: Array(7).fill(d.threshold),
+        borderColor: 'rgba(239,68,68,0.5)',
+        borderWidth: 1.5,
+        borderDash: [6, 3],
+        pointRadius: 0,
+        fill: false,
+      }] : [])
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { labels: { color: '#94A3B8', font: { size: 12 } } },
+        tooltip: { backgroundColor:'#15243F', borderColor:'#1F2D4D', borderWidth:1, titleColor:'#94A3B8', bodyColor:'#F1F5F9' }
+      },
+      scales: {
+        x: { grid:{ color:'rgba(31,45,77,0.3)' }, ticks:{ color:'#64748B' } },
+        y: { grid:{ color:'rgba(31,45,77,0.3)' }, ticks:{ color:'#64748B' } }
+      }
+    }
+  });
+}
+
+function switchChart(btn, key) {
+  document.querySelectorAll('.chart-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  buildChart(key);
+}
+</script>
+<script src="assets/theme.js"></script>
+</body>
+</html>
