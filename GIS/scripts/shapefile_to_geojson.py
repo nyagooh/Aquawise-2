@@ -1,5 +1,5 @@
 """
-Convert the Kisumu water supply shapefile (UTM Zone 36S, EPSG:32736) into a
+Convert the Riverton water supply shapefile (UTM Zone 36S, EPSG:32736) into a
 WGS84 GeoJSON the browser map can consume directly. Pure stdlib — no external
 deps required.
 
@@ -29,9 +29,9 @@ SHP_DIR = os.path.join(os.path.dirname(ROOT), "Updated pipelines")
 SHP = os.path.join(SHP_DIR, "Updated pipelines.shp")
 DBF = os.path.join(SHP_DIR, "Updated pipelines.dbf")
 OUT_DIR = os.path.join(ROOT, "public", "data")
-OUT_PIPES = os.path.join(OUT_DIR, "kisumu-pipes.geojson")
-OUT_ASSETS = os.path.join(OUT_DIR, "kisumu-assets.geojson")
-OUT_META = os.path.join(OUT_DIR, "kisumu-meta.json")
+OUT_PIPES = os.path.join(OUT_DIR, "riverton-pipes.geojson")
+OUT_ASSETS = os.path.join(OUT_DIR, "riverton-assets.geojson")
+OUT_META = os.path.join(OUT_DIR, "riverton-meta.json")
 
 # ---------------------------------------------------------------------------
 # UTM Zone 36S -> WGS84 (inverse Transverse Mercator, Snyder 1987 §8)
@@ -612,13 +612,13 @@ def main() -> None:
 
     pipes_fc = {
         "type": "FeatureCollection",
-        "name": "kisumu-pipes",
+        "name": "riverton-pipes",
         "crs": {"type": "name", "properties": {"name": "EPSG:4326"}},
         "features": features,
     }
     assets_fc = {
         "type": "FeatureCollection",
-        "name": "kisumu-assets",
+        "name": "riverton-assets",
         "crs": {"type": "name", "properties": {"name": "EPSG:4326"}},
         "features": asset_features,
     }
@@ -630,7 +630,7 @@ def main() -> None:
         asset_counts[a["properties"]["asset"]] += 1
 
     meta = {
-        "source": "Kisumu Water & Sanitation Co.",
+        "source": "Riverton Water & Sanitation Co.",
         "feature_count": len(features),
         "skipped": skipped,
         "asset_count": len(asset_features),

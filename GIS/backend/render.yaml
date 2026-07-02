@@ -1,0 +1,27 @@
+# Render Blueprint for the lightweight Aquawise GIS demo backend.
+# In Render: New → Blueprint → pick this repo. Render reads this file.
+services:
+  - type: web
+    name: aquawise-gis-backend
+    runtime: docker
+    rootDir: GIS/backend
+    dockerfilePath: docker/Dockerfile.demo
+    plan: free
+    healthCheckPath: /healthz
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DJANGO_DEBUG
+        value: "false"
+      - key: DEMO_LEAD_RECIPIENT
+        value: annmaina.info@gmail.com
+      # Set these to actually deliver demo-request emails (SMTP), e.g. Gmail app password:
+      # - key: EMAIL_HOST
+      #   value: smtp.gmail.com
+      # - key: EMAIL_HOST_USER
+      #   value: you@gmail.com
+      # - key: EMAIL_HOST_PASSWORD
+      #   sync: false
+      # Lock CORS to your Vercel URL once known (otherwise any origin is allowed):
+      # - key: CORS_ALLOWED_ORIGINS
+      #   value: https://your-app.vercel.app

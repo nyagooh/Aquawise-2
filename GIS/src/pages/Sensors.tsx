@@ -1,5 +1,5 @@
 /**
- * Sensors — every measuring device deployed across the Kisumu network.
+ * Sensors — every measuring device deployed across the Riverton network.
  *
  * One filter bar, one table. Filter chips let the operator focus on a
  * specific sensor family (pressure, pH, turbidity, tank level, or valves).

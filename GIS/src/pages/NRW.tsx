@@ -1,5 +1,5 @@
 /**
- * NRW Monitoring — non-revenue water analysis powered by the real Kisumu
+ * NRW Monitoring — non-revenue water analysis powered by the real Riverton
  * network composition (length by zone, material mix, age distribution).
  */
 import { useEffect, useMemo, useState } from 'react';

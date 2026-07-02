@@ -44,11 +44,11 @@ export interface Alert {
 }
 
 export const zones: Zone[] = [
-  { id: 'MIL', name: 'Milimani',                  people: 14500, alerts: 1, pressure: 3.4, status: 'safe',   loss: 8,  color: '#22C55E' },
-  { id: 'CBD', name: 'Central Business District', people: 21000, alerts: 2, pressure: 2.1, status: 'warn',   loss: 18, color: '#F59E0B' },
-  { id: 'KRE', name: 'Kibos',                     people: 19800, alerts: 0, pressure: 3.2, status: 'safe',   loss: 9,  color: '#22C55E' },
-  { id: 'MYT', name: 'Mamboleo · Tom Mboya',      people: 24600, alerts: 1, pressure: 1.4, status: 'danger', loss: 27, color: '#EF4444' },
-  { id: 'OBA', name: 'Obunga',                    people: 11200, alerts: 0, pressure: 3.6, status: 'safe',   loss: 6,  color: '#22C55E' }
+  { id: 'MIL', name: 'Riverside',        people: 16200, alerts: 1, pressure: 3.5, status: 'safe',   loss: 7,  color: '#22C55E' },
+  { id: 'CBD', name: 'Downtown Central', people: 23400, alerts: 2, pressure: 2.0, status: 'warn',   loss: 19, color: '#F59E0B' },
+  { id: 'KRE', name: 'Millwood',         people: 18100, alerts: 0, pressure: 3.1, status: 'safe',   loss: 10, color: '#22C55E' },
+  { id: 'MYT', name: 'Northgate',        people: 26800, alerts: 1, pressure: 1.5, status: 'danger', loss: 25, color: '#EF4444' },
+  { id: 'OBA', name: 'Westhaven',        people: 12750, alerts: 0, pressure: 3.7, status: 'safe',   loss: 6,  color: '#22C55E' }
 ];
 
 export const sensors: Sensor[] = [
@@ -88,6 +88,9 @@ export interface Leak {
   severity: LeakSeverity;
   pipe?: string;
   notes: string;
+  /* Georeference — WGS84 [lat, lng] so the leak can be plotted on the map */
+  lat: number;
+  lng: number;
   /* Plumber resolution — populated when status === 'fixed' or 'in_progress' */
   crew?: string;
   timeStarted?: string;
@@ -103,12 +106,12 @@ export interface Leak {
    Tickets are created in the CSR app when a caller reports a leak — the
    utility just pulls them in and lets a plumber log the fix here. */
 export const leaks: Leak[] = [
-  { id: 'LK-2041', caller: 'Mary Auma',      phone: '+254 722 814 902', zone: 'MYT', address: 'Mamboleo Rd, near Tom Mboya Estate', reported: '2026-05-25 08:14', source: 'CSR call',  status: 'reported',    severity: 'critical', pipe: 'P-104', notes: 'Water gushing from road surface, traffic affected.' },
-  { id: 'LK-2040', caller: 'Joseph Otieno',  phone: '+254 711 442 118', zone: 'CBD', address: 'Oginga Odinga St, opp. Mega Plaza',  reported: '2026-05-25 07:32', source: 'CSR call',  status: 'dispatched',  severity: 'major',    pipe: 'P-102', notes: 'Wet patch on pavement, slow seepage for 2 days.' },
-  { id: 'LK-2039', caller: 'Faith Nyambura', phone: '+254 733 590 230', zone: 'MIL', address: 'Milimani, Achieng Oneko Rd',         reported: '2026-05-25 06:58', source: 'CSR chat',  status: 'in_progress', severity: 'minor',    pipe: 'P-101', notes: 'Visible joint leak on shared connection.', crew: 'Crew C · Achieng', timeStarted: '07:30' },
-  { id: 'LK-2038', caller: 'Brian Kiptoo',   phone: '+254 720 119 660', zone: 'MYT', address: 'Mamboleo, Kondele junction',         reported: '2026-05-24 21:11', source: 'CSR call',  status: 'fixed',       severity: 'major',    pipe: 'P-104', notes: 'Burst on 100mm line, isolated and patched.', crew: 'Crew A · Otieno',  timeStarted: '21:55', timeFixed: '23:40', materials: 'PVC sleeve, clamp, 0.8m pipe', cost: 'KES 4,200', cause: 'Old joint failure', fixDescription: 'Replaced 0.8m segment, re-pressurised.', leakType: 'Burst' },
-  { id: 'LK-2037', caller: 'Aisha Hassan',   phone: '+254 715 008 442', zone: 'KRE', address: 'Kibos Rd, near sugar factory',       reported: '2026-05-24 18:42', source: 'CSR call',  status: 'fixed',       severity: 'minor',    pipe: 'P-103', notes: 'Meter-box leak, slow drip.',                  crew: 'Crew B · Wanjiru', timeStarted: '19:30', timeFixed: '20:10', materials: 'Washers, thread tape',         cost: 'KES 600',   cause: 'Worn washer',       fixDescription: 'Replaced inlet washer.',                  leakType: 'Meter leak' },
-  { id: 'LK-2036', caller: 'Peter Mwangi',   phone: '+254 729 776 514', zone: 'OBA', address: 'Obunga, Got Nyabondo lane',          reported: '2026-05-24 14:20', source: 'CSR email', status: 'reported',    severity: 'major',    pipe: 'P-105', notes: 'Reported on email; large pool by community tap.' }
+  { id: 'LK-2041', caller: 'Maria Alvarez',  phone: '+1 (555) 014-2901', zone: 'MYT', address: 'Northgate Ave, near Riverside Mall', reported: '2026-05-25 08:14', source: 'CSR call',  status: 'reported',    severity: 'critical', pipe: 'P-104', notes: 'Water gushing from road surface, traffic affected.', lat: -0.0588, lng: 34.7861 },
+  { id: 'LK-2040', caller: 'James Carter',   phone: '+1 (555) 044-2118', zone: 'CBD', address: 'Main St, opp. Central Plaza',  reported: '2026-05-25 07:32', source: 'CSR call',  status: 'dispatched',  severity: 'major',    pipe: 'P-102', notes: 'Wet patch on pavement, slow seepage for 2 days.', lat: -0.0917, lng: 34.7603 },
+  { id: 'LK-2039', caller: 'Grace Bennett',  phone: '+1 (555) 059-0230', zone: 'MIL', address: 'Riverside, Elm Road',         reported: '2026-05-25 06:58', source: 'CSR chat',  status: 'in_progress', severity: 'minor',    pipe: 'P-101', notes: 'Visible joint leak on shared connection.', crew: 'Crew C · Diallo', timeStarted: '07:30', lat: -0.1018, lng: 34.7549 },
+  { id: 'LK-2038', caller: 'David Osei',     phone: '+1 (555) 011-9660', zone: 'MYT', address: 'Northgate, Kingsway junction',         reported: '2026-05-24 21:11', source: 'CSR call',  status: 'fixed',       severity: 'major',    pipe: 'P-104', notes: 'Burst on 100mm line, isolated and patched.', crew: 'Crew A · Reyes',  timeStarted: '21:55', timeFixed: '23:40', materials: 'PVC sleeve, clamp, 0.8m pipe', cost: '$320', cause: 'Old joint failure', fixDescription: 'Replaced 0.8m segment, re-pressurised.', leakType: 'Burst', lat: -0.0552, lng: 34.8004 },
+  { id: 'LK-2037', caller: 'Aisha Khan',     phone: '+1 (555) 000-8442', zone: 'KRE', address: 'Millwood Rd, near the old mill',       reported: '2026-05-24 18:42', source: 'CSR call',  status: 'fixed',       severity: 'minor',    pipe: 'P-103', notes: 'Meter-box leak, slow drip.',                  crew: 'Crew B · Novak', timeStarted: '19:30', timeFixed: '20:10', materials: 'Washers, thread tape',         cost: '$45',   cause: 'Worn washer',       fixDescription: 'Replaced inlet washer.',                  leakType: 'Meter leak', lat: -0.0701, lng: 34.8203 },
+  { id: 'LK-2036', caller: 'Peter Nolan',    phone: '+1 (555) 077-6514', zone: 'OBA', address: 'Westhaven, Cedar lane',          reported: '2026-05-24 14:20', source: 'CSR email', status: 'reported',    severity: 'major',    pipe: 'P-105', notes: 'Reported on email; large pool by community tap.', lat: -0.0852, lng: 34.7307 }
 ];
 
 export const alerts: Alert[] = [

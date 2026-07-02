@@ -1,0 +1,253 @@
+{
+  "source": "Riverton Water & Sanitation Co.",
+  "feature_count": 3233,
+  "skipped": 47,
+  "asset_count": 70,
+  "asset_counts": {
+    "tank": 6,
+    "pressure_valve": 18,
+    "meter_valve": 20,
+    "sensor": 26
+  },
+  "by_class": {
+    "distribution": 2308,
+    "backfeed": 39,
+    "main": 110,
+    "household": 767,
+    "boundary": 9
+  },
+  "length_km_by_class": {
+    "distribution": 612.87,
+    "backfeed": 19.35,
+    "main": 41.94,
+    "household": 42.0,
+    "boundary": 0.07
+  },
+  "length_km_by_zone": {
+    "CBD": 161.4,
+    "KREKAJ": 157.67,
+    "MYT": 173.9,
+    "MIL": 121.76,
+    "ME": 38.8,
+    "KRE": 15.38,
+    "MTY": 0.06,
+    "RIAT C": 14.94,
+    "OBA": 25.72,
+    "HDPE": 0.09,
+    "CDD": 0.0
+  },
+  "length_km_by_material": {
+    "PPR": 9.75,
+    "PVC": 444.58,
+    "GI": 67.42,
+    "Steel": 50.16,
+    "AC": 24.3,
+    "HDPE": 113.73
+  },
+  "top_zones": [
+    [
+      "MIL",
+      847
+    ],
+    [
+      "MYT",
+      776
+    ],
+    [
+      "CBD",
+      624
+    ],
+    [
+      "KREKAJ",
+      558
+    ],
+    [
+      "ME",
+      249
+    ],
+    [
+      "OBA",
+      53
+    ],
+    [
+      "KRE",
+      39
+    ],
+    [
+      "RIAT C",
+      32
+    ],
+    [
+      "MTY",
+      1
+    ],
+    [
+      "HDPE",
+      1
+    ],
+    [
+      "CDD",
+      1
+    ]
+  ],
+  "zones_normalized": [
+    [
+      "MIL",
+      847
+    ],
+    [
+      "MYT",
+      776
+    ],
+    [
+      "CBD",
+      624
+    ],
+    [
+      "KREKAJ",
+      558
+    ],
+    [
+      "ME",
+      249
+    ],
+    [
+      "OBA",
+      53
+    ],
+    [
+      "KRE",
+      39
+    ],
+    [
+      "RIAT C",
+      32
+    ],
+    [
+      "MTY",
+      1
+    ],
+    [
+      "HDPE",
+      1
+    ],
+    [
+      "CDD",
+      1
+    ]
+  ],
+  "materials": [
+    [
+      "PVC",
+      2145
+    ],
+    [
+      "GI",
+      372
+    ],
+    [
+      "HDPE",
+      360
+    ],
+    [
+      "Steel",
+      164
+    ],
+    [
+      "AC",
+      85
+    ],
+    [
+      "PPR",
+      57
+    ]
+  ],
+  "common_diameters_mm": [
+    [
+      50,
+      567
+    ],
+    [
+      75,
+      360
+    ],
+    [
+      100,
+      334
+    ],
+    [
+      40,
+      247
+    ],
+    [
+      32,
+      209
+    ],
+    [
+      25,
+      201
+    ],
+    [
+      150,
+      175
+    ],
+    [
+      200,
+      86
+    ],
+    [
+      350,
+      41
+    ],
+    [
+      20,
+      41
+    ],
+    [
+      225,
+      36
+    ],
+    [
+      250,
+      34
+    ]
+  ],
+  "diameter_distribution": {
+    "<50 mm": 713,
+    "50-99 mm": 941,
+    "100-199 mm": 525,
+    "200-349 mm": 180,
+    ">=350 mm": 102,
+    "unknown": 772
+  },
+  "age_distribution": {
+    "2020+": 613,
+    "2010-2019": 1951,
+    "pre-2000": 1,
+    "unknown": 667,
+    "2000-2009": 1
+  },
+  "status_counts": {
+    "open": 3095,
+    "closed": 41,
+    "unknown": 97
+  },
+  "service_counts": {
+    "in-service": 3091,
+    "pending": 7,
+    "out-of-service": 28,
+    "unknown": 107
+  },
+  "total_length_m": 716228.7,
+  "total_length_km": 716.23,
+  "bbox": [
+    34.67174411496047,
+    -0.1452139530850921,
+    34.86898825397556,
+    -0.0008823925678796425
+  ],
+  "center": [
+    34.77036618446802,
+    -0.07304817282648587
+  ]
+}

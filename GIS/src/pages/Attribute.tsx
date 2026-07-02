@@ -1,6 +1,6 @@
 /**
- * Attribute Table — Excel-style view of the Kisumu shapefile .dbf, served from
- * /data/kisumu-pipes-attributes.csv. Row N matches polyline N in the .shp.
+ * Attribute Table — Excel-style view of the Riverton shapefile .dbf, served from
+ * /data/riverton-pipes-attributes.csv. Row N matches polyline N in the .shp.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { Shell } from '../components/Shell';
@@ -51,33 +51,18 @@ export default function Attribute() {
   const [err, setErr] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(0);
-  const [networkName, setNetworkName] = useState('');
 
   useEffect(() => {
     let alive = true;
-    import('../data/network').then(({ loadNetwork }) => {
-      loadNetwork()
-        .then(data => {
-          if (!alive) return;
-          if (data.meta.name) {
-            setNetworkName(data.meta.name);
-          }
-          const stdHeaders = ['id', 'ui_class', 'material', 'diameter_mm', 'length_m', 'status', 'service', 'zone', 'installed'];
-          setHeaders(stdHeaders);
-          
-          const pipeRows = data.pipes.map(p => {
-            const r: Row = {};
-            stdHeaders.forEach(h => {
-              r[h] = p.properties[h as keyof typeof p.properties]?.toString() ?? '';
-            });
-            return r;
-          });
-          setRows(pipeRows);
-        })
-        .catch(e => {
-          if (alive) setErr(e.message || String(e));
-        });
-    });
+    fetch('/data/riverton-pipes-attributes.csv')
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.text(); })
+      .then(text => {
+        if (!alive) return;
+        const { headers, rows } = parseCsv(text);
+        setHeaders(headers);
+        setRows(rows);
+      })
+      .catch(e => { if (alive) setErr(String(e)); });
     return () => { alive = false; };
   }, []);
 
@@ -95,7 +80,7 @@ export default function Attribute() {
   const sub = err
     ? `Failed to load attribute table — ${err}`
     : rows.length
-      ? `${rows.length.toLocaleString()} records · ${headers.length} fields · from ${networkName || 'active'} network database`
+      ? `${rows.length.toLocaleString()} records · ${headers.length} fields · from Riverton water supply network.dbf`
       : 'Loading attribute table…';
 
   return (
@@ -135,10 +120,11 @@ export default function Attribute() {
               disabled={page >= totalPages - 1}
               style={btnStyle(page >= totalPages - 1)}
             >Next →</button>
-            <button
-              onClick={() => exportPipesCsv(filtered, headers, networkName)}
-              style={btnStyle(false)}
-            >Download CSV</button>
+            <a
+              href="/data/riverton-pipes-attributes.csv"
+              download="riverton-pipes-attributes.csv"
+              style={{ ...btnStyle(false), textDecoration: 'none', display: 'inline-block' }}
+            >Download CSV</a>
           </div>
         </div>
 
@@ -212,22 +198,4 @@ function stickyHead(): React.CSSProperties {
     background: 'hsl(var(--card))',
     boxShadow: 'inset 0 -1px 0 hsl(var(--border))'
   };
-}
-
-function exportPipesCsv(rows: Row[], headers: string[], networkName: string) {
-  const esc = (v: unknown) => {
-    const s = v == null ? '' : String(v);
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  };
-  const lines = [
-    headers.join(','),
-    ...rows.map(r => headers.map(h => esc(r[h])).join(','))
-  ];
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${networkName || 'network'}-pipes-attributes-${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
 }

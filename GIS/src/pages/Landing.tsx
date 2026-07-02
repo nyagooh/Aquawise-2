@@ -7,6 +7,7 @@
 import { useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTheme } from '../theme';
+import { hasDemoAccess } from '../access';
 
 function useReveal() {
   useEffect(() => {
@@ -23,7 +24,12 @@ function useReveal() {
 export default function Landing() {
   const { mode, toggle } = useTheme();
   const navigate = useNavigate();
-  const openDemo = useCallback(() => navigate('/networks'), [navigate]);
+
+  // Live demo is gated behind the lead form — unless this session already passed it.
+  const openDemo = useCallback(() => {
+    navigate(hasDemoAccess() ? '/demo' : '/request-demo');
+  }, [navigate]);
+  const bookWalkthrough = useCallback(() => navigate('/request-demo?mode=book'), [navigate]);
   useReveal();
 
   return (
@@ -73,12 +79,12 @@ export default function Landing() {
         </p>
         <div className="hero-ctas reveal reveal-delay-3">
           <button type="button" className="btn btn-primary btn-lg" onClick={openDemo}>Explore Live Demo →</button>
-          <a href="mailto:annmaina.info@gmail.com?subject=Aquawise%20Walkthrough%20Request" className="btn btn-ghost btn-lg">Book a Walkthrough</a>
+          <button type="button" className="btn btn-ghost btn-lg" onClick={bookWalkthrough}>Book a Walkthrough</button>
         </div>
         <div className="hero-meta reveal reveal-delay-3">
           <span><span className="dot" />Free 30-minute demo</span>
           <span><span className="dot" />No credit card required</span>
-          <span><span className="dot" />Live Kisumu network sandbox</span>
+          <span><span className="dot" />Live Riverton network sandbox</span>
         </div>
       </section>
 
@@ -90,7 +96,7 @@ export default function Landing() {
             <span className="d" style={{ background: '#FEBC2E' }} />
             <span className="d" style={{ background: '#28C840' }} />
             <span style={{ flex: 1, marginLeft: 12, fontSize: 11, color: 'rgba(255,255,255,0.35)', fontFamily: 'var(--font-mono)' }}>
-              app.aquawise.io / gis — Kisumu Water Supply Network
+              app.aquawise.io / gis — Riverton Water Supply Network
             </span>
             <span style={{ fontSize: 10, color: 'hsl(var(--primary))', fontFamily: 'var(--font-mono)', fontWeight: 600, marginRight: 4 }}>● LIVE</span>
           </div>
@@ -137,7 +143,7 @@ export default function Landing() {
             <button type="button" className="btn btn-primary btn-lg" onClick={openDemo}>Open the live map →</button>
           </div>
           <div className="story-stacked-visual reveal reveal-delay-1">
-            <MockupBar url="Map · Kisumu Service Area" />
+            <MockupBar url="Map · Riverton Service Area" />
             <MapScreen />
           </div>
         </div>
@@ -360,7 +366,7 @@ export default function Landing() {
           </p>
           <div className="final-cta-actions">
             <button type="button" className="btn btn-primary btn-lg" onClick={openDemo}>Explore Live Demo →</button>
-            <a href="mailto:annmaina.info@gmail.com?subject=Aquawise%20Walkthrough%20Request" className="btn btn-ghost btn-lg">Book a Walkthrough</a>
+            <button type="button" className="btn btn-ghost btn-lg" onClick={bookWalkthrough}>Book a Walkthrough</button>
           </div>
           <div className="final-trust">
             <span><span className="dot-safe" />Free 30-minute demo</span>
@@ -809,7 +815,7 @@ function NRWScreen() {
 
 /* ─── Data ─── */
 const TESTIMONIALS = [
-  { quote: 'We can now see every pipe segment on the map with its diameter and material. Before, that data lived in spreadsheets nobody could find.', name: 'James Mwangi', org: 'Head of Operations · Kisumu Water & Sewerage', initials: 'JM' },
+  { quote: 'We can now see every pipe segment on the map with its diameter and material. Before, that data lived in spreadsheets nobody could find.', name: 'Michael Grant', org: 'Head of Operations · Riverton Water & Sanitation Co.', initials: 'MG' },
   { quote: 'The pressure sensor feeds caught a zone anomaly at 02:30 AM. We had a crew on site before the first customer complaint came in.', name: 'Amina Odhiambo', org: 'Network Engineer · Nakuru Urban Water', initials: 'AO' },
   { quote: 'Tank level alerts mean operations know a reservoir is getting low before it ever hits a service interruption. It changed our night shifts.', name: 'Samuel Kipchoge', org: 'Operations Director · Eldoret Water', initials: 'SK' },
 ];

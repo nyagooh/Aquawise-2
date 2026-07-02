@@ -1,5 +1,5 @@
 /**
- * Dashboard — operational command center for the Kisumu water network.
+ * Dashboard — operational command center for the Riverton water network.
  *
  * Every number is derived from the loaded GeoJSON / meta — no mock data.
  * Mirrors the Qatium-style hierarchy: KPI row, network composition, zone
@@ -46,7 +46,7 @@ export default function Dashboard() {
   }, [data]);
 
   return (
-    <Shell active="dashboard" title="Operations Dashboard" sub={data ? `${data.meta.name || 'Kisumu Water Network'} · ${data.meta.feature_count.toLocaleString()} segments · ${data.meta.total_length_km.toFixed(0)} km` : 'Loading network…'}>
+    <Shell active="dashboard" title="Operations Dashboard" sub={data ? `${data.meta.feature_count.toLocaleString()} segments · ${data.meta.total_length_km.toFixed(0)} km` : 'Loading network…'}>
       {!data || !derived ? (
         <DashboardSkeleton />
       ) : (

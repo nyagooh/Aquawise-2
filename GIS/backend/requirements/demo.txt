@@ -1,0 +1,11 @@
+# Minimal dependencies for the lightweight upload/lead-capture demo backend
+# (aquawise_gis.settings.demo). No PostGIS/Celery/Channels/JWT.
+# fiona / pyproj / shapely ship self-contained native libs in their wheels,
+# so no system GDAL/GEOS/PROJ packages are required.
+Django==6.0.5
+djangorestframework==3.17.1
+django-cors-headers==4.9.0
+fiona==1.10.1
+pyproj==3.7.2
+shapely==2.1.2
+gunicorn==26.0.0

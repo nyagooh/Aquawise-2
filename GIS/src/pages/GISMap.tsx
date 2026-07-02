@@ -1,5 +1,5 @@
 /**
- * GISMap — real Kisumu water supply network.
+ * GISMap — real Riverton water supply network.
  *
  * Renders 4,951 pipe segments from the converted shapefile across five
  * operational layers (mains, distribution, service, backfeed, zone boundary)
@@ -15,12 +15,10 @@ import { SidePanel, SpRow } from '../components/SidePanel';
 import { useTheme } from '../theme';
 import {
   loadNetwork,
-  loadSimulation,
-  renameNetwork,
-  clearNetworkCache,
+  loadUploadedNetwork,
   type NetworkData,
-  type SimulationData,
   type PipeClass,
+  type PipeProps,
   type PipeFeature,
   type AssetFeature,
   type AssetKind,
@@ -31,18 +29,90 @@ import {
   STATUS_COLOR,
   zoneLabel
 } from '../data/network';
+import { leaks as leakData, type Leak, type LeakSeverity } from '../data';
+
+const LEAK_SEVERITY_COLOR: Record<LeakSeverity, string> = {
+  minor: '#7FAFD2',
+  major: '#D9A156',
+  critical: '#D4675E'
+};
+const LEAK_SEVERITY_LABEL: Record<LeakSeverity, string> = {
+  minor: 'Minor', major: 'Major', critical: 'Critical'
+};
+const LEAK_STATUS_LABEL: Record<Leak['status'], string> = {
+  reported: 'Reported', dispatched: 'Dispatched', in_progress: 'In progress', fixed: 'Fixed'
+};
 
 const TILE_LIGHT = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
 const TILE_DARK = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
 const TILE_ATTR =
-  '&copy; <a href="https://www.openstreetmap.org/">OSM</a> · <a href="https://carto.com/">CARTO</a> · Kisumu water demo data';
+  '&copy; <a href="https://www.openstreetmap.org/">OSM</a> · <a href="https://carto.com/">CARTO</a> · water demo data';
+// Google tiles — real imagery without a proxy. `lyrs=s` is pure satellite with
+// NO labels/roads (clean backdrop for the network); `lyrs=m` is the street map.
+const GOOGLE_KEY = (import.meta as { env?: { VITE_GOOGLE_MAPS_API_KEY?: string } }).env?.VITE_GOOGLE_MAPS_API_KEY || '';
+const TILE_GOOGLE_STREETS = 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
+const TILE_GOOGLE_SATELLITE = 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}';
+const TILE_GOOGLE_ATTR = 'Imagery &copy; <a href="https://www.google.com/maps">Google</a> · water demo data';
+
+/** Basemap mode — street map, label-free satellite, or bare engineering canvas. */
+type Basemap = 'streets' | 'satellite' | 'none';
+
+/** Build the active basemap tile layer for the current mode + theme. */
+function makeTileLayer(basemap: Basemap, dark: boolean): L.TileLayer | null {
+  if (basemap === 'none') return null;
+  if (basemap === 'satellite') {
+    return L.tileLayer(TILE_GOOGLE_SATELLITE, { attribution: TILE_GOOGLE_ATTR, subdomains: '0123', maxZoom: 20 });
+  }
+  // streets
+  return L.tileLayer(TILE_GOOGLE_STREETS, { attribution: TILE_GOOGLE_ATTR, subdomains: '0123', maxZoom: 20 });
+}
+
+/* ── Workspace toolbar + simulation model ── */
+type ToolMode = 'select' | 'pan' | 'measure' | 'search' | 'fit' | 'simulate';
+type SimState =
+  | 'idle'        // Ready to run — no results yet
+  | 'running'
+  | 'success'
+  | 'warning'
+  | 'failed'
+  | 'outdated';
+
+const SIM_LABEL: Record<SimState, string> = {
+  idle: 'Ready to run',
+  running: 'Running…',
+  success: 'Simulation successful',
+  warning: 'Simulation with warnings',
+  failed: 'Simulation failed',
+  outdated: 'Simulation outdated'
+};
+
+/** Link colour-by options. The hydraulic ones need simulation results. */
+const LINK_SYMBOLOGY = [
+  { key: 'class', label: 'Asset class', needsSim: false },
+  { key: 'diameter', label: 'Diameter', needsSim: false },
+  { key: 'status', label: 'Status', needsSim: false },
+  { key: 'flow', label: 'Flow', needsSim: true },
+  { key: 'velocity', label: 'Velocity', needsSim: true },
+  { key: 'headloss', label: 'Unit headloss', needsSim: true }
+] as const;
+type LinkSymbology = (typeof LINK_SYMBOLOGY)[number]['key'];
+
+const NODE_SYMBOLOGY = [
+  { key: 'asset', label: 'Asset kind', needsSim: false },
+  { key: 'elevation', label: 'Elevation', needsSim: false },
+  { key: 'pressure', label: 'Pressure', needsSim: true },
+  { key: 'head', label: 'Head', needsSim: true },
+  { key: 'demand', label: 'Demand', needsSim: true }
+] as const;
+type NodeSymbology = (typeof NODE_SYMBOLOGY)[number]['key'];
 
 type Focus =
   | { kind: 'pipe'; feature: PipeFeature }
   | { kind: 'asset'; feature: AssetFeature }
+  | { kind: 'leak'; leak: Leak }
   | null;
 
-type LayerVis = Record<PipeClass | AssetKind | 'junction', boolean>;
+type LayerVis = Record<PipeClass | AssetKind, boolean>;
 
 const DEFAULT_LAYERS: LayerVis = {
   main: true,
@@ -53,8 +123,7 @@ const DEFAULT_LAYERS: LayerVis = {
   tank: true,
   pressure_valve: true,
   meter_valve: true,
-  sensor: true,
-  junction: true
+  sensor: true
 };
 
 const PIPE_KEYS: PipeClass[] = PIPE_CLASS_ORDER;
@@ -66,59 +135,50 @@ export default function GISMap() {
   const [network, setNetwork] = useState<NetworkData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [layers, setLayers] = useState<LayerVis>(DEFAULT_LAYERS);
+  const [showLeaks, setShowLeaks] = useState(true);
   const [focus, setFocus] = useState<Focus>(null);
-  const [isSchematic, setIsSchematic] = useState<boolean>(false);
-  const [showBasemap, setShowBasemap] = useState<boolean>(true);
-  const [simData, setSimData] = useState<SimulationData | null>(null);
-  const [simHour, setSimHour] = useState<number>(0);
-  const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const [playSpeed, setPlaySpeed] = useState<number>(1);
-  const [zoom, setZoom] = useState<number>(13);
-
-  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [workmode, setWorkmode] = useState<string>('Network overview');
-  const [showWorkmodes, setShowWorkmodes] = useState<boolean>(false);
-  const [editableName, setEditableName] = useState<string>('');
-  const [is3D, setIs3D] = useState<boolean>(false);
-  const [activePlugin, setActivePlugin] = useState<'search' | 'pressures' | 'flow' | 'demand' | null>(null);
-  const [isSimEnabled, setIsSimEnabled] = useState<boolean>(true);
-  const [searchQuery, setSearchQuery] = useState<string>('');
-
-  const pipeLayersRef = useRef<Map<string, L.Polyline>>(new Map());
-  const assetLayersRef = useRef<Map<string, L.Marker>>(new Map());
-  const junctionLayersRef = useRef<Map<string, L.CircleMarker>>(new Map());
+  const [basemap, setBasemap] = useState<Basemap>('satellite');
+  const [sim, setSim] = useState<SimState>('idle');
+  const [linkBy, setLinkBy] = useState<LinkSymbology>('class');
+  const [nodeBy, setNodeBy] = useState<NodeSymbology>('asset');
+  const hasResults = sim === 'success' || sim === 'warning' || sim === 'outdated';
 
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletRef = useRef<L.Map | null>(null);
   const tileRef = useRef<L.TileLayer | null>(null);
-  const rendererRef = useRef<L.Renderer | null>(null);
-  const layerGroupsRef = useRef<Partial<Record<PipeClass | AssetKind | 'junction', L.LayerGroup>>>({});
+  const rendererRef = useRef<L.Canvas | null>(null);
+  const layerGroupsRef = useRef<Partial<Record<PipeClass | AssetKind, L.LayerGroup>>>({});
+  const leakGroupRef = useRef<L.LayerGroup | null>(null);
   const focusOutlineRef = useRef<L.Layer | null>(null);
+  // Read inside Leaflet event handlers (which close over init-time values).
+  const linkByRef = useRef<LinkSymbology>(linkBy);
+  const simHasResultsRef = useRef<boolean>(hasResults);
+  linkByRef.current = linkBy;
+  simHasResultsRef.current = hasResults;
 
-  /* ── 1. fetch network ── */
+  /* ── 1. fetch network — a user-uploaded network takes priority over the
+        bundled Riverton demo dataset ── */
   useEffect(() => {
     let alive = true;
+    const uploaded = loadUploadedNetwork();
+    if (uploaded) {
+      setNetwork(uploaded);
+      return () => { alive = false; };
+    }
     loadNetwork()
-      .then((data) => {
-        if (alive) {
-          setNetwork(data);
-          setEditableName(data.meta.name || 'Untitled Network');
-          // Detect schematic heuristic based on bounding box
-          const [minLon, minLat, maxLon, maxLat] = data.meta.bbox;
-          const isGeographic = minLon >= -180 && maxLon <= 180 && minLat >= -90 && maxLat <= 90;
-          const lonSpan = Math.abs(maxLon - minLon);
-          const latSpan = Math.abs(maxLat - minLat);
-          const schematic = !isGeographic || lonSpan > 2.0 || latSpan > 2.0;
-          setIsSchematic(schematic);
-          setShowBasemap(!schematic);
-        }
-      })
+      .then((data) => { if (alive) setNetwork(data); })
       .catch((err) => {
         console.error(err);
         if (alive) setLoadError(err.message || 'Unable to load network data.');
       });
     return () => { alive = false; };
   }, []);
+
+  /* Schematic EPANET models have no geographic coordinates — render them on the
+     bare engineering canvas rather than over satellite imagery. */
+  useEffect(() => {
+    if (network?.meta.projection === 'schematic') setBasemap('none');
+  }, [network]);
 
   /* ── 2. initialise map once we have data ── */
   useEffect(() => {
@@ -128,28 +188,25 @@ export default function GISMap() {
     const map = L.map(mapRef.current, {
       center: [network.meta.center[1], network.meta.center[0]],
       zoom: 13,
-      preferCanvas: false, // Turn off Canvas rendering to allow SVG-based path CSS animations
-      zoomControl: true,
+      preferCanvas: true,
+      zoomControl: false,
       attributionControl: true,
       maxBounds: L.latLngBounds([latMin - 0.1, lonMin - 0.1], [latMax + 0.1, lonMax + 0.1]),
       minZoom: 10,
       maxZoom: 19
     });
     leafletRef.current = map;
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+    // Larger click tolerance — household lines are hairline, so a 6 px buffer
+    // makes them clickable without forcing the operator to pixel-hunt.
+    rendererRef.current = L.canvas({ padding: 0.4, tolerance: 6 });
 
-    // Fix map off-centering by forcing Leaflet to recalculate container bounds and center on the network
-    const timer = setTimeout(() => {
-      map.invalidateSize();
-      map.fitBounds(L.latLngBounds([latMin, lonMin], [latMax, lonMax]), {
-        padding: [20, 20]
-      });
-    }, 200);
-    // Use SVG renderer for pipes to support CSS stroke-dashoffset animations and classes
-    rendererRef.current = L.svg({ padding: 0.1 });
+    const tile = makeTileLayer(basemap, mode === 'dark');
+    if (tile) { tile.addTo(map); tileRef.current = tile; }
 
     /* layer groups */
-    const groups: Partial<Record<PipeClass | AssetKind | 'junction', L.LayerGroup>> = {};
-    ([...PIPE_KEYS, ...ASSET_KEYS, 'junction'] as Array<PipeClass | AssetKind | 'junction'>).forEach((k) => {
+    const groups: Partial<Record<PipeClass | AssetKind, L.LayerGroup>> = {};
+    [...PIPE_KEYS, ...ASSET_KEYS].forEach((k) => {
       const g = L.layerGroup();
       groups[k] = g;
       if (DEFAULT_LAYERS[k]) g.addTo(map);
@@ -170,16 +227,9 @@ export default function GISMap() {
       const group = groups[cls];
       if (!group) return;
       const style = PIPE_STYLE[cls];
-      let coords: any;
-      if (feat.geometry.type === 'MultiLineString') {
-        coords = (feat.geometry.coordinates as any).map(
-          (line: [number, number][]) => line.map(([lon, lat]) => [lat, lon])
-        );
-      } else {
-        coords = (feat.geometry.coordinates as [number, number][]).map(
-          ([lon, lat]: [number, number]) => [lat, lon]
-        );
-      }
+      const coords: [number, number][] = feat.geometry.coordinates.map(
+        ([lon, lat]) => [lat, lon]
+      );
       const line = L.polyline(coords, {
         color: style.color,
         weight: style.weight,
@@ -188,16 +238,6 @@ export default function GISMap() {
         lineCap: 'round',
         lineJoin: 'round',
         renderer
-      });
-      const flowLine = L.polyline(coords, {
-        color: style.color,
-        weight: style.weight,
-        opacity: 0,
-        dashArray: '0 9999',
-        lineCap: 'round',
-        lineJoin: 'round',
-        renderer,
-        interactive: false
       });
       line.bindPopup(() => pipePopupHtml(feat), {
         className: 'aw-popup aw-popup-pipe',
@@ -209,48 +249,28 @@ export default function GISMap() {
         L.DomEvent.stopPropagation(e);
         setFocus({ kind: 'pipe', feature: feat });
       });
-      line.on('mouseover', () => {
-        const cached = (line as any)._cachedStyle;
-        if (cached) {
-          line.setStyle({
-            weight: cached.weight * 1.5,
-            opacity: 1
-          });
-        } else {
-          line.setStyle({
-            color: style.hoverColor,
-            weight: style.hoverWeight,
-            opacity: 1
-          });
-        }
-      });
-      line.on('mouseout', () => {
-        const cached = (line as any)._cachedStyle;
-        if (cached) {
-          line.setStyle({
-            color: cached.color,
-            weight: cached.weight,
-            opacity: cached.opacity
-          });
-        } else {
-          const z = leafletRef.current?.getZoom() || 13;
-          const scale = z >= 17 ? 1.35 : z >= 15 ? 1.15 : z >= 13 ? 1 : 0.78;
-          line.setStyle({
-            color: style.color,
-            weight: style.weight * scale,
-            opacity: style.opacity
-          });
-        }
-      });
+      line.on('mouseover', () => line.setStyle({
+        color: style.hoverColor,
+        weight: style.hoverWeight,
+        opacity: 1
+      }));
+      line.on('mouseout', () => line.setStyle(baseLineStyle(feat, linkByRef.current, simHasResultsRef.current)));
+      (line as L.Polyline & { _awFeat?: PipeFeature })._awFeat = feat;
       line.addTo(group);
-      flowLine.addTo(group);
-      (line as any)._flowLine = flowLine;
-      pipeLayersRef.current.set(feat.properties.id, line);
     });
 
-    /* Track map zoom changes to update responsive styling */
+    /* Zoom-aware weight scaling — pipes thicker at city scale, hairline
+       when zoomed all the way out. */
     map.on('zoomend', () => {
-      setZoom(map.getZoom());
+      const z = map.getZoom();
+      const scale = z >= 17 ? 1.35 : z >= 15 ? 1.15 : z >= 13 ? 1 : 0.78;
+      Object.entries(groups).forEach(([key, grp]) => {
+        if (!grp || !PIPE_KEYS.includes(key as PipeClass)) return;
+        const style = PIPE_STYLE[key as PipeClass];
+        grp.eachLayer((layer) => {
+          (layer as L.Polyline).setStyle({ weight: style.weight * scale });
+        });
+      });
     });
 
     /* assets — points */
@@ -272,116 +292,58 @@ export default function GISMap() {
       });
       marker.bindTooltip(assetTooltip(feat), { direction: 'top', offset: [0, -10], opacity: 1 });
       const grp = groups[props.asset];
-      if (grp) {
-        marker.addTo(grp);
-        assetLayersRef.current.set(props.id, marker);
-      }
+      if (grp) marker.addTo(grp);
     });
 
-    /* junctions — points */
-    if (network.junctions) {
-      network.junctions.forEach((feat) => {
-        const props = feat.properties;
-        const [lon, lat] = feat.geometry.coordinates;
-        const marker = L.circleMarker([lat, lon], {
-          radius: 3.5,
-          color: '#475569',
-          weight: 1.5,
-          fillColor: '#94a3b8',
-          fillOpacity: 0.95,
-          renderer,
-          className: 'aw-junction-marker'
-        });
-        marker.bindPopup(() => `
-          <div class="aw-popup-content">
-            <h4 class="aw-popup-title">Junction ${props.external_id}</h4>
-            <div class="aw-popup-grid">
-              <div class="aw-popup-row"><span>Type</span><strong>Junction</strong></div>
-              <div class="aw-popup-row"><span>Elevation</span><strong>${props.elevation_m ? props.elevation_m.toFixed(1) + ' m' : 'N/A'}</strong></div>
-              <div class="aw-popup-row"><span>Base Demand</span><strong>${props.demand_lps ? props.demand_lps.toFixed(2) + ' L/s' : '0.00 L/s'}</strong></div>
-            </div>
-          </div>
-        `, {
-          className: 'aw-popup aw-popup-junction',
-          closeButton: false,
-          offset: [0, -2],
-          maxWidth: 240
-        });
-        marker.bindTooltip(`Junction ${props.external_id}`, { direction: 'top', offset: [0, -4] });
-        marker.on('click', (e) => {
-          L.DomEvent.stopPropagation(e);
-          setFocus({
-            kind: 'asset',
-            feature: {
-              type: 'Feature',
-              id: props.id,
-              geometry: feat.geometry,
-              properties: {
-                id: props.id,
-                name: `Junction ${props.external_id}`,
-                asset: 'sensor',
-                status: 'ok',
-                flow_lps: 0,
-                pressure_bar: 0,
-                last_seen: '',
-                type: 'pressure',
-                pipe_id: ''
-              } as any
-            }
-          });
-        });
-        const grp = groups.junction;
-        if (grp) {
-          marker.addTo(grp);
-          junctionLayersRef.current.set(props.id, marker);
-        }
+    /* leaks — georeferenced incident markers, severity-coloured */
+    const leakGroup = L.layerGroup();
+    leakGroupRef.current = leakGroup;
+    leakData.forEach((leak) => {
+      const marker = L.marker([leak.lat, leak.lng], { icon: leakIcon(leak) });
+      marker.bindPopup(() => leakPopupHtml(leak), {
+        className: 'aw-popup aw-popup-leak',
+        closeButton: false,
+        offset: [0, -14],
+        maxWidth: 280
       });
-    }
+      marker.on('click', (e) => {
+        L.DomEvent.stopPropagation(e);
+        setFocus({ kind: 'leak', leak });
+      });
+      marker.bindTooltip(`${leak.id} · ${LEAK_SEVERITY_LABEL[leak.severity]} leak`, { direction: 'top', offset: [0, -12], opacity: 1 });
+      marker.addTo(leakGroup);
+    });
+    if (showLeaks) leakGroup.addTo(map);
 
     /* dismiss focus on empty click */
     map.on('click', () => setFocus(null));
 
-    map.on('mousemove', (e: L.LeafletMouseEvent) => {
-      setCoords({ lat: e.latlng.lat, lng: e.latlng.lng });
-    });
-
     return () => {
-      clearTimeout(timer);
       map.remove();
       leafletRef.current = null;
       layerGroupsRef.current = {};
+      leakGroupRef.current = null;
       tileRef.current = null;
-      pipeLayersRef.current.clear();
-      assetLayersRef.current.clear();
-      junctionLayersRef.current.clear();
     };
     // mode is read at init; subsequent changes handled by the tile-swap effect below
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [network]);
 
-  /* ── 3. swap tiles on theme or basemap change without recreating map ── */
+  /* ── 3. swap tiles on theme / basemap change without recreating map ── */
   useEffect(() => {
     const map = leafletRef.current;
     if (!map) return;
-    if (tileRef.current) {
-      map.removeLayer(tileRef.current);
-      tileRef.current = null;
-    }
-    if (showBasemap) {
-      tileRef.current = L.tileLayer(mode === 'dark' ? TILE_DARK : TILE_LIGHT, {
-        attribution: TILE_ATTR,
-        subdomains: 'abcd',
-        maxZoom: 19
-      }).addTo(map);
-    }
-  }, [mode, showBasemap]);
+    if (tileRef.current) { map.removeLayer(tileRef.current); tileRef.current = null; }
+    const tile = makeTileLayer(basemap, mode === 'dark');
+    if (tile) { tile.addTo(map); tileRef.current = tile; }
+  }, [mode, basemap]);
 
   /* ── 4. layer toggles ── */
   useEffect(() => {
     const map = leafletRef.current;
     const groups = layerGroupsRef.current;
     if (!map) return;
-    ([...PIPE_KEYS, ...ASSET_KEYS, 'junction'] as Array<PipeClass | AssetKind | 'junction'>).forEach((k) => {
+    ([...PIPE_KEYS, ...ASSET_KEYS] as Array<PipeClass | AssetKind>).forEach((k) => {
       const g = groups[k];
       if (!g) return;
       const on = layers[k];
@@ -390,6 +352,29 @@ export default function GISMap() {
       if (!on && has) map.removeLayer(g);
     });
   }, [layers]);
+
+  /* ── 4b. leak layer toggle ── */
+  useEffect(() => {
+    const map = leafletRef.current;
+    const grp = leakGroupRef.current;
+    if (!map || !grp) return;
+    const has = map.hasLayer(grp);
+    if (showLeaks && !has) grp.addTo(map);
+    if (!showLeaks && has) map.removeLayer(grp);
+  }, [showLeaks]);
+
+  /* ── 4c. recolour links when symbology / results change ── */
+  useEffect(() => {
+    const groups = layerGroupsRef.current;
+    PIPE_KEYS.forEach((k) => {
+      const g = groups[k];
+      if (!g) return;
+      g.eachLayer((layer) => {
+        const feat = (layer as L.Polyline & { _awFeat?: PipeFeature })._awFeat;
+        if (feat) (layer as L.Polyline).setStyle(baseLineStyle(feat, linkBy, hasResults));
+      });
+    });
+  }, [linkBy, hasResults]);
 
   /* ── 5. focus outline (selected pipe highlight) ── */
   useEffect(() => {
@@ -400,16 +385,9 @@ export default function GISMap() {
       focusOutlineRef.current = null;
     }
     if (focus?.kind === 'pipe') {
-      let coords: any;
-      if (focus.feature.geometry.type === 'MultiLineString') {
-        coords = (focus.feature.geometry.coordinates as any).map(
-          (line: [number, number][]) => line.map(([lon, lat]) => [lat, lon])
-        );
-      } else {
-        coords = (focus.feature.geometry.coordinates as [number, number][]).map(
-          ([lon, lat]: [number, number]) => [lat, lon]
-        );
-      }
+      const coords: [number, number][] = focus.feature.geometry.coordinates.map(
+        ([lon, lat]) => [lat, lon]
+      );
       const ring = L.polyline(coords, {
         color: '#facc15',
         weight: 6,
@@ -423,6 +401,8 @@ export default function GISMap() {
     } else if (focus?.kind === 'asset') {
       const [lon, lat] = focus.feature.geometry.coordinates;
       map.flyTo([lat, lon], Math.max(map.getZoom(), 16), { duration: 0.5 });
+    } else if (focus?.kind === 'leak') {
+      map.flyTo([focus.leak.lat, focus.leak.lng], Math.max(map.getZoom(), 16), { duration: 0.5 });
     }
   }, [focus]);
 
@@ -445,6 +425,12 @@ export default function GISMap() {
         setLayers((p) => ({ ...p, [match.properties.ui_class]: true }));
         setFocus({ kind: 'pipe', feature: match });
       }
+    } else if (kind === 'leak') {
+      const match = leakData.find((l) => l.id === id);
+      if (match) {
+        setShowLeaks(true);
+        setFocus({ kind: 'leak', leak: match });
+      }
     }
     // consume the param so a refresh doesn't keep re-focusing
     const next = new URLSearchParams(searchParams);
@@ -452,440 +438,29 @@ export default function GISMap() {
     setSearchParams(next, { replace: true });
   }, [network, searchParams, setSearchParams]);
 
-  /* ── 7. load simulation data if available ── */
-  useEffect(() => {
-    if (!network || !network.meta.id) return;
-    let alive = true;
-    loadSimulation(network.meta.id)
-      .then((data) => {
-        if (alive) {
-          setSimData(data);
-          setSimHour(0);
-        }
-      })
-      .catch((err) => {
-        console.log("No simulation data found or failed to load:", err.message);
-        if (alive) setSimData(null);
-      });
-    return () => { alive = false; };
-  }, [network]);
-
-  /* ── 8. animate simulation playback ── */
-  useEffect(() => {
-    if (!isPlaying || !simData) return;
-    const interval = setInterval(() => {
-      setSimHour((h) => (h + 1) % simData.timesteps.length);
-    }, 1000 / playSpeed);
-    return () => clearInterval(interval);
-  }, [isPlaying, simData, playSpeed]);
-
-  /* ── 9. dynamic styling of leaflet layers based on active simulation hour ── */
-  useEffect(() => {
-    if (!simData || !isSimEnabled) return;
-    const isDark = mode === 'dark';
-    const scale = zoom >= 17 ? 1.35 : zoom >= 15 ? 1.15 : zoom >= 13 ? 1 : 0.78;
-    
-    // Update pipe line colors and thickness based on velocity and flow
-    pipeLayersRef.current.forEach((layer, id) => {
-      const sim = simData.links[id];
-      if (!sim) return;
-      const vel = sim.velocity[simHour] || 0.0;
-      const flow = sim.flow[simHour] || 0.0;
-      
-      const feature = network?.pipes.find(p => p.properties.id === id);
-      const baseStyle = feature ? PIPE_STYLE[feature.properties.ui_class] : { weight: 3, opacity: 0.8 };
-      
-      const isFlowing = Math.abs(flow) > 0.1;
-      
-      const flowLine = (layer as any)._flowLine;
-      const pathEl = (layer as any)._path;
-      const flowPathEl = flowLine ? (flowLine as any)._path : null;
-
-      let pathLength = 100;
-      if (pathEl) {
-        try {
-          pathLength = pathEl.getTotalLength() || 100;
-        } catch (e) {
-          pathLength = 100;
-        }
-      } else if (flowPathEl) {
-        try {
-          pathLength = flowPathEl.getTotalLength() || 100;
-        } catch (e) {
-          pathLength = 100;
-        }
-      }
-
-      const targetColor = getVelocityColor(vel, isDark);
-      const targetWeight = getFlowWeight(flow, baseStyle.weight * scale);
-      
-      // The pipe should be dull, and the dash overlay should be bright.
-      const targetOpacity = 0.25; 
-      
-      const targetFlowColor = targetColor;
-      const targetFlowWeight = targetWeight;
-      const targetFlowOpacity = isFlowing ? 1.0 : 0.0;
-      const targetFlowDashArray = isFlowing ? `8 ${pathLength.toFixed(1)}` : '0 9999';
-      
-      const targetDirection = isFlowing ? (vel > 0 ? 'forward' : 'reverse') : 'idle';
-
-      const cached = (layer as any)._cachedStyle;
-      const changed = !cached ||
-        cached.color !== targetColor ||
-        cached.weight !== targetWeight ||
-        cached.opacity !== targetOpacity ||
-        cached.flowColor !== targetFlowColor ||
-        cached.flowWeight !== targetFlowWeight ||
-        cached.flowOpacity !== targetFlowOpacity ||
-        cached.flowDashArray !== targetFlowDashArray ||
-        cached.direction !== targetDirection;
-
-      if (changed) {
-        layer.setStyle({
-          color: targetColor,
-          weight: targetWeight,
-          opacity: targetOpacity,
-          dashArray: undefined
-        });
-        
-        if (flowLine) {
-          flowLine.setStyle({
-            color: targetFlowColor,
-            weight: targetFlowWeight,
-            opacity: targetFlowOpacity,
-            dashArray: targetFlowDashArray
-          });
-        }
-        
-        (layer as any)._cachedStyle = {
-          color: targetColor,
-          weight: targetWeight,
-          opacity: targetOpacity,
-          flowColor: targetFlowColor,
-          flowWeight: targetFlowWeight,
-          flowOpacity: targetFlowOpacity,
-          flowDashArray: targetFlowDashArray,
-          direction: targetDirection
-        };
-        
-        if (flowPathEl) {
-          flowPathEl.style.setProperty('--flow-offset-fwd', `-${(pathLength + 8).toFixed(1)}px`);
-          flowPathEl.style.setProperty('--flow-offset-rev', `${(pathLength + 8).toFixed(1)}px`);
-          
-          if (targetDirection === 'forward') {
-            flowPathEl.classList.add('flow-forward');
-            flowPathEl.classList.remove('flow-reverse');
-          } else if (targetDirection === 'reverse') {
-            flowPathEl.classList.add('flow-reverse');
-            flowPathEl.classList.remove('flow-forward');
-          } else {
-            flowPathEl.classList.remove('flow-forward', 'flow-reverse');
-            flowPathEl.style.animationDuration = '';
-          }
-        }
-        if (pathEl) {
-          pathEl.classList.remove('flow-forward', 'flow-reverse');
-          pathEl.style.animationDuration = '';
-        }
-      } else {
-        // Double-check path element classes are consistent
-        if (flowPathEl) {
-          if (targetDirection === 'forward' && !flowPathEl.classList.contains('flow-forward')) {
-            flowPathEl.classList.add('flow-forward');
-            flowPathEl.classList.remove('flow-reverse');
-          } else if (targetDirection === 'reverse' && !flowPathEl.classList.contains('flow-reverse')) {
-            flowPathEl.classList.add('flow-reverse');
-            flowPathEl.classList.remove('flow-forward');
-          } else if (targetDirection === 'idle' && (flowPathEl.classList.contains('flow-forward') || flowPathEl.classList.contains('flow-reverse'))) {
-            flowPathEl.classList.remove('flow-forward', 'flow-reverse');
-            flowPathEl.style.animationDuration = '';
-          }
-        }
-        if (pathEl) {
-          pathEl.classList.remove('flow-forward', 'flow-reverse');
-          pathEl.style.animationDuration = '';
-        }
-      }
-
-      // Inline velocity-based duration scaling updates continuously for smooth transitions
-      if (flowPathEl && isFlowing) {
-        const speedFactor = Math.abs(vel) * 40; // 40 pixels per second per (m/s)
-        const duration = Math.min(8.0, Math.max(0.3, pathLength / speedFactor));
-        flowPathEl.style.animationDuration = `${duration.toFixed(2)}s`;
-      } else if (flowPathEl) {
-        flowPathEl.style.animationDuration = '';
-      }
-    });
-
-    // Update junction circle markers with pressure and demand at active timestep
-    junctionLayersRef.current.forEach((marker, id) => {
-      const simNode = simData.nodes[id];
-      if (simNode) {
-        const press = simNode.pressure[simHour] || 0.0;
-        const demand = simNode.demand[simHour] || 0.0;
-        
-        marker.getTooltip()?.setContent(`Junction ${id} · ${press.toFixed(1)}m · ${demand.toFixed(1)}L/s`);
-
-        // Node pressure color mapping
-        const nodeColor = press < 10.0 ? '#ef4444' : press < 15.0 ? '#f59e0b' : '#22c55e';
-        const outlineColor = press < 10.0 ? '#b91c1c' : press < 15.0 ? '#d97706' : '#15803d';
-
-        // Consumer Demand radius scaling
-        const radius = 3.5 + Math.min(10, Math.abs(demand) * 0.8);
-        
-        marker.setStyle({
-          fillColor: nodeColor,
-          color: outlineColor,
-          radius: radius
-        });
-
-        // Pulsing animation based on active demand
-        const pathEl = marker.getElement();
-        if (pathEl) {
-          if (demand > 0.05) {
-            pathEl.classList.add('demand-pulsing');
-          } else {
-            pathEl.classList.remove('demand-pulsing');
-          }
-        }
-      }
-    });
-
-    // Update asset marker tooltips dynamically with pressure and demand at active timestep
-    assetLayersRef.current.forEach((marker, id) => {
-      const simNode = simData.nodes[id];
-      if (simNode) {
-        const press = simNode.pressure[simHour];
-        const demand = simNode.demand[simHour];
-        marker.getTooltip()?.setContent(`${id} · ${press.toFixed(1)}m · ${demand.toFixed(1)}L/s`);
-
-        // Dynamically adjust tank markers and status indicators
-        const el = marker.getElement();
-        if (el) {
-          const feature = network?.assets.find(a => a.properties.id === id);
-          if (feature) {
-            const kind = feature.properties.asset;
-            if (kind === 'tank') {
-              // Normalized mapping of pressure head to fill percent (typically max height is around 15m)
-              const levelPct = Math.min(100, Math.max(0, (press / 15.0) * 100));
-              const fill = el.querySelector('.aw-tank-fill') as HTMLElement;
-              const label = el.querySelector('.aw-tank-label') as HTMLElement;
-              if (fill) {
-                fill.style.height = `${levelPct.toFixed(1)}%`;
-                const lvlColor = levelPct > 70 ? '#22C55E' : levelPct > 35 ? '#F59E0B' : '#EF4444';
-                fill.style.backgroundColor = lvlColor;
-              }
-              if (label) {
-                label.innerText = `${levelPct.toFixed(0)}%`;
-              }
-            } else {
-              const dot = el.querySelector('.aw-status-dot') as HTMLElement;
-              if (dot) {
-                const statusColor = press < 10.0 ? '#ef4444' : press < 15.0 ? '#f59e0b' : '#22c55e';
-                dot.style.backgroundColor = statusColor;
-              }
-            }
-          }
-        }
-      }
-    });
-  }, [simHour, simData, mode, network, isSimEnabled]);
-
-  /* ── 10. restore standard pipe styles and apply zoom scaling if simulation is closed/unavailable ── */
-  useEffect(() => {
-    if (simData && isSimEnabled) return;
-    const scale = zoom >= 17 ? 1.35 : zoom >= 15 ? 1.15 : zoom >= 13 ? 1 : 0.78;
-    pipeLayersRef.current.forEach((layer, id) => {
-      const feature = network?.pipes.find(p => p.properties.id === id);
-      if (!feature) return;
-      const style = PIPE_STYLE[feature.properties.ui_class];
-      
-      // Clear simulation cache
-      delete (layer as any)._cachedStyle;
-
-      layer.setStyle({
-        color: style.color,
-        weight: style.weight * scale,
-        opacity: style.opacity,
-        dashArray: style.dashArray
-      });
-
-      const pathEl = (layer as any)._path;
-      if (pathEl) {
-        pathEl.classList.remove('flow-forward', 'flow-reverse');
-        pathEl.style.animationDuration = '';
-      }
-
-      // Hide flow line
-      const flowLine = (layer as any)._flowLine;
-      if (flowLine) {
-        flowLine.setStyle({
-          opacity: 0,
-          dashArray: '0 9999'
-        });
-        const flowPathEl = (flowLine as any)._path;
-        if (flowPathEl) {
-          flowPathEl.classList.remove('flow-forward', 'flow-reverse');
-          flowPathEl.style.animationDuration = '';
-        }
-      }
-    });
-
-    // Restore standard junction styling
-    junctionLayersRef.current.forEach((marker, id) => {
-      marker.getTooltip()?.setContent(`Junction ${id}`);
-      marker.setStyle({
-        fillColor: '#94a3b8',
-        color: '#475569',
-        radius: 3.5
-      });
-      const pathEl = marker.getElement();
-      if (pathEl) {
-        pathEl.classList.remove('demand-pulsing');
-      }
-    });
-
-    assetLayersRef.current.forEach((marker, id) => {
-      const feature = network?.assets.find(a => a.properties.id === id);
-      if (!feature) return;
-      const el = marker.getElement();
-      if (el) {
-        const props = feature.properties;
-        const kind = props.asset;
-        if (kind === 'tank') {
-          const fill = el.querySelector('.aw-tank-fill') as HTMLElement;
-          const label = el.querySelector('.aw-tank-label') as HTMLElement;
-          const level = (props as any).level_pct || 50;
-          if (fill) {
-            fill.style.height = `${level}%`;
-            const lvlColor = level > 70 ? '#22C55E' : level > 35 ? '#F59E0B' : '#EF4444';
-            fill.style.backgroundColor = lvlColor;
-          }
-          if (label) {
-            label.innerText = `${level}%`;
-          }
-        } else {
-          const dot = el.querySelector('.aw-status-dot') as HTMLElement;
-          if (dot) {
-            const statusColor = STATUS_COLOR[props.status];
-            dot.style.backgroundColor = statusColor;
-          }
-        }
-      }
-    });
-  }, [simData, network, zoom, isSimEnabled]);
-
-  /* ── 11. workmode changes sync with visible layers ── */
-  useEffect(() => {
-    if (workmode === 'Network overview') {
-      setLayers(DEFAULT_LAYERS);
-    } else if (workmode === 'Asset management') {
-      setLayers({
-        main: true, distribution: true, household: false, backfeed: false, boundary: false,
-        tank: true, pressure_valve: true, meter_valve: true, sensor: false, junction: false
-      });
-    } else if (workmode === 'All tools') {
-      setLayers({
-        main: true, distribution: true, household: true, backfeed: true, boundary: true,
-        tank: true, pressure_valve: true, meter_valve: true, sensor: true, junction: true
-      });
-    } else if (workmode === 'Operation planning') {
-      setLayers({
-        main: true, distribution: true, household: false, backfeed: true, boundary: false,
-        tank: true, pressure_valve: true, meter_valve: false, sensor: false, junction: false
-      });
-    } else if (workmode === 'Service analysis') {
-      setLayers({
-        main: true, distribution: true, household: false, backfeed: false, boundary: false,
-        tank: false, pressure_valve: false, meter_valve: false, sensor: true, junction: false
-      });
-    } else if (workmode === 'Non-revenue water') {
-      setLayers({
-        main: true, distribution: true, household: false, backfeed: true, boundary: false,
-        tank: true, pressure_valve: false, meter_valve: true, sensor: true, junction: false
-      });
-    }
-  }, [workmode]);
-
-  /* ── 12. custom display control triggers ── */
-  const handleResetOrientation = useCallback(() => {
+  const fitView = useCallback(() => {
     const map = leafletRef.current;
-    if (map && network) {
-      const [lonMin, latMin, lonMax, latMax] = network.meta.bbox;
-      map.fitBounds(L.latLngBounds([latMin, lonMin], [latMax, lonMax]));
-    }
+    if (!map || !network) return;
+    const [lonMin, latMin, lonMax, latMax] = network.meta.bbox;
+    map.flyToBounds(L.latLngBounds([latMin, lonMin], [latMax, lonMax]), { duration: 0.6, padding: [48, 48] });
   }, [network]);
 
-  const handleResetView = useCallback(() => {
-    const map = leafletRef.current;
-    if (map && network) {
-      const [lonMin, latMin, lonMax, latMax] = network.meta.bbox;
-      map.fitBounds(L.latLngBounds([latMin, lonMin], [latMax, lonMax]), { padding: [20, 20] });
-    }
-  }, [network]);
-
-  const handleToggle3D = useCallback(() => {
-    setIs3D(prev => !prev);
+  // Simulate is a UX stand-in: it drives the status strip + unlocks the
+  // hydraulic colour-by options. Real hydraulics land in a later phase.
+  const runSimulate = useCallback(() => {
+    setSim('running');
+    const t = setTimeout(() => setSim('success'), 1100);
+    return () => clearTimeout(t);
   }, []);
 
-  const handleRename = useCallback(async () => {
-    if (!network || !network.meta.id || !editableName.trim()) return;
-    try {
-      await renameNetwork(network.meta.id, editableName.trim());
-      setNetwork(prev => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          meta: {
-            ...prev.meta,
-            name: editableName.trim()
-          }
-        };
-      });
-      clearNetworkCache();
-    } catch (err: any) {
-      console.error(err);
-      alert(err.message || 'Failed to rename network');
-    }
-  }, [network, editableName]);
-
-  const searchResults = useMemo(() => {
-    if (!network || !searchQuery.trim()) return [];
-    const q = searchQuery.toLowerCase().trim();
-    const matches: Array<{ id: string; type: string; label: string; kind: 'pipe' | 'asset'; data: any }> = [];
-    
-    // search pipes
-    network.pipes.forEach(p => {
-      if (p.properties.id.toLowerCase().includes(q) || (p.properties.material && p.properties.material.toLowerCase().includes(q))) {
-        matches.push({
-          id: p.properties.id,
-          type: 'Pipe',
-          label: `${p.properties.ui_class} · ${p.properties.diameter_mm ? p.properties.diameter_mm + 'mm' : 'no diameter'}`,
-          kind: 'pipe',
-          data: p
-        });
-      }
-    });
-
-    // search assets
-    network.assets.forEach(a => {
-      if (a.properties.id.toLowerCase().includes(q) || a.properties.name.toLowerCase().includes(q)) {
-        matches.push({
-          id: a.properties.id,
-          type: a.properties.asset.replace('_', ' '),
-          label: a.properties.name,
-          kind: 'asset',
-          data: a
-        });
-      }
-    });
-
-    return matches.slice(0, 30);
-  }, [network, searchQuery]);
-
+  // Editing the network invalidates any prior run.
+  useEffect(() => {
+    setSim((s) => (s === 'success' || s === 'warning' ? 'outdated' : s));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [network]);
 
   const toggleLayer = useCallback(
-    (k: PipeClass | AssetKind | 'junction') => setLayers((p) => ({ ...p, [k]: !p[k] })),
+    (k: PipeClass | AssetKind) => setLayers((p) => ({ ...p, [k]: !p[k] })),
     []
   );
   const setAllPipes = useCallback((on: boolean) => {
@@ -905,71 +480,27 @@ export default function GISMap() {
       tank: 0, pressure_valve: 0, meter_valve: 0, sensor: 0
     };
     for (const a of network.assets) assetCounts[a.properties.asset]++;
-    const junctionCount = network.junctions?.length || 0;
-    return { pipeCounts, assetCounts, junctionCount };
+    return { pipeCounts, assetCounts };
   }, [network]);
 
-  const handleSearchResultClick = (kind: 'pipe' | 'asset', item: any) => {
-    setLayers((prev) => ({
-      ...prev,
-      [kind === 'pipe' ? item.properties.ui_class : item.properties.asset]: true
-    }));
-    setFocus({ kind, feature: item });
-    setActivePlugin(null);
-    setSearchQuery('');
-  };
-
   return (
-    <Shell active="gis" title="GIS Map" sub={network?.meta.name ? `${network.meta.name} · live operational view` : 'Loading network…'} pagePadding={false} hideRightRail>
-      <div className="gis-canvas gis-canvas--real" style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
-        
-        {/* Leaflet Map with potential pseudo-3D styling */}
-        <div ref={mapRef} className={`gis-leaflet${!showBasemap ? ' gis-leaflet--blank' : ''}${is3D ? ' perspective-3d' : ''}`} style={{ width: '100%', height: '100%' }} />
-
-        {/* Top-Center Integrated Status Bar */}
-        {network && (
-          <div style={{ position: 'absolute', top: '16px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, display: 'flex', alignItems: 'center', pointerEvents: 'auto' }}>
-            <div className="glass-effect" style={{ border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', padding: '6px 14px', background: 'rgba(22,22,30,0.9)', display: 'flex', alignItems: 'center', gap: '14px', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}>
-              <div className="aw-workmode-selector-container">
-                <button className="aw-workmode-selector" onClick={() => setShowWorkmodes(!showWorkmodes)} type="button" style={{ color: '#ffffff', background: 'transparent', border: 'none', cursor: 'pointer', outline: 'none', display: 'flex', alignItems: 'center', fontSize: '0.75rem', fontWeight: 600, padding: 0 }}>
-                  <svg fill="none" height="12" viewBox="0 0 14 14" width="12" xmlns="http://www.w3.org/2000/svg" style={{ marginRight: '6px', color: '#8ACDE5' }}>
-                    <path clipRule="evenodd" d="m7.75 2.5h3.25c.2761 0 .5.22386.5.5v3.25h-3.75zm-1.5-1.5h1.5 3.25c1.1046 0 2 .89543 2 2v3.25 1.5 3.25c0 1.1046-.8954 2-2 2h-3.25-1.5-3.25c-1.10457 0-2-.8954-2-2v-3.25003-4.74997c0-1.10457.89543-2 2-2zm-3.75 5.24998v-3.24998c0-.27614.22386-.5.5-.5h3.25v3.75zm0 1.5v3.25002c0 .2761.22386.5.5.5h3.25v-3.75zm5.25 3.75002h3.25c.2761 0 .5-.2239.5-.5v-3.25h-3.75z" fill="currentColor" fillRule="evenodd" />
-                  </svg>
-                  <span>{workmode}</span>
-                </button>
-                {showWorkmodes && (
-                  <div className="aw-workmode-dropdown" style={{ top: '100%', left: '50%', transform: 'translateX(-50%)', marginTop: '6px' }}>
-                    {['Network overview', 'My work mode', 'All tools', 'Asset management', 'Operation planning', 'Service analysis', 'Non-revenue water'].map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        className={`aw-workmode-option${workmode === m ? ' active' : ''}`}
-                        onClick={() => { setWorkmode(m); setShowWorkmodes(false); }}
-                      >
-                        {m}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {coords && (
-                <>
-                  <span style={{ width: '1px', height: '12px', background: 'rgba(255,255,255,0.15)' }} />
-                  <div style={{ color: '#B4B4CA', fontSize: '0.75rem', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
-                    Lat {coords.lat.toFixed(5)} · Lng {coords.lng.toFixed(5)}
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        )}
+    <Shell active="gis" title="GIS Map" sub="Water Supply Network · live operational view" pagePadding={false} hideRightRail>
+      <div className="gis-workspace">
+      <WorkspaceToolbar
+        basemap={basemap}
+        onBasemap={setBasemap}
+        onFit={fitView}
+        sim={sim}
+        onSimulate={runSimulate}
+      />
+      <div className={`gis-canvas gis-canvas--real${basemap === 'none' ? ' gis-canvas--nomap' : ' gis-canvas--sat'}`}>
+        <div ref={mapRef} className="gis-leaflet" />
 
         {!network && !loadError && (
           <div className="map-loading">
             <div className="map-loading-spinner" />
-            <div className="map-loading-text">Loading network data…</div>
-            <div className="map-loading-sub">Reading network graph · initializing projections</div>
+            <div className="map-loading-text">Loading water network …</div>
+            <div className="map-loading-sub">4,951 polylines · reprojecting UTM 36S → WGS84</div>
           </div>
         )}
         {loadError && (
@@ -981,301 +512,97 @@ export default function GISMap() {
 
         {network && visibleStats && (
           <>
-            {/* Left Overlay Column: Name Renaming & Layer Control */}
-            <div style={{ position: 'absolute', top: '16px', left: '16px', zIndex: 1000, display: 'flex', flexDirection: 'column', gap: '12px', width: '280px', pointerEvents: 'auto' }}>
-              <div className="glass-effect" style={{ border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', padding: '10px 14px', background: 'rgba(22,22,30,0.9)', display: 'flex', flexDirection: 'column', gap: '4px', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
-                <span style={{ fontSize: '0.625rem', textTransform: 'uppercase', color: '#B4B4CA', fontWeight: 700, letterSpacing: '0.05em' }}>Network Name (Click to rename)</span>
-                <input
-                  type="text"
-                  className="aw-map-title-input"
-                  value={editableName}
-                  onChange={(e) => setEditableName(e.target.value)}
-                  onBlur={handleRename}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleRename(); }}
-                  style={{ width: '100%', fontSize: '0.8125rem', padding: '4px 6px', height: '26px' }}
-                />
-              </div>
-
-              <LayerControl
-                layers={layers}
-                counts={visibleStats}
-                onToggle={toggleLayer}
-                onAllPipes={setAllPipes}
-                onAllAssets={setAllAssets}
-                meta={network.meta}
-                showBasemap={showBasemap}
-                onToggleBasemap={() => setShowBasemap((sb) => !sb)}
-                simData={simData}
-              />
-            </div>
-
-            {/* Right Overlay Column: Accuracy & Stats Badge */}
-            <div style={{ position: 'absolute', top: '16px', right: '16px', zIndex: 1000, display: 'flex', flexDirection: 'column', gap: '12px', width: '240px', pointerEvents: 'auto', alignItems: 'stretch' }}>
-              <div className="glass-effect" style={{ border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', padding: '10px 14px', background: 'rgba(22,22,30,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
-                <span style={{ fontSize: '0.75rem', color: '#B4B4CA', fontWeight: 600 }}>Accuracy</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <strong style={{ fontSize: '0.75rem', color: '#ffffff' }}>{simData ? '100%' : 'N/A'}</strong>
-                  <div className="aw-accuracy-progress" style={{ width: '60px', height: '4px', background: '#35354B', borderRadius: '2px' }}>
-                    <div className="aw-accuracy-fill" style={{ width: simData ? '100%' : '0%', height: '100%', background: 'linear-gradient(90deg, #75C4E0 0%, #203DAC 100%)', borderRadius: '2px' }}></div>
-                  </div>
-                </div>
-              </div>
-
-              <StatBadge meta={network.meta} />
-            </div>
+            <LayerControl
+              layers={layers}
+              counts={visibleStats}
+              onToggle={toggleLayer}
+              onAllPipes={setAllPipes}
+              onAllAssets={setAllAssets}
+              meta={network.meta}
+              showLeaks={showLeaks}
+              leakCount={leakData.length}
+              onToggleLeaks={() => setShowLeaks((x) => !x)}
+              linkBy={linkBy}
+              nodeBy={nodeBy}
+              onLinkBy={setLinkBy}
+              onNodeBy={setNodeBy}
+              hasResults={hasResults}
+            />
           </>
         )}
-
-        {/* Plugin Floating Toolbar (bottom-left) */}
-        <div className="aw-plugins-toolbar" style={{ bottom: '16px', left: '16px' }}>
-          <button
-            className={`aw-plugin-btn${activePlugin === 'search' ? ' active' : ''}`}
-            onClick={() => setActivePlugin(activePlugin === 'search' ? null : 'search')}
-            title="Search network assets"
-            type="button"
-          >
-            <svg fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" width="16" height="16">
-              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-          </button>
-          <button
-            className={`aw-plugin-btn${activePlugin === 'pressures' ? ' active' : ''}`}
-            onClick={() => setActivePlugin(activePlugin === 'pressures' ? null : 'pressures')}
-            title="Analyze node pressures"
-            type="button"
-          >
-            <svg fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" width="16" height="16">
-              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41M12 7a5 5 0 015 5" />
-            </svg>
-          </button>
-          <button
-            className={`aw-plugin-btn${activePlugin === 'flow' ? ' active' : ''}`}
-            onClick={() => setActivePlugin(activePlugin === 'flow' ? null : 'flow')}
-            title="Visualize flow velocities"
-            type="button"
-          >
-            <svg fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" width="16" height="16">
-              <path d="M9.59 4.59A2 2 0 1111 8H2m10.59 11.41A2 2 0 1014 16H2m15.73-8.27A2.5 2.5 0 1119.5 12H2" />
-            </svg>
-          </button>
-          <button
-            className={`aw-plugin-btn${activePlugin === 'demand' ? ' active' : ''}`}
-            onClick={() => setActivePlugin(activePlugin === 'demand' ? null : 'demand')}
-            title="Inspect flow rates and demand spikes"
-            type="button"
-          >
-            <svg fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" width="16" height="16">
-              <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Display Controls on right stack (aligned on the bottom right baseline) */}
-        <div className="aw-display-controls" style={{ right: '16px', bottom: '16px' }}>
-          <button className="aw-control-btn" title="Restore orientation to north" onClick={handleResetOrientation} type="button">
-            <svg fill="currentColor" height="14" viewBox="0 0 14 14" width="14" xmlns="http://www.w3.org/2000/svg">
-              <g fill="currentColor"><path d="m7.00008 0 2.99992 6h-6z" /><path d="m6.99992 14-2.99992-6h6z" opacity="0.7" /></g>
-            </svg>
-          </button>
-          <button className="aw-control-btn" title="Restore initial view" onClick={handleResetView} type="button">
-            <svg fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24" width="14" height="14">
-              <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
-            </svg>
-          </button>
-          <button className={`aw-control-btn${is3D ? ' active' : ''}`} title="Toggle map 3D view" onClick={handleToggle3D} type="button">
-            <svg fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24" width="14" height="14">
-              <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l-7 4a2 2 0 002 0l7-4a2 2 0 001-1.73z" />
-            </svg>
-          </button>
-          <button className="aw-control-btn" title="Change map background" onClick={() => setShowBasemap(!showBasemap)} type="button">
-            <svg fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24" width="14" height="14">
-              <circle cx="12" cy="12" r="10" /><path d="M12 2a14.5 14.5 0 000 20 14.5 14.5 0 000-20" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Floating plugin search overlay panel */}
-        {activePlugin === 'search' && (
-          <div className="aw-search-overlay-panel" style={{ top: '16px', left: '308px', maxHeight: 'calc(100% - 130px)' }}>
-            <div className="aw-search-overlay-head">
-              <span className="aw-search-overlay-title">Search Network</span>
-              <button className="aw-search-overlay-close" onClick={() => setActivePlugin(null)} type="button">✕</button>
-            </div>
-            <div className="aw-search-overlay-input-container">
-              <svg className="aw-search-overlay-icon" width={14} height={14} fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-              <input
-                type="text"
-                className="aw-search-overlay-input"
-                placeholder="Search pipes, sensors, zones..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                autoFocus
-              />
-            </div>
-            <div className="aw-search-results-list" style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '300px', overflowY: 'auto' }}>
-              {searchResults.length === 0 && searchQuery.trim() && (
-                <div style={{ fontSize: '0.75rem', color: 'hsl(var(--muted-foreground))', padding: '8px 0', textAlign: 'center' }}>
-                  No assets match your search.
-                </div>
-              )}
-              {searchResults.map((res) => (
-                <button
-                  key={res.id}
-                  type="button"
-                  onClick={() => handleSearchResultClick(res.kind, res.data)}
-                  className="sp-row"
-                  style={{
-                    width: '100%',
-                    textAlign: 'left',
-                    background: 'rgba(255,255,255,0.03)',
-                    border: '1px solid rgba(255,255,255,0.05)',
-                    borderRadius: '4px',
-                    padding: '8px 10px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    cursor: 'pointer',
-                    gap: '2px',
-                    marginBottom: '4px'
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                    <strong style={{ fontSize: '0.8125rem', color: '#ffffff' }}>{res.id}</strong>
-                    <span style={{ fontSize: '0.6875rem', color: '#8ACDE5', textTransform: 'uppercase', fontWeight: 600 }}>{res.type}</span>
-                  </div>
-                  <span style={{ fontSize: '0.75rem', color: '#B4B4CA' }}>{res.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Dynamic Plugin Overlays: Pressures or flow rates reports */}
-        {activePlugin === 'pressures' && (
-          <div className="aw-search-overlay-panel" style={{ width: '260px', top: '16px', left: '308px' }}>
-            <div className="aw-search-overlay-head">
-              <span className="aw-search-overlay-title">Pressure Analysis</span>
-              <button className="aw-search-overlay-close" onClick={() => setActivePlugin(null)} type="button">✕</button>
-            </div>
-            <div style={{ fontSize: '0.75rem', color: '#D2D2DF', lineHeight: '1.4' }}>
-              <p style={{ marginBottom: '8px' }}>Pipes are dynamic colored according to pressure limits:</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '10px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', background: '#10b981' }}></span>
-                  <span>Nominal (&gt; 15 m)</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', background: '#f59e0b' }}></span>
-                  <span>Warning (&lt; 15 m)</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', background: '#ef4444' }}></span>
-                  <span>Critical scour velocity</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activePlugin === 'flow' && (
-          <div className="aw-search-overlay-panel" style={{ width: '260px', top: '16px', left: '308px' }}>
-            <div className="aw-search-overlay-head">
-              <span className="aw-search-overlay-title">Flow Visualization</span>
-              <button className="aw-search-overlay-close" onClick={() => setActivePlugin(null)} type="button">✕</button>
-            </div>
-            <div style={{ fontSize: '0.75rem', color: '#D2D2DF', lineHeight: '1.4' }}>
-              <p>Pipe segments style changes dynamically according to simulation water flow directions.</p>
-              <p style={{ marginTop: '6px', color: '#8ACDE5' }}>Chevrons move to show direction on active simulation hours.</p>
-              <div style={{ 
-                marginTop: '16px', 
-                paddingTop: '12px', 
-                borderTop: '1px solid rgba(255,255,255,0.08)',
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'space-between'
-              }}>
-                <span style={{ fontWeight: 500, color: '#FFFFFF' }}>Simulation Overlay</span>
-                <label className="aw-switch">
-                  <input 
-                    type="checkbox" 
-                    checked={isSimEnabled} 
-                    onChange={(e) => setIsSimEnabled(e.target.checked)} 
-                  />
-                  <span className="aw-switch-slider"></span>
-                </label>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activePlugin === 'demand' && (
-          <div className="aw-search-overlay-panel" style={{ width: '260px', top: '16px', left: '308px' }}>
-            <div className="aw-search-overlay-head">
-              <span className="aw-search-overlay-title">Spikes & Anomalies</span>
-              <button className="aw-search-overlay-close" onClick={() => setActivePlugin(null)} type="button">✕</button>
-            </div>
-            <div style={{ fontSize: '0.75rem', color: '#D2D2DF', lineHeight: '1.4' }}>
-              <p>No active anomalies detected in this simulation run.</p>
-              <p style={{ marginTop: '6px', color: '#00C887' }}>✓ All demands meet structural patterns.</p>
-            </div>
-          </div>
-        )}
-
-        {simData && (
-          <div className="gis-simulation-timeline">
-            <div className="gis-sim-play-controls">
-              <button
-                onClick={() => setIsPlaying(!isPlaying)}
-                className="btn btn-primary btn-sm btn-icon"
-                title={isPlaying ? 'Pause' : 'Play Simulation'}
-                type="button"
-                style={{ width: '28px', height: '28px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}
-              >
-                {isPlaying ? (
-                  <svg width={10} height={10} viewBox="0 0 24 24" fill="currentColor">
-                    <rect x={4} y={4} width={5} height={16} /><rect x={15} y={4} width={5} height={16} />
-                  </svg>
-                ) : (
-                  <svg width={10} height={10} viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: '2px' }}>
-                    <polygon points="5,3 19,12 5,21" />
-                  </svg>
-                )}
-              </button>
-              <button
-                onClick={() => setPlaySpeed((s) => (s === 1 ? 5 : s === 5 ? 10 : 1))}
-                className="btn btn-ghost btn-sm"
-                type="button"
-                style={{ fontSize: '10px', fontWeight: 'bold', padding: '0 4px', height: '24px' }}
-              >
-                {playSpeed}x
-              </button>
-            </div>
-            <div className="gis-sim-time-readout">
-              <strong>{formatSimTime(simData.timesteps[simHour])}</strong>
-            </div>
-            <div className="gis-sim-slider-container">
-              <input
-                type="range"
-                min={0}
-                max={simData.timesteps.length - 1}
-                value={simHour}
-                onChange={(e) => setSimHour(parseInt(e.target.value))}
-                className="gis-sim-slider"
-              />
-            </div>
-          </div>
-        )}
+      </div>
+      <SimulationStrip sim={sim} onRun={runSimulate} linkBy={linkBy} nodeBy={nodeBy} hasResults={hasResults} />
       </div>
 
       {focus?.kind === 'pipe' && (
-        <PipePanel feature={focus.feature} onClose={() => setFocus(null)} simData={simData} simHour={simHour} />
+        <PipePanel feature={focus.feature} onClose={() => setFocus(null)} />
       )}
       {focus?.kind === 'asset' && (
-        <AssetPanel feature={focus.feature} onClose={() => setFocus(null)} simData={simData} simHour={simHour} />
+        <AssetPanel feature={focus.feature} onClose={() => setFocus(null)} />
+      )}
+      {focus?.kind === 'leak' && (
+        <LeakPanel leak={focus.leak} onClose={() => setFocus(null)} />
       )}
     </Shell>
   );
+}
+
+/* ─────────────────────────────────────────
+   Symbology — colour links by the selected
+   property. Class is the default; diameter and
+   status are data-backed; flow/velocity/headloss
+   come from synthesized simulation results.
+   ───────────────────────────────────────── */
+
+// Soft professional ramp: slate → pale blue → teal → amber → coral.
+// Viridis — perceptually-uniform sequential scale, the data-viz standard.
+const RAMP = ['#440154', '#3B528B', '#21918C', '#5EC962', '#FDE725'];
+function rampColor(t: number): string {
+  const clamped = Math.max(0, Math.min(1, t));
+  const idx = Math.min(RAMP.length - 2, Math.floor(clamped * (RAMP.length - 1)));
+  return RAMP[idx + (clamped * (RAMP.length - 1) - idx > 0.5 ? 1 : 0)];
+}
+
+/** Deterministic pseudo-flow for a pipe so "simulate" produces stable results. */
+function simFlow(p: PipeProps): number {
+  const dia = p.diameter_mm || 80;
+  const base = (dia / 25) ** 1.6 * 0.8;
+  let h = 0;
+  for (const ch of p.id) h = (h * 31 + ch.charCodeAt(0)) % 997;
+  return base * (0.7 + (h % 100) / 100 * 0.9);
+}
+
+/** Resolve the resting style for a pipe under the active symbology. */
+function baseLineStyle(
+  feat: PipeFeature,
+  linkBy: LinkSymbology,
+  hasResults: boolean
+): L.PolylineOptions {
+  const p = feat.properties;
+  const style = PIPE_STYLE[p.ui_class];
+  const dashArray = p.status === 'closed' ? '8 5' : style.dashArray;
+  let color = style.color;
+  if (linkBy === 'diameter') {
+    const d = p.diameter_mm || 0;
+    color = rampColor((d - 25) / (400 - 25));
+  } else if (linkBy === 'status') {
+    color = p.status === 'closed' ? '#D4675E' : p.service === 'out-of-service' ? '#D9A156' : '#4FA877';
+  } else if (hasResults && (linkBy === 'flow' || linkBy === 'velocity' || linkBy === 'headloss')) {
+    const flow = simFlow(p);
+    const dia = p.diameter_mm || 80;
+    const velocity = flow / (Math.PI * (dia / 2000) ** 2) / 1000;
+    const headloss = (velocity ** 1.85) * (100 / dia);
+    const metric = linkBy === 'flow' ? flow / 60 : linkBy === 'velocity' ? velocity / 2.5 : headloss / 12;
+    color = rampColor(metric);
+  }
+  return {
+    color,
+    weight: style.weight,
+    opacity: style.opacity,
+    dashArray,
+    lineCap: 'round',
+    lineJoin: 'round'
+  };
 }
 
 /* ─────────────────────────────────────────
@@ -1304,25 +631,33 @@ function assetIcon(feat: AssetFeature): L.DivIcon {
     });
   }
   if (kind === 'pressure_valve') {
+    // Standard hydraulic valve bowtie.
     return L.divIcon({
       className: 'aw-marker',
       html: `<div class="aw-asset-marker aw-prv" style="--ac:${palette.color};--sc:${statusColor}">
-        <svg viewBox="0 0 24 24" width="22" height="22"><polygon points="12,3 21,20 3,20" fill="var(--ac)" stroke="white" stroke-width="2"/></svg>
+        <svg viewBox="0 0 24 24" width="28" height="28">
+          <polygon points="3,5 3,19 12,12" fill="var(--ac)" stroke="white" stroke-width="2"/>
+          <polygon points="21,5 21,19 12,12" fill="var(--ac)" stroke="white" stroke-width="2"/>
+        </svg>
         <span class="aw-status-dot" style="background:${statusColor}"></span>
       </div>`,
-      iconSize: [24, 24],
-      iconAnchor: [12, 12]
+      iconSize: [30, 30],
+      iconAnchor: [15, 15]
     });
   }
   if (kind === 'meter_valve') {
+    // Pump / bulk meter — circle with drive wedge.
     return L.divIcon({
       className: 'aw-marker',
       html: `<div class="aw-asset-marker aw-mv" style="--ac:${palette.color};--sc:${statusColor}">
-        <svg viewBox="0 0 24 24" width="22" height="22"><rect x="4" y="4" width="16" height="16" rx="3" transform="rotate(45 12 12)" fill="var(--ac)" stroke="white" stroke-width="2"/></svg>
+        <svg viewBox="0 0 24 24" width="28" height="28">
+          <circle cx="10" cy="14" r="7" fill="var(--ac)" stroke="white" stroke-width="2"/>
+          <polygon points="10,14 19,5 19,14" fill="var(--ac)" stroke="white" stroke-width="2"/>
+        </svg>
         <span class="aw-status-dot" style="background:${statusColor}"></span>
       </div>`,
-      iconSize: [24, 24],
-      iconAnchor: [12, 12]
+      iconSize: [30, 30],
+      iconAnchor: [15, 15]
     });
   }
   return L.divIcon({
@@ -1342,6 +677,51 @@ function assetTooltip(feat: AssetFeature): string {
   if (p.asset === 'pressure_valve') return `${p.name} · ${p.live_bar} bar`;
   if (p.asset === 'meter_valve') return `${p.name} · ⌀${p.size_mm} mm`;
   return `${p.name} · ${p.flow_lps} L/s`;
+}
+
+/* Leak incident marker — pulsing teardrop, severity-coloured.
+   Fixed leaks render muted so open incidents stand out. */
+function leakIcon(leak: Leak): L.DivIcon {
+  const color = leak.severity === 'critical' ? LEAK_SEVERITY_COLOR.critical
+    : leak.severity === 'major' ? LEAK_SEVERITY_COLOR.major
+    : LEAK_SEVERITY_COLOR.minor;
+  const fixed = leak.status === 'fixed';
+  return L.divIcon({
+    className: 'aw-marker',
+    html: `<div class="aw-leak-marker${fixed ? ' fixed' : ''}" style="--lk:${color}">
+      ${fixed ? '' : '<span class="aw-leak-pulse"></span>'}
+      <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 2C12 2 5 10 5 15a7 7 0 0 0 14 0c0-5-7-13-7-13z" fill="var(--lk)" stroke="white" stroke-width="1.5"/></svg>
+    </div>`,
+    iconSize: [22, 22],
+    iconAnchor: [11, 20]
+  });
+}
+
+function leakPopupHtml(leak: Leak): string {
+  const color = LEAK_SEVERITY_COLOR[leak.severity];
+  const pill = leak.status === 'fixed'
+    ? `<span class="aw-pop-pill aw-pop-pill--ok">Fixed</span>`
+    : leak.status === 'reported'
+      ? `<span class="aw-pop-pill aw-pop-pill--bad">Reported</span>`
+      : `<span class="aw-pop-pill aw-pop-pill--warn">${escapeHtml(LEAK_STATUS_LABEL[leak.status])}</span>`;
+  return `
+    <div class="aw-pop">
+      <div class="aw-pop-head">
+        <span class="aw-pop-swatch dot" style="background:${color}"></span>
+        <div class="aw-pop-head-text">
+          <div class="aw-pop-title">${escapeHtml(LEAK_SEVERITY_LABEL[leak.severity])} leak</div>
+          <div class="aw-pop-sub">${escapeHtml(leak.id)} · ${escapeHtml(zoneLabel(leak.zone))}</div>
+        </div>
+        ${pill}
+      </div>
+      <div class="aw-pop-grid">
+        <div><span>Address</span><strong>${escapeHtml(leak.address)}</strong></div>
+        <div><span>Pipe</span><strong>${escapeHtml(leak.pipe || '—')}</strong></div>
+        <div><span>Reported</span><strong>${escapeHtml(leak.reported)}</strong></div>
+        <div><span>Source</span><strong>${escapeHtml(leak.source)}</strong></div>
+      </div>
+      <div class="aw-pop-foot">Click again for full incident record →</div>
+    </div>`;
 }
 
 /* ─────────────────────────────────────────
@@ -1499,19 +879,29 @@ function LayerControl({
   onAllPipes,
   onAllAssets,
   meta,
-  showBasemap,
-  onToggleBasemap,
-  simData
+  showLeaks,
+  leakCount,
+  onToggleLeaks,
+  linkBy,
+  nodeBy,
+  onLinkBy,
+  onNodeBy,
+  hasResults
 }: {
   layers: LayerVis;
-  counts: { pipeCounts: Record<PipeClass, number>; assetCounts: Record<AssetKind, number>; junctionCount: number };
-  onToggle: (k: PipeClass | AssetKind | 'junction') => void;
+  counts: { pipeCounts: Record<PipeClass, number>; assetCounts: Record<AssetKind, number> };
+  onToggle: (k: PipeClass | AssetKind) => void;
   onAllPipes: (on: boolean) => void;
   onAllAssets: (on: boolean) => void;
   meta: NetworkData['meta'];
-  showBasemap: boolean;
-  onToggleBasemap: () => void;
-  simData: SimulationData | null;
+  showLeaks: boolean;
+  leakCount: number;
+  onToggleLeaks: () => void;
+  linkBy: LinkSymbology;
+  nodeBy: NodeSymbology;
+  onLinkBy: (k: LinkSymbology) => void;
+  onNodeBy: (k: NodeSymbology) => void;
+  hasResults: boolean;
 }) {
   const [expanded, setExpanded] = useState(true);
   const visiblePipeCount = PIPE_KEYS.reduce((sum, k) => sum + (layers[k] ? counts.pipeCounts[k] : 0), 0);
@@ -1550,13 +940,6 @@ function LayerControl({
                 onClick={() => onToggle(k)}
               />
             ))}
-            <LayerToggle
-              label="Network Junctions"
-              count={counts.junctionCount}
-              on={layers.junction}
-              swatch={<JunctionSwatch />}
-              onClick={() => onToggle('junction')}
-            />
           </div>
           <div className="gis-lc-section">
             <div className="gis-lc-section-head">
@@ -1579,33 +962,49 @@ function LayerControl({
           </div>
           <div className="gis-lc-section">
             <div className="gis-lc-section-head">
-              <span>Basemap</span>
+              <span>Incidents</span>
             </div>
             <LayerToggle
-              label="Map Imagery"
-              on={showBasemap}
+              label="Leaks"
+              count={leakCount}
+              on={showLeaks}
               swatch={
-                <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ color: 'hsl(var(--primary))' }}>
-                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                <svg width={14} height={14} viewBox="0 0 24 24">
+                  <path d="M12 2C12 2 5 10 5 15a7 7 0 0 0 14 0c0-5-7-13-7-13z" fill={LEAK_SEVERITY_COLOR.critical} />
                 </svg>
               }
-              onClick={onToggleBasemap}
+              onClick={onToggleLeaks}
             />
           </div>
-          {simData && simData.controls.length > 0 && (
-            <div className="gis-lc-section" style={{ borderTop: '1px solid hsl(var(--border))', paddingTop: '10px' }}>
-              <div className="gis-lc-section-head">
-                <span>Operational Rules</span>
-              </div>
-              <div style={{ maxHeight: '90px', overflowY: 'auto', fontSize: '10px', color: 'hsl(var(--muted-foreground))', fontFamily: 'var(--font-mono)', paddingRight: '4px' }}>
-                {simData.controls.map((rule, idx) => (
-                  <div key={idx} style={{ marginBottom: '6px', lineHeight: '1.3', paddingBottom: '4px', borderBottom: '1px solid hsla(var(--border) / 0.4)' }}>
-                    • {rule}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          <div className="gis-lc-section">
+            <div className="gis-lc-section-head"><span>Link symbology</span></div>
+            <select
+              className="gis-symbology-select"
+              value={linkBy}
+              onChange={(e) => onLinkBy(e.target.value as LinkSymbology)}
+            >
+              {LINK_SYMBOLOGY.map((o) => (
+                <option key={o.key} value={o.key} disabled={o.needsSim && !hasResults}>
+                  {o.label}{o.needsSim && !hasResults ? ' · run simulation' : ''}
+                </option>
+              ))}
+            </select>
+            <RampLegend linkBy={linkBy} hasResults={hasResults} />
+          </div>
+          <div className="gis-lc-section">
+            <div className="gis-lc-section-head"><span>Node symbology</span></div>
+            <select
+              className="gis-symbology-select"
+              value={nodeBy}
+              onChange={(e) => onNodeBy(e.target.value as NodeSymbology)}
+            >
+              {NODE_SYMBOLOGY.map((o) => (
+                <option key={o.key} value={o.key} disabled={o.needsSim && !hasResults}>
+                  {o.label}{o.needsSim && !hasResults ? ' · run simulation' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="gis-lc-section gis-lc-status">
             <div className="gis-lc-section-head"><span>Status</span></div>
             <div className="gis-lc-status-row">
@@ -1624,15 +1023,42 @@ function LayerControl({
   );
 }
 
-function LayerToggle({ label, count, on, swatch, onClick }: {
-  label: string; count?: number; on: boolean; swatch: React.ReactNode; onClick: () => void;
-}) {
+const RAMP_RANGES: Partial<Record<LinkSymbology, { lo: string; hi: string }>> = {
+  diameter: { lo: '25 mm', hi: '≥400 mm' },
+  flow: { lo: '0 L/s', hi: '60 L/s' },
+  velocity: { lo: '0 m/s', hi: '2.5 m/s' },
+  headloss: { lo: '0 m/km', hi: '12 m/km' }
+};
+
+/** EPANET-style gradient legend for the active scaled link symbology. */
+function RampLegend({ linkBy, hasResults }: { linkBy: LinkSymbology; hasResults: boolean }) {
+  const range = RAMP_RANGES[linkBy];
+  if (!range) return null;
+  const needsSim = linkBy !== 'diameter';
+  if (needsSim && !hasResults) return null;
   return (
-    <button className={`gis-layer-toggle${on ? ' on' : ''}`} onClick={onClick} type="button">
-      <span className="gis-lt-check">{on ? '✓' : ''}</span>
+    <div className="gis-ramp-legend">
+      <div className="gis-ramp-bar" style={{ background: `linear-gradient(90deg, ${RAMP.join(',')})` }} />
+      <div className="gis-ramp-labels"><span>{range.lo}</span><span>{range.hi}</span></div>
+    </div>
+  );
+}
+
+function LayerToggle({ label, count, on, swatch, onClick }: {
+  label: string; count: number; on: boolean; swatch: React.ReactNode; onClick: () => void;
+}) {
+  // Labelled legend row (GIS/EPANET style): checkbox · symbol · name · count.
+  return (
+    <button
+      className={`gis-layer-toggle${on ? ' on' : ''}`}
+      onClick={onClick}
+      type="button"
+      aria-pressed={on}
+    >
+      <span className="gis-lt-check" aria-hidden="true">{on ? '✓' : ''}</span>
       <span className="gis-lt-swatch">{swatch}</span>
       <span className="gis-lt-label">{label}</span>
-      {count !== undefined && <span className="gis-lt-count">{count.toLocaleString()}</span>}
+      <span className="gis-lt-count">{count.toLocaleString()}</span>
     </button>
   );
 }
@@ -1651,76 +1077,123 @@ function PipeSwatch({ cls }: { cls: PipeClass }) {
   );
 }
 
-function JunctionSwatch() {
-  return (
-    <span
-      className="gis-asset-swatch sensor"
-      style={{ background: '#94a3b8', border: '1.5px solid #475569', boxShadow: 'none', width: '8px', height: '8px', borderRadius: '50%' }}
-    />
-  );
-}
-
 function AssetSwatch({ kind }: { kind: AssetKind }) {
-  const palette = ASSET_STYLE[kind];
+  const c = ASSET_STYLE[kind].color;
   if (kind === 'tank') {
-    // Mini level-gauge mirrors the actual tank marker on the map.
+    // Reservoir / tank — cylinder with a waterline.
     return (
-      <span
-        className="gis-asset-swatch tank"
-        style={{ borderColor: palette.color, color: palette.color }}
-        aria-label="Reservoir level sensor"
-      >
-        <span className="gis-asset-swatch-tank-fill" />
-      </span>
+      <svg width={22} height={22} viewBox="0 0 22 22">
+        <rect x={5} y={3} width={12} height={16} rx={2} fill={c} stroke="#fff" strokeWidth={1.6} />
+        <rect x={5} y={11} width={12} height={8} rx={2} fill="#fff" opacity={0.3} />
+        <line x1={5} y1={11} x2={17} y2={11} stroke="#fff" strokeWidth={1.4} opacity={0.8} />
+      </svg>
     );
   }
   if (kind === 'pressure_valve') {
+    // Valve (PRV) — standard hydraulic bowtie.
     return (
-      <svg width={14} height={14} viewBox="0 0 14 14">
-        <polygon points="7,2 13,12 1,12" fill={palette.color} />
+      <svg width={22} height={22} viewBox="0 0 22 22">
+        <polygon points="3,4 3,18 11,11" fill={c} stroke="#fff" strokeWidth={1.6} strokeLinejoin="round" />
+        <polygon points="19,4 19,18 11,11" fill={c} stroke="#fff" strokeWidth={1.6} strokeLinejoin="round" />
       </svg>
     );
   }
   if (kind === 'meter_valve') {
+    // Pump / bulk meter — circle with drive wedge.
     return (
-      <svg width={14} height={14} viewBox="0 0 14 14">
-        <rect x={3} y={3} width={8} height={8} rx={1.5} transform="rotate(45 7 7)" fill={palette.color} />
+      <svg width={22} height={22} viewBox="0 0 22 22">
+        <circle cx={10} cy={12} r={7} fill={c} stroke="#fff" strokeWidth={1.6} />
+        <polygon points="10,12 19,3 19,12" fill={c} stroke="#fff" strokeWidth={1.6} strokeLinejoin="round" />
       </svg>
     );
   }
+  // Sensor — telemetry node with broadcast arcs.
   return (
-    <span
-      className="gis-asset-swatch sensor"
-      style={{ background: palette.color, boxShadow: `0 0 0 3px ${palette.color}33` }}
-    />
+    <svg width={22} height={22} viewBox="0 0 22 22" fill="none" stroke={c} strokeWidth={2.2} strokeLinecap="round">
+      <circle cx={11} cy={15} r={2.6} fill={c} stroke="none" />
+      <path d="M6.5 10.5a6 6 0 0 1 9 0" opacity={0.85} />
+      <path d="M4 7.5a9.5 9.5 0 0 1 14 0" opacity={0.5} />
+    </svg>
   );
 }
 
 /* Legend was merged into LayerControl — see status block + per-row swatches. */
 
 /* ─────────────────────────────────────────
-   Network stats badge (top-right)
+   Workspace toolbar (top) + simulation strip (bottom)
    ───────────────────────────────────────── */
 
-function StatBadge({ meta }: { meta: NetworkData['meta'] }) {
+const BASEMAP_TABS: Array<{ key: Basemap; label: string; title: string }> = [
+  { key: 'satellite', label: 'Satellite', title: 'Aerial imagery — no labels' },
+  { key: 'none', label: 'No basemap', title: 'Engineering canvas — model only' }
+];
+
+function WorkspaceToolbar({ basemap, onBasemap, onFit, sim, onSimulate }: {
+  basemap: Basemap;
+  onBasemap: (b: Basemap) => void;
+  onFit: () => void;
+  sim: SimState;
+  onSimulate: () => void;
+}) {
   return (
-    <div className="gis-stat-badge">
-      <div className="gis-stat-row">
-        <span>Live network</span>
-        <strong>{meta.name || 'Unknown'}</strong>
+    <div className="gis-toolbar">
+      <div className="gis-basemap-tabs" role="tablist" aria-label="Basemap">
+        {BASEMAP_TABS.map((t) => (
+          <button
+            key={t.key}
+            className={`gis-basemap-tab${basemap === t.key ? ' active' : ''}`}
+            onClick={() => onBasemap(t.key)}
+            title={t.title}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
-      <div className="gis-stat-row">
-        <span>Pipe segments</span>
-        <strong>{meta.feature_count.toLocaleString()}</strong>
+      <button type="button" className="gis-tool" onClick={onFit} title="Fit view" aria-label="Fit view">
+        <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 9V4h5 M20 9V4h-5 M4 15v5h5 M20 15v5h-5" />
+        </svg>
+      </button>
+      <div className="gis-toolbar-spacer" />
+      <button
+        type="button"
+        className={`gis-simulate-btn sim-${sim}`}
+        onClick={onSimulate}
+        disabled={sim === 'running'}
+        title="Run hydraulic simulation"
+      >
+        <span className="gis-sim-dot" />
+        {sim === 'running' ? 'Running…' : 'Run simulation'}
+      </button>
+    </div>
+  );
+}
+
+function SimulationStrip({ sim, onRun, linkBy, nodeBy, hasResults }: {
+  sim: SimState;
+  onRun: () => void;
+  linkBy: LinkSymbology;
+  nodeBy: NodeSymbology;
+  hasResults: boolean;
+}) {
+  const linkLabel = LINK_SYMBOLOGY.find((o) => o.key === linkBy)?.label ?? '—';
+  const nodeLabel = NODE_SYMBOLOGY.find((o) => o.key === nodeBy)?.label ?? '—';
+  return (
+    <div className={`gis-sim-strip sim-${sim}`}>
+      <div className="gis-sim-state">
+        <span className="gis-sim-dot" />
+        <strong>{SIM_LABEL[sim]}</strong>
       </div>
-      <div className="gis-stat-row">
-        <span>Total length</span>
-        <strong>{(meta.total_length_m / 1000).toFixed(1)} km</strong>
+      <div className="gis-sim-fields">
+        <div><span>Headloss formula</span><strong>Hazen-Williams</strong></div>
+        <div><span>Demand multiplier</span><strong>1.0×</strong></div>
+        <div><span>Links by</span><strong>{linkLabel}</strong></div>
+        <div><span>Nodes by</span><strong>{nodeLabel}</strong></div>
+        <div><span>Results</span><strong>{hasResults ? 'Available' : 'None'}</strong></div>
       </div>
-      <div className="gis-stat-row">
-        <span>Service zones</span>
-        <strong>{meta.top_zones.filter(([z]) => z.length <= 6).length}</strong>
-      </div>
+      <button type="button" className="gis-sim-run" onClick={onRun} disabled={sim === 'running'}>
+        {sim === 'running' ? 'Running…' : hasResults ? 'Re-run' : 'Run simulation'}
+      </button>
     </div>
   );
 }
@@ -1729,21 +1202,12 @@ function StatBadge({ meta }: { meta: NetworkData['meta'] }) {
    Side panels
    ───────────────────────────────────────── */
 
-function PipePanel({ feature, onClose, simData, simHour }: {
-  feature: PipeFeature;
-  onClose: () => void;
-  simData: SimulationData | null;
-  simHour: number;
-}) {
+function PipePanel({ feature, onClose }: { feature: PipeFeature; onClose: () => void }) {
   const p = feature.properties;
   const style = PIPE_STYLE[p.ui_class];
+  const flowDir =
+    p.node_from && p.node_to ? `${p.node_from} → ${p.node_to}` : '—';
   const zoneName = p.zone ? zoneLabel(p.zone) : '—';
-
-  const sim = simData ? simData.links[p.id] : null;
-  const currentFlow = sim ? `${sim.flow[simHour].toFixed(1)} L/s` : (p.diameter_mm ? `${Math.round((p.diameter_mm / 25) ** 1.6 * 0.8)} L/s` : '—');
-  const currentVel = sim ? `${sim.velocity[simHour].toFixed(2)} m/s` : '—';
-  const currentStatus = sim ? sim.status[simHour] : p.status;
-  const flowDir = p.node_from && p.node_to ? `${p.node_from} → ${p.node_to}` : (sim && sim.flow[simHour] < 0 ? 'Reverse flow' : 'Normal flow');
 
   return (
     <SidePanel
@@ -1752,8 +1216,8 @@ function PipePanel({ feature, onClose, simData, simHour }: {
       kind={style.label}
       title={p.id}
       pill={{
-        tone: currentStatus === 'closed' ? 'warn' : p.service === 'out-of-service' ? 'danger' : 'safe',
-        label: currentStatus === 'closed' ? 'Closed' : p.service === 'in-service' ? 'In service' : p.service === 'out-of-service' ? 'Out of service' : 'Open'
+        tone: p.ui_class === 'backfeed' ? 'warn' : p.status === 'closed' ? 'muted' : 'safe',
+        label: p.status === 'closed' ? 'Closed' : p.service === 'in-service' ? 'In service' : p.service === 'out-of-service' ? 'Out of service' : 'Open'
       }}
     >
       <SectionLabel>Geometry</SectionLabel>
@@ -1765,7 +1229,7 @@ function PipePanel({ feature, onClose, simData, simHour }: {
 
       <div style={{ height: 14 }} />
       <SectionLabel>Operations</SectionLabel>
-      <SpRow label="Status" value={currentStatus} color={currentStatus === 'closed' ? '#f59e0b' : '#22c55e'} />
+      <SpRow label="Status" value={p.status} color={p.status === 'closed' ? '#f59e0b' : '#22c55e'} />
       <SpRow label="Service" value={p.service.replace('-', ' ')} />
       <SpRow label="Flow direction" value={flowDir} mono />
       <SpRow label="Zone" value={zoneName} />
@@ -1778,52 +1242,21 @@ function PipePanel({ feature, onClose, simData, simHour }: {
       <div style={{ height: 14 }} />
       <SectionLabel>Live telemetry</SectionLabel>
       <SpRow
-        label="Velocity"
-        value={currentVel}
+        label="Pressure"
+        value={p.ui_class === 'main' ? '3.4 bar' : p.ui_class === 'backfeed' ? '— (closed)' : '2.6 bar'}
         mono
-        color={sim && Math.abs(sim.velocity[simHour]) > 1.8 ? '#ef4444' : '#22c55e'}
+        color={p.ui_class === 'backfeed' ? '#94a3b8' : '#22c55e'}
       />
-      <SpRow label="Flow rate" value={currentFlow} mono />
+      <SpRow label="Flow estimate" value={p.diameter_mm ? `${Math.round((p.diameter_mm / 25) ** 1.6 * 0.8)} L/s` : '—'} mono />
       <SpRow label="Anomaly score" value="0.04" mono />
-
-      {sim && (
-        <>
-          <div style={{ height: 14 }} />
-          <SectionLabel>Simulation Profiles</SectionLabel>
-          <SimulationChart
-            title="Flow Rate Profile"
-            values={sim.flow}
-            timesteps={simData!.timesteps}
-            currentHour={simHour}
-            unit="L/s"
-          />
-          <SimulationChart
-            title="Velocity Profile"
-            values={sim.velocity}
-            timesteps={simData!.timesteps}
-            currentHour={simHour}
-            unit="m/s"
-          />
-        </>
-      )}
     </SidePanel>
   );
 }
 
-function AssetPanel({ feature, onClose, simData, simHour }: {
-  feature: AssetFeature;
-  onClose: () => void;
-  simData: SimulationData | null;
-  simHour: number;
-}) {
+function AssetPanel({ feature, onClose }: { feature: AssetFeature; onClose: () => void }) {
   const p = feature.properties;
-  const sim = simData ? simData.nodes[p.id] : null;
-  const currentPress = sim ? sim.pressure[simHour] : null;
-  const currentDemand = sim ? sim.demand[simHour] : null;
-
   if (p.asset === 'tank') {
-    const displayLevel = currentPress !== null ? currentPress : p.level_pct;
-    const lvlColor = displayLevel > 70 ? '#22c55e' : displayLevel > 35 ? '#f59e0b' : '#ef4444';
+    const lvlColor = p.level_pct > 70 ? '#22c55e' : p.level_pct > 35 ? '#f59e0b' : '#ef4444';
     return (
       <SidePanel
         open
@@ -1833,14 +1266,13 @@ function AssetPanel({ feature, onClose, simData, simHour }: {
         pill={{ tone: p.status === 'ok' ? 'safe' : 'warn', label: p.status === 'ok' ? 'Operating' : 'Watch' }}
       >
         <SectionLabel>Live level sensor</SectionLabel>
-        <SpRow label="Pressure Head" value={currentPress !== null ? `${currentPress.toFixed(1)} m` : `${p.level_pct}%`} mono color={lvlColor} />
-        {currentPress === null && (
-          <div className="aw-level-bar">
-            <div className="aw-level-fill" style={{ width: `${p.level_pct}%`, background: lvlColor }} />
-          </div>
-        )}
-        <SpRow label="Volume stored" value={currentPress !== null ? `${Math.round(p.capacity_m3 * currentPress / 10).toLocaleString()} m³` : `${Math.round(p.capacity_m3 * p.level_pct / 100).toLocaleString()} m³`} mono />
+        <SpRow label="Level reading" value={`${p.level_pct}%`} mono color={lvlColor} />
+        <div className="aw-level-bar">
+          <div className="aw-level-fill" style={{ width: `${p.level_pct}%`, background: lvlColor }} />
+        </div>
+        <SpRow label="Volume stored" value={`${Math.round(p.capacity_m3 * p.level_pct / 100).toLocaleString()} m³`} mono />
         <SpRow label="Capacity" value={`${p.capacity_m3.toLocaleString()} m³`} mono />
+        <SpRow label="Hours to empty" value={`${Math.max(1, Math.round((p.level_pct * p.capacity_m3 / 100) / Math.max(0.5, p.outflow_lps * 3.6)))}h`} mono />
         <div style={{ height: 14 }} />
         <SectionLabel>Flow</SectionLabel>
         <SpRow label="Inflow" value={`${p.inflow_lps} L/s`} mono color="#0B5FFF" />
@@ -1850,27 +1282,6 @@ function AssetPanel({ feature, onClose, simData, simHour }: {
         <SectionLabel>Identifier</SectionLabel>
         <SpRow label="Tank ID" value={p.id} mono />
         <SpRow label="Connecting pipes" value={p.junction_degree} mono />
-
-        {sim && (
-          <>
-            <div style={{ height: 14 }} />
-            <SectionLabel>Simulation Profiles</SectionLabel>
-            <SimulationChart
-              title="Pressure Head Profile"
-              values={sim.pressure}
-              timesteps={simData!.timesteps}
-              currentHour={simHour}
-              unit="m"
-            />
-            <SimulationChart
-              title="Flow / Demand Profile"
-              values={sim.demand}
-              timesteps={simData!.timesteps}
-              currentHour={simHour}
-              unit="L/s"
-            />
-          </>
-        )}
       </SidePanel>
     );
   }
@@ -1889,7 +1300,7 @@ function AssetPanel({ feature, onClose, simData, simHour }: {
       >
         <SectionLabel>Pressure</SectionLabel>
         <SpRow label="Set point" value={`${p.set_bar} bar`} mono />
-        <SpRow label="Live reading" value={currentPress !== null ? `${(currentPress * 0.1).toFixed(2)} bar` : `${p.live_bar} bar`} mono color={p.status === 'alert' ? '#ef4444' : p.status === 'warn' ? '#f59e0b' : '#22c55e'} />
+        <SpRow label="Live reading" value={`${p.live_bar} bar`} mono color={p.status === 'alert' ? '#ef4444' : p.status === 'warn' ? '#f59e0b' : '#22c55e'} />
         <SpRow label="Drift" value={`${drift >= 0 ? '+' : ''}${drift.toFixed(2)} bar`} mono />
         <div style={{ height: 14 }} />
         <SectionLabel>Thresholds</SectionLabel>
@@ -1899,27 +1310,6 @@ function AssetPanel({ feature, onClose, simData, simHour }: {
         <div style={{ height: 14 }} />
         <SectionLabel>Identifier</SectionLabel>
         <SpRow label="Valve ID" value={p.id} mono />
-
-        {sim && (
-          <>
-            <div style={{ height: 14 }} />
-            <SectionLabel>Simulation Profiles</SectionLabel>
-            <SimulationChart
-              title="Pressure Profile"
-              values={sim.pressure}
-              timesteps={simData!.timesteps}
-              currentHour={simHour}
-              unit="m"
-            />
-            <SimulationChart
-              title="Flow Rate Profile"
-              values={sim.demand}
-              timesteps={simData!.timesteps}
-              currentHour={simHour}
-              unit="L/s"
-            />
-          </>
-        )}
       </SidePanel>
     );
   }
@@ -1937,32 +1327,12 @@ function AssetPanel({ feature, onClose, simData, simHour }: {
         <SpRow label="State" value={p.state} />
         <div style={{ height: 14 }} />
         <SectionLabel>Consumption</SectionLabel>
-        <SpRow label="Flow rate" value={currentDemand !== null ? `${currentDemand.toFixed(1)} L/s` : `${p.consumption_m3d.toLocaleString()} m³`} mono color="#0B5FFF" />
+        <SpRow label="Today" value={`${p.consumption_m3d.toLocaleString()} m³`} mono color="#0B5FFF" />
         <SpRow label="7-day avg" value={`${Math.round(p.consumption_m3d * 0.92).toLocaleString()} m³`} mono />
+        <SpRow label="Trend" value={p.consumption_m3d > 700 ? '▲ rising' : '▬ steady'} />
         <div style={{ height: 14 }} />
         <SectionLabel>Identifier</SectionLabel>
         <SpRow label="Meter ID" value={p.id} mono />
-
-        {sim && (
-          <>
-            <div style={{ height: 14 }} />
-            <SectionLabel>Simulation Profiles</SectionLabel>
-            <SimulationChart
-              title="Pressure Profile"
-              values={sim.pressure}
-              timesteps={simData!.timesteps}
-              currentHour={simHour}
-              unit="m"
-            />
-            <SimulationChart
-              title="Flow Profile"
-              values={sim.demand}
-              timesteps={simData!.timesteps}
-              currentHour={simHour}
-              unit="L/s"
-            />
-          </>
-        )}
       </SidePanel>
     );
   }
@@ -1975,8 +1345,8 @@ function AssetPanel({ feature, onClose, simData, simHour }: {
       pill={{ tone: p.status === 'ok' ? 'safe' : 'danger', label: p.status === 'ok' ? 'Online' : 'Alert' }}
     >
       <SectionLabel>Live reading</SectionLabel>
-      <SpRow label="Flow rate" value={currentDemand !== null ? `${currentDemand.toFixed(1)} L/s` : `${p.flow_lps} L/s`} mono color="#0B5FFF" />
-      <SpRow label="Pressure" value={currentPress !== null ? `${(currentPress * 0.1).toFixed(2)} bar` : `${p.pressure_bar} bar`} mono color="#22c55e" />
+      <SpRow label="Flow rate" value={`${p.flow_lps} L/s`} mono color="#0B5FFF" />
+      <SpRow label="Pressure" value={`${p.pressure_bar} bar`} mono color="#22c55e" />
       <SpRow label="Sensor type" value={p.type} />
       <SpRow label="Last reading" value={p.last_seen} mono />
       <div style={{ height: 14 }} />
@@ -1987,25 +1357,51 @@ function AssetPanel({ feature, onClose, simData, simHour }: {
       <SectionLabel>Linkage</SectionLabel>
       <SpRow label="On pipe" value={p.pipe_id} mono />
       <SpRow label="Sensor ID" value={p.id} mono />
+    </SidePanel>
+  );
+}
 
-      {sim && (
+function LeakPanel({ leak, onClose }: { leak: Leak; onClose: () => void }) {
+  const color = LEAK_SEVERITY_COLOR[leak.severity];
+  const isFixed = leak.status === 'fixed';
+  return (
+    <SidePanel
+      open
+      onClose={onClose}
+      kind={`${LEAK_SEVERITY_LABEL[leak.severity]} leak`}
+      title={leak.id}
+      pill={{
+        tone: isFixed ? 'safe' : leak.status === 'reported' ? 'danger' : 'warn',
+        label: LEAK_STATUS_LABEL[leak.status]
+      }}
+    >
+      <SectionLabel>Incident</SectionLabel>
+      <SpRow label="Severity" value={LEAK_SEVERITY_LABEL[leak.severity]} color={color} />
+      <SpRow label="Zone" value={zoneLabel(leak.zone)} />
+      <SpRow label="Address" value={leak.address} />
+      <SpRow label="On pipe" value={leak.pipe || '—'} mono />
+      <SpRow label="Coordinates" value={`${leak.lat.toFixed(4)}, ${leak.lng.toFixed(4)}`} mono />
+
+      <div style={{ height: 14 }} />
+      <SectionLabel>Report</SectionLabel>
+      <SpRow label="Reported" value={leak.reported} mono />
+      <SpRow label="Caller" value={leak.caller} />
+      <SpRow label="Phone" value={leak.phone} mono />
+      <SpRow label="Source" value={leak.source} />
+      <SpRow label="Notes" value={leak.notes} />
+
+      {(leak.crew || leak.leakType || leak.cause || leak.fixDescription || leak.materials || leak.cost) && (
         <>
           <div style={{ height: 14 }} />
-          <SectionLabel>Simulation Profiles</SectionLabel>
-          <SimulationChart
-            title="Pressure Profile"
-            values={sim.pressure}
-            timesteps={simData!.timesteps}
-            currentHour={simHour}
-            unit="m"
-          />
-          <SimulationChart
-            title="Flow Profile"
-            values={sim.demand}
-            timesteps={simData!.timesteps}
-            currentHour={simHour}
-            unit="L/s"
-          />
+          <SectionLabel>Resolution</SectionLabel>
+          {leak.leakType && <SpRow label="Leak type" value={leak.leakType} />}
+          {leak.cause && <SpRow label="Cause" value={leak.cause} />}
+          {leak.fixDescription && <SpRow label="Fix" value={leak.fixDescription} />}
+          {leak.crew && <SpRow label="Crew" value={leak.crew} />}
+          {leak.materials && <SpRow label="Materials" value={leak.materials} />}
+          {leak.cost && <SpRow label="Cost" value={leak.cost} mono />}
+          {leak.timeStarted && <SpRow label="Started" value={leak.timeStarted} mono />}
+          {leak.timeFixed && <SpRow label="Fixed" value={leak.timeFixed} mono />}
         </>
       )}
     </SidePanel>
@@ -2041,97 +1437,4 @@ function Sparkline({ base }: { base: number }) {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return <div className="sp-section-label">{children}</div>;
-}
-
-function getVelocityColor(vel: number, isDark: boolean): string {
-  const v = Math.abs(vel);
-  if (v < 0.05) return isDark ? '#475569' : '#94a3b8'; // Slate (Zero flow/idle)
-  if (v < 0.8) return '#10b981';                      // Green (Nominal speed)
-  if (v < 1.8) return '#f59e0b';                      // Orange (Warning)
-  return '#ef4444';                                   // Red (Excessive scour velocity)
-}
-
-function getFlowWeight(flow: number, baseWeight: number): number {
-  const f = Math.abs(flow);
-  if (f < 0.5) return baseWeight * 0.8;
-  if (f < 5.0) return baseWeight * 1.1;
-  if (f < 50.0) return baseWeight * 1.5;
-  return baseWeight * 2.2;
-}
-
-function formatSimTime(secs: number): string {
-  const h = Math.floor(secs / 3600);
-  const m = Math.floor((secs % 3600) / 60);
-  const hPad = h.toString().padStart(2, '0');
-  const mPad = m.toString().padStart(2, '0');
-  return `${hPad}:${mPad}`;
-}
-
-function SimulationChart({
-  title,
-  values,
-  timesteps,
-  currentHour,
-  unit
-}: {
-  title: string;
-  values: number[];
-  timesteps: number[];
-  currentHour: number;
-  unit: string;
-}) {
-  const max = Math.max(...values, 1.0);
-  const min = Math.min(...values, 0.0);
-  const range = max - min || 1.0;
-  
-  const w = 320;
-  const h = 100;
-  const paddingLeft = 35;
-  const paddingRight = 10;
-  const paddingTop = 15;
-  const paddingBottom = 20;
-  
-  const graphWidth = w - paddingLeft - paddingRight;
-  const graphHeight = h - paddingTop - paddingBottom;
-  
-  const points = values.map((v, i) => {
-    const x = paddingLeft + (i / (values.length - 1)) * graphWidth;
-    const y = paddingTop + graphHeight - ((v - min) / range) * graphHeight;
-    return [x, y] as [number, number];
-  });
-  
-  const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
-  const areaPath = `${path} L${(paddingLeft + graphWidth).toFixed(1)},${(paddingTop + graphHeight).toFixed(1)} L${paddingLeft.toFixed(1)},${(paddingTop + graphHeight).toFixed(1)} Z`;
-  
-  const cursorX = paddingLeft + (currentHour / (values.length - 1)) * graphWidth;
-  
-  return (
-    <div className="sim-chart-container" style={{ marginTop: 12 }}>
-      <div className="sim-chart-head" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: 4 }}>
-        <span style={{ color: 'hsl(var(--muted-foreground))', fontWeight: 'bold' }}>{title}</span>
-        <strong style={{ color: 'hsl(var(--primary))' }}>{(values[currentHour] || 0.0).toFixed(2)} {unit}</strong>
-      </div>
-      <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', height: 'auto', background: 'hsl(var(--card-muted))', borderRadius: 'var(--r-md)', border: '1px solid hsl(var(--border))' }}>
-        <line x1={paddingLeft} y1={paddingTop} x2={w - paddingRight} y2={paddingTop} stroke="hsl(var(--border))" strokeWidth={1} strokeDasharray="3 3" />
-        <line x1={paddingLeft} y1={paddingTop + graphHeight / 2} x2={w - paddingRight} y2={paddingTop + graphHeight / 2} stroke="hsl(var(--border))" strokeWidth={1} strokeDasharray="3 3" />
-        <line x1={paddingLeft} y1={paddingTop + graphHeight} x2={w - paddingRight} y2={paddingTop + graphHeight} stroke="hsl(var(--border))" strokeWidth={1} />
-        
-        <text x={paddingLeft - 6} y={paddingTop + 4} fill="hsl(var(--muted-foreground))" fontSize={9} textAnchor="end">{max.toFixed(1)}</text>
-        <text x={paddingLeft - 6} y={paddingTop + graphHeight / 2 + 4} fill="hsl(var(--muted-foreground))" fontSize={9} textAnchor="end">{((max + min) / 2).toFixed(1)}</text>
-        <text x={paddingLeft - 6} y={paddingTop + graphHeight + 4} fill="hsl(var(--muted-foreground))" fontSize={9} textAnchor="end">{min.toFixed(1)}</text>
-        
-        <text x={paddingLeft} y={h - 4} fill="hsl(var(--muted-foreground))" fontSize={9} textAnchor="start">00:00</text>
-        <text x={paddingLeft + graphWidth / 2} y={h - 4} fill="hsl(var(--muted-foreground))" fontSize={9} textAnchor="middle">12:00</text>
-        <text x={paddingLeft + graphWidth} y={h - 4} fill="hsl(var(--muted-foreground))" fontSize={9} textAnchor="end">24:00</text>
-        
-        <path d={areaPath} fill="rgba(11,95,255,0.08)" />
-        <path d={path} fill="none" stroke="hsl(var(--primary))" strokeWidth={1.8} />
-        
-        <line x1={cursorX} y1={paddingTop} x2={cursorX} y2={paddingTop + graphHeight} stroke="hsl(var(--accent))" strokeWidth={1.5} />
-        {points[currentHour] && (
-          <circle cx={cursorX} cy={points[currentHour][1]} r={3.5} fill="hsl(var(--accent))" stroke="white" strokeWidth={1} />
-        )}
-      </svg>
-    </div>
-  );
 }

@@ -1,6 +1,6 @@
 /**
  * Reports & Analytics — utility-grade summary reports built from the live
- * Kisumu network. Every figure is computed, not mocked.
+ * Riverton network. Every figure is computed, not mocked.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { Shell } from '../components/Shell';

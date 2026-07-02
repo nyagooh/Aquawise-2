@@ -1,11 +1,11 @@
 /**
- * Network data loader — fetches the real Kisumu shapefile (converted to
+ * Network data loader — fetches the real Riverton shapefile (converted to
  * GeoJSON by scripts/shapefile_to_geojson.py) and exposes typed accessors.
  *
  * Files served as static assets from /public/data/:
- *   - kisumu-pipes.geojson    (3,233 polylines, classified with ui_class)
- *   - kisumu-assets.geojson   (synthesized point telemetry overlay)
- *   - kisumu-meta.json        (rich aggregates: km by class/zone/material,
+ *   - riverton-pipes.geojson    (3,233 polylines, classified with ui_class)
+ *   - riverton-assets.geojson   (synthesized point telemetry overlay)
+ *   - riverton-meta.json        (rich aggregates: km by class/zone/material,
  *                              status counts, age/diameter distribution, bbox)
  */
 
@@ -34,7 +34,7 @@ export interface PipeProps {
 export interface PipeFeature {
   type: 'Feature';
   id: string;
-  geometry: { type: 'LineString' | 'MultiLineString'; coordinates: any };
+  geometry: { type: 'LineString'; coordinates: [number, number][] };
   properties: PipeProps;
 }
 
@@ -102,9 +102,12 @@ export interface AssetFeature {
 }
 
 export interface NetworkMeta {
-  id?: string;
-  name?: string;
   source: string;
+  /** Set by the EPANET .inp parser. Absent for GIS uploads / the bundled demo. */
+  model_kind?: 'epanet';
+  /** 'schematic' when .inp coordinates don't project to lon/lat. */
+  projection?: 'geographic' | 'schematic';
+  node_count?: number;
   feature_count: number;
   asset_count: number;
   asset_counts: Partial<Record<AssetKind, number>>;
@@ -126,350 +129,106 @@ export interface NetworkMeta {
   center: [number, number];
 }
 
-export interface JunctionFeature {
-  type: 'Feature';
-  id: string;
-  geometry: { type: 'Point'; coordinates: [number, number] };
-  properties: {
-    id: string;
-    external_id: string;
-    node_type: string;
-    elevation_m?: number;
-    demand_lps?: number;
-  };
-}
-
 export interface NetworkData {
   pipes: PipeFeature[];
   assets: AssetFeature[];
-  junctions?: JunctionFeature[];
   meta: NetworkMeta;
 }
 
 let cache: Promise<NetworkData> | null = null;
-let accessToken: string | null = null;
-
-export async function getAuthHeaders(): Promise<HeadersInit> {
-  if (!accessToken) {
-    const res = await fetch('/api/v1/auth/token/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: 'admin', password: 'admin123' })
-    });
-    if (!res.ok) {
-      throw new Error('Failed to authenticate with backend.');
-    }
-    const data = await res.json();
-    accessToken = data.access;
-  }
-  return {
-    'Authorization': `Bearer ${accessToken}`,
-    'Content-Type': 'application/json'
-  };
-}
-
-export function clearNetworkCache() {
-  cache = null;
-}
-
-async function loadFromBackend(): Promise<NetworkData> {
-  const headers = await getAuthHeaders();
-  
-  // 1. Fetch active network
-  let networkId = localStorage.getItem('activeNetworkId');
-  if (!networkId) {
-    const netsRes = await fetch('/api/v1/networks/', { headers });
-    if (!netsRes.ok) throw new Error('Failed to fetch networks list');
-    const networks = await netsRes.json();
-    const network = networks[0];
-    if (!network) throw new Error('No networks found in backend');
-    networkId = network.id;
-    localStorage.setItem('activeNetworkId', networkId!);
-  }
-
-  // 2. Fetch zones
-  const zonesRes = await fetch(`/api/v1/networks/${networkId}/zones/`, { headers });
-  if (!zonesRes.ok) throw new Error('Failed to fetch zones');
-  const zonesFc = await zonesRes.json();
-  const zoneMap = new Map<string, string>();
-  zonesFc.features.forEach((feat: any) => {
-    if (feat.properties && feat.properties.id) {
-      zoneMap.set(feat.properties.id, feat.properties.code || feat.properties.name);
-    }
-  });
-
-  // 3. Fetch pipes
-  const pipesRes = await fetch(`/api/v1/networks/${networkId}/pipes/`, { headers });
-  if (!pipesRes.ok) throw new Error('Failed to fetch pipes');
-  const pipesFc = await pipesRes.json();
-  
-  const pipes: PipeFeature[] = pipesFc.features.map((feat: any) => {
-    const props = feat.properties;
-    let uiClass: PipeClass = 'distribution';
-    if (props.status === 'closed') {
-      uiClass = 'backfeed';
-    } else if (props.diameter_mm && props.diameter_mm >= 150) {
-      uiClass = 'main';
-    } else if (props.diameter_mm && props.diameter_mm <= 32) {
-      uiClass = 'household';
-    }
-
-    let mappedStatus: PipeStatus = 'open';
-    let mappedService: ServiceState = 'in-service';
-    if (props.status === 'closed') {
-      mappedStatus = 'closed';
-      mappedService = 'pending';
-    } else if (props.status === 'out_of_service') {
-      mappedStatus = 'unknown';
-      mappedService = 'out-of-service';
-    } else if (props.status === 'pending') {
-      mappedStatus = 'unknown';
-      mappedService = 'pending';
-    }
-
-    return {
-      type: 'Feature',
-      id: props.external_id || props.id,
-      geometry: feat.geometry,
-      properties: {
-        id: props.external_id || props.id,
-        class: props.diameter_mm && props.diameter_mm >= 150 ? 'transmission' : 'distribution',
-        ui_class: uiClass,
-        network_raw: props.material || 'PVC',
-        material: props.material,
-        diameter_mm: props.diameter_mm,
-        length_m: props.length_m,
-        status: mappedStatus,
-        service: mappedService,
-        zone: zoneMap.get(props.zone_id) || props.zone_id || null,
-        installed: props.installation_year || 2020,
-        node_from: null,
-        node_to: null,
-        remarks: null,
-        layer: null
-      }
-    };
-  });
-
-  // 4. Fetch assets
-  const assetsRes = await fetch(`/api/v1/networks/${networkId}/assets/`, { headers });
-  if (!assetsRes.ok) throw new Error('Failed to fetch assets');
-  const assetsFc = await assetsRes.json();
-  
-  const assets: AssetFeature[] = assetsFc.features.map((feat: any) => {
-    const props = feat.properties;
-    return {
-      type: 'Feature',
-      id: props.id,
-      geometry: feat.geometry,
-      properties: {
-        ...props,
-        id: props.id,
-        status: props.status || 'ok'
-      }
-    };
-  });
-
-  // 4b. Fetch nodes (junctions)
-  const nodesRes = await fetch(`/api/v1/networks/${networkId}/nodes/`, { headers });
-  if (!nodesRes.ok) throw new Error('Failed to fetch nodes');
-  const nodesFc = await nodesRes.json();
-  
-  const junctions: JunctionFeature[] = nodesFc.features.map((feat: any) => {
-    const props = feat.properties;
-    return {
-      type: 'Feature',
-      id: props.external_id || props.id,
-      geometry: feat.geometry,
-      properties: {
-        id: props.external_id || props.id,
-        external_id: props.external_id || props.id,
-        node_type: props.node_type || 'junction',
-        elevation_m: props.elevation_m,
-        demand_lps: props.demand_lps
-      }
-    };
-  });
-
-  // 5. Fetch stats
-  const statsRes = await fetch(`/api/v1/networks/${networkId}/stats/`, { headers });
-  if (!statsRes.ok) throw new Error('Failed to fetch stats');
-  const stats = await statsRes.json();
-
-  const assetCounts: Partial<Record<AssetKind, number>> = {};
-  assets.forEach((f) => {
-    const kind = f.properties.asset as AssetKind;
-    assetCounts[kind] = (assetCounts[kind] || 0) + 1;
-  });
-
-  const byClass: Partial<Record<PipeClass, number>> = {};
-  const lengthKmByClass: Partial<Record<PipeClass, number>> = {};
-  pipes.forEach((p) => {
-    const cls = p.properties.ui_class;
-    byClass[cls] = (byClass[cls] || 0) + 1;
-    const lenKm = (p.properties.length_m || 0) / 1000;
-    lengthKmByClass[cls] = (lengthKmByClass[cls] || 0) + lenKm;
-  });
-
-  const lengthKmByZone: Record<string, number> = {};
-  stats.zones_breakdown.forEach((z: any) => {
-    lengthKmByZone[z.code || z.name] = z.length_km;
-  });
-
-  const lengthKmByMaterial: Record<string, number> = {};
-  stats.materials_breakdown.forEach((m: any) => {
-    lengthKmByMaterial[m.material] = m.length_km;
-  });
-
-  const materials: Array<[string, number]> = stats.materials_breakdown.map((m: any) => [m.material, m.count]);
-  const statusCounts: Record<PipeStatus, number> = {
-    open: stats.status_breakdown.open || 0,
-    closed: stats.status_breakdown.closed || 0,
-    unknown: stats.status_breakdown.unknown || 0
-  };
-
-  const netRes = await fetch(`/api/v1/networks/${networkId}/`, { headers });
-  if (!netRes.ok) throw new Error('Failed to fetch network detail');
-  const netDetail = await netRes.json();
-
-  let bbox: [number, number, number, number] = [34.6, -0.15, 34.95, -0.01];
-  let center: [number, number] = [34.75, -0.08];
-  if (netDetail.bbox && netDetail.bbox.coordinates) {
-    const coords = netDetail.bbox.coordinates[0];
-    const lons = coords.map((pt: any) => pt[0]);
-    const lats = coords.map((pt: any) => pt[1]);
-    const minx = Math.min(...lons);
-    const miny = Math.min(...lats);
-    const maxx = Math.max(...lons);
-    const maxy = Math.max(...lats);
-    bbox = [minx, miny, maxx, maxy];
-    center = [(minx + maxx) / 2, (miny + maxy) / 2];
-  }
-
-  // Detect if coordinates are schematic (non-geographic or huge span)
-  const [minLon, minLat, maxLon, maxLat] = bbox;
-  const isGeographic = minLon >= -180 && maxLon <= 180 && minLat >= -90 && maxLat <= 90;
-  const lonSpan = Math.abs(maxLon - minLon);
-  const latSpan = Math.abs(maxLat - minLat);
-  const schematic = !isGeographic || lonSpan > 2.0 || latSpan > 2.0;
-
-  if (schematic) {
-    const cx = (minLon + maxLon) / 2;
-    const cy = (minLat + maxLat) / 2;
-    const maxRange = Math.max(lonSpan, latSpan) || 1.0;
-    const scale = 0.05 / maxRange;
-
-    const normCoord = (pt: [number, number]): [number, number] => [
-      (pt[0] - cx) * scale,
-      (pt[1] - cy) * scale
-    ];
-
-    pipes.forEach((p) => {
-      if (p.geometry.type === 'LineString') {
-        p.geometry.coordinates = (p.geometry.coordinates as [number, number][]).map(normCoord);
-      } else if (p.geometry.type === 'MultiLineString') {
-        p.geometry.coordinates = (p.geometry.coordinates as any).map((line: [number, number][]) =>
-          line.map(normCoord)
-        );
-      }
-    });
-
-    assets.forEach((a) => {
-      a.geometry.coordinates = normCoord(a.geometry.coordinates);
-    });
-
-    junctions.forEach((j) => {
-      j.geometry.coordinates = normCoord(j.geometry.coordinates);
-    });
-
-    bbox = [
-      (minLon - cx) * scale,
-      (minLat - cy) * scale,
-      (maxLon - cx) * scale,
-      (maxLat - cy) * scale
-    ];
-    center = [0.0, 0.0];
-  }
-
-  const meta: NetworkMeta = {
-    id: networkId || undefined,
-    name: netDetail.name,
-    source: 'Django PostGIS Backend',
-    feature_count: pipes.length,
-    asset_count: assets.length,
-    asset_counts: assetCounts,
-    by_class: byClass,
-    length_km_by_class: lengthKmByClass,
-    length_km_by_zone: lengthKmByZone,
-    length_km_by_material: lengthKmByMaterial,
-    top_zones: stats.zones_breakdown.slice(0, 5).map((z: any) => [z.code || z.name, z.length_km] as [string, number]),
-    zones_normalized: stats.zones_breakdown.map((z: any) => [z.code || z.name, z.length_km] as [string, number]),
-    materials: materials,
-    common_diameters_mm: [],
-    diameter_distribution: {},
-    age_distribution: stats.age_distribution,
-    status_counts: statusCounts,
-    service_counts: {
-      'in-service': statusCounts.open,
-      'out-of-service': 0,
-      'pending': statusCounts.closed,
-      'unknown': statusCounts.unknown
-    },
-    total_length_m: stats.total_length_km * 1000,
-    total_length_km: stats.total_length_km,
-    bbox: bbox,
-    center: center
-  };
-
-  if (pipes.length === 0 && assets.length === 0) {
-    throw new Error("EMPTY_NETWORK: A network with 0 pipes and 0 nodes has no lines/markers to render, and its bounding box defaults to null.");
-  }
-
-  const synthetic = synthesizeQualitySensors(pipes);
-  meta.asset_count += synthetic.length;
-  meta.asset_counts.sensor = (meta.asset_counts.sensor || 0) + synthetic.length;
-
-  return { pipes, assets: [...assets, ...synthetic], junctions, meta };
-}
 
 export function loadNetwork(): Promise<NetworkData> {
   if (cache) return cache;
   cache = (async () => {
-    try {
-      console.log("Attempting to load network data from Django REST API...");
-      return await loadFromBackend();
-    } catch (err: any) {
-      if (err.message && err.message.startsWith("EMPTY_NETWORK")) {
-        throw new Error(err.message.replace("EMPTY_NETWORK: ", ""));
-      }
-      console.error("Backend load failed:", err);
-      throw new Error(err.message || 'Unable to load network data from backend.');
+    const base = (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
+    const url = (path: string) => `${base.replace(/\/$/, '')}/data/${path}`;
+    const [pipesRes, assetsRes, metaRes] = await Promise.all([
+      fetch(url('riverton-pipes.geojson')),
+      fetch(url('riverton-assets.geojson')),
+      fetch(url('riverton-meta.json'))
+    ]);
+    if (!pipesRes.ok || !assetsRes.ok || !metaRes.ok) {
+      throw new Error('Failed to load Riverton network dataset.');
     }
+    const pipesFc = await pipesRes.json();
+    const assetsFc = await assetsRes.json();
+    const rawMeta: NetworkMeta = await metaRes.json();
+
+    const pipes = pipesFc.features as PipeFeature[];
+    const assets = assetsFc.features as AssetFeature[];
+    const synthetic = synthesizeQualitySensors(pipes);
+    // Reflect synthetic sensors in the meta counts so KPIs match the rendered list.
+    const meta: NetworkMeta = synthetic.length
+      ? {
+          ...rawMeta,
+          asset_count: rawMeta.asset_count + synthetic.length,
+          asset_counts: {
+            ...rawMeta.asset_counts,
+            sensor: (rawMeta.asset_counts.sensor || 0) + synthetic.length
+          }
+        }
+      : rawMeta;
+
+    return { pipes, assets: [...assets, ...synthetic], meta };
   })();
   return cache;
 }
 
-export interface SimulationData {
-  network_id: string;
-  timesteps: number[];
-  nodes: Record<string, { pressure: number[]; demand: number[] }>;
-  links: Record<string, { flow: number[]; velocity: number[]; status: string[] }>;
-  patterns: Record<string, number[]>;
-  controls: string[];
+/** Session key holding a user-uploaded network parsed by the backend. */
+const UPLOAD_KEY = 'aw:uploaded-network';
+
+/**
+ * Persist a backend parse response (pipes/assets FeatureCollections + meta) so
+ * the map can render it after navigation. Stored in sessionStorage — cleared
+ * when the tab closes, matching the demo's "your data stays yours" promise.
+ */
+export function storeUploadedNetwork(raw: {
+  pipes: { features: unknown[] };
+  assets: { features: unknown[] };
+  meta: unknown;
+}): void {
+  sessionStorage.setItem(UPLOAD_KEY, JSON.stringify(raw));
 }
 
-export async function loadSimulation(networkId: string): Promise<SimulationData> {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`/api/v1/networks/${networkId}/simulation/`, { headers });
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.error || 'Failed to load simulation results');
-  }
-  return await res.json();
+export function hasUploadedNetwork(): boolean {
+  return sessionStorage.getItem(UPLOAD_KEY) != null;
+}
+
+export function clearUploadedNetwork(): void {
+  sessionStorage.removeItem(UPLOAD_KEY);
 }
 
 /**
- * Real Kisumu telemetry covers flow + pressure only. Water utilities also
+ * Build NetworkData from a stored upload, mirroring loadNetwork's shaping
+ * (feature extraction + synthesized quality sensors reflected in meta).
+ * Returns null when no upload is staged.
+ */
+export function loadUploadedNetwork(): NetworkData | null {
+  const stored = sessionStorage.getItem(UPLOAD_KEY);
+  if (!stored) return null;
+  const raw = JSON.parse(stored) as {
+    pipes: { features: PipeFeature[] };
+    assets: { features: AssetFeature[] };
+    meta: NetworkMeta;
+  };
+  const pipes = raw.pipes.features;
+  const assets = raw.assets.features;
+  const synthetic = synthesizeQualitySensors(pipes);
+  const meta: NetworkMeta = synthetic.length
+    ? {
+        ...raw.meta,
+        asset_count: raw.meta.asset_count + synthetic.length,
+        asset_counts: {
+          ...raw.meta.asset_counts,
+          sensor: (raw.meta.asset_counts.sensor || 0) + synthetic.length
+        }
+      }
+    : raw.meta;
+  return { pipes, assets: [...assets, ...synthetic], meta };
+}
+
+/**
+ * Real Riverton telemetry covers flow + pressure only. Water utilities also
  * monitor water-quality sensors (pH, turbidity) at reservoirs and key
  * distribution points — we synthesize a representative set here so the
  * Sensors page can demo them alongside the real flow/pressure nodes.
@@ -484,11 +243,7 @@ function synthesizeQualitySensors(pipes: PipeFeature[]): AssetFeature[] {
   for (const z of zones) {
     const sample = pipes.find((p) => p.properties.zone === z);
     if (sample) {
-      const geom = sample.geometry;
-      let coords = geom.coordinates;
-      if (geom.type === 'MultiLineString') {
-        coords = (geom.coordinates as any)[0];
-      }
+      const coords = sample.geometry.coordinates;
       zonePoint[z] = coords[Math.floor(coords.length / 2)] as [number, number];
     }
   }
@@ -559,50 +314,57 @@ export const PIPE_STYLE: Record<PipeClass, {
   shortLabel: string;
   description: string;
 }> = {
+  // Distinct categorical data palette (Tableau-style), full opacity, tuned to
+  // read over label-free satellite imagery: blue trunk, cyan distribution,
+  // light service, amber closed, pink DMA.
+  // Bold, high-visibility engineering palette tuned for dark satellite imagery
+  // — water-utility GIS convention: red trunk mains, blue distribution, light
+  // service, gold closed/isolated, magenta DMA boundary. Heavy weights + full
+  // opacity + white casing (see baseLineStyle) keep every class legible.
   main: {
-    color: '#1E40AF',          // deep cobalt — trunk authority
-    hoverColor: '#3B82F6',
-    weight: 5,
-    hoverWeight: 7,
-    opacity: 0.98,
+    color: '#1FA2FF',          // shiny blue — transmission trunk
+    hoverColor: '#7CC8FF',
+    weight: 5.5,
+    hoverWeight: 7.5,
+    opacity: 1,
     label: 'Transmission main',
     shortLabel: 'Mains',
     description: 'Primary supply trunk · highest priority'
   },
   distribution: {
-    color: '#14B8A6',          // teal — clearly distinct from mains' cobalt
-    hoverColor: '#5EEAD4',
-    weight: 2.2,
-    hoverWeight: 4,
-    opacity: 0.88,
+    color: '#1FA2FF',          // shiny blue — distribution backbone
+    hoverColor: '#7CC8FF',
+    weight: 3,
+    hoverWeight: 5,
+    opacity: 1,
     label: 'Distribution main',
     shortLabel: 'Distribution',
     description: 'Neighbourhood feeder · zone backbone'
   },
   household: {
-    color: '#64748B',          // mid slate — visible on both light and dark basemaps
-    hoverColor: '#0EA5E9',
-    weight: 1.6,
-    hoverWeight: 3,
-    opacity: 0.85,
-    label: 'Household connection',
-    shortLabel: 'Households',
+    color: '#1FA2FF',          // shiny blue — service lines
+    hoverColor: '#7CC8FF',
+    weight: 1.8,
+    hoverWeight: 3.2,
+    opacity: 0.95,
+    label: 'Service connection',
+    shortLabel: 'Service',
     description: 'Service line to customer property'
   },
   backfeed: {
-    color: '#F97316',          // saturated orange — flags isolation
-    hoverColor: '#FB923C',
-    weight: 2.8,
-    hoverWeight: 4.5,
+    color: '#1FA2FF',          // shiny blue — closed / isolated (dashed)
+    hoverColor: '#7CC8FF',
+    weight: 3,
+    hoverWeight: 5,
     dashArray: '8 5',
-    opacity: 0.95,
+    opacity: 1,
     label: 'Backfeed / closed',
     shortLabel: 'Backfeed',
     description: 'Reversible supply path · currently closed'
   },
   boundary: {
-    color: '#A855F7',          // saturated purple — clearly visible on both basemaps
-    hoverColor: '#D8B4FE',
+    color: '#1FA2FF',          // shiny blue — DMA outline (dashed)
+    hoverColor: '#7CC8FF',
     weight: 3,
     hoverWeight: 4.5,
     dashArray: '6 4',
@@ -622,30 +384,33 @@ export const ASSET_STYLE: Record<AssetKind, {
   shortLabel: string;
   description: string;
 }> = {
+  // Each asset kind is a distinct category — give it its own hue so icons
+  // read apart from the blue (#1FA2FF) pipe network and from each other.
+  // Status semantics (green/amber/red) stay on the separate status dot.
   tank: {
-    color: '#1D4ED8',
-    ring: '#BFDBFE',
-    label: 'Reservoir · level sensor',
-    shortLabel: 'Level sensors',
+    color: '#8B5CF6',          // violet — reservoir / tank node
+    ring: '#DDD6FE',
+    label: 'Reservoir / tank',
+    shortLabel: 'Reservoirs',
     description: 'Reservoir level-sensor telemetry'
   },
   pressure_valve: {
-    color: '#10B981',
-    ring: '#A7F3D0',
-    label: 'Pressure valve',
-    shortLabel: 'PRVs',
+    color: '#14B8A6',          // teal — pressure valve
+    ring: '#99F6E4',
+    label: 'Valve (PRV)',
+    shortLabel: 'Valves',
     description: 'Pressure-reducing valve · live drift'
   },
   meter_valve: {
-    color: '#F97316',
-    ring: '#FED7AA',
-    label: 'Meter / bulk valve',
+    color: '#EC4899',          // magenta — bulk meter / pump
+    ring: '#FBCFE8',
+    label: 'Meter / pump',
     shortLabel: 'Meters',
     description: 'Consumption-metered valve assembly'
   },
   sensor: {
-    color: '#EF4444',
-    ring: '#FECACA',
+    color: '#F97316',          // orange — sensor node (telemetry)
+    ring: '#FED7AA',
     label: 'Flow + pressure sensor',
     shortLabel: 'Sensors',
     description: 'Live flow & pressure telemetry node'
@@ -655,9 +420,9 @@ export const ASSET_STYLE: Record<AssetKind, {
 export const ASSET_ORDER: AssetKind[] = ['tank', 'pressure_valve', 'meter_valve', 'sensor'];
 
 export const STATUS_COLOR: Record<AssetStatus, string> = {
-  ok: '#22C55E',
-  warn: '#F59E0B',
-  alert: '#EF4444'
+  ok: '#4FA877',     // muted green — healthy
+  warn: '#D9A156',   // amber — watch
+  alert: '#D4675E'   // coral — critical
 };
 
 export const MATERIAL_TINT: Record<string, string> = {
@@ -673,15 +438,15 @@ export const MATERIAL_TINT: Record<string, string> = {
 
 /** Zone display names (curated). Falls back to raw key for unknowns. */
 export const ZONE_LABELS: Record<string, string> = {
-  MIL: 'Milimani',
-  MYT: 'Mamboleo · Tom Mboya',
-  KREKAJ: 'Kibos · Kajulu',
-  CBD: 'Central Business District',
-  ME: 'Manyatta East',
-  OBA: 'Obaria',
-  KRE: 'Kibos',
-  'RIAT C': 'Riat Centre',
-  MTY: 'Mamboleo (legacy)',
+  MIL: 'Riverside',
+  MYT: 'Northgate',
+  KREKAJ: 'East Meadows',
+  CBD: 'Downtown Central',
+  ME: 'Millbrook East',
+  OBA: 'Westhaven',
+  KRE: 'Millwood',
+  'RIAT C': 'Hillcrest',
+  MTY: 'Northgate (legacy)',
   HDPE: 'Unclassified',
   CDD: 'Unclassified'
 };
@@ -722,18 +487,3 @@ export function deriveNRW(meta: NetworkMeta): number {
 export function lengthByClass(meta: NetworkMeta, cls: PipeClass): number {
   return meta.length_km_by_class[cls] || 0;
 }
-
-export async function renameNetwork(networkId: string, newName: string): Promise<any> {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`/api/v1/networks/${networkId}/`, {
-    method: 'PATCH',
-    headers,
-    body: JSON.stringify({ name: newName })
-  });
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.error || 'Failed to rename network');
-  }
-  return await res.json();
-}
-

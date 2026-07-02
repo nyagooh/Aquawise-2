@@ -1,8 +1,6 @@
 import { Link } from 'react-router-dom';
 import { alerts as allAlerts, leaks as allLeaks } from '../data';
 import { useTheme } from '../theme';
-import { useEffect, useState } from 'react';
-import { getAuthHeaders } from '../data/network';
 
 export type Active = 'dashboard' | 'gis' | 'alerts' | 'leaks' | 'nrw' | 'sensors' | 'reports';
 
@@ -30,27 +28,6 @@ export function Sidebar({ active, collapsed, onToggle }: { active: Active; colla
   const { mode, toggle } = useTheme();
   const activeAlertCount = allAlerts.filter(a => a.status === 'active').length;
   const openLeakCount = allLeaks.filter(l => l.status === 'reported' || l.status === 'dispatched').length;
-
-  const [userProfile, setUserProfile] = useState<{ username: string; role: string } | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-    getAuthHeaders()
-      .then(async (headers) => {
-        const res = await fetch('/api/v1/auth/me/', { headers });
-        if (res.ok) {
-          const profile = await res.json();
-          if (profile && alive) {
-            setUserProfile({
-              username: profile.username || 'admin',
-              role: profile.role || 'Admin'
-            });
-          }
-        }
-      })
-      .catch(() => { /* ignore fallback */ });
-    return () => { alive = false; };
-  }, []);
   return (
     <aside className={`sidebar${collapsed ? ' collapsed' : ''}`}>
       <Link to="/" className="sb-brand" style={{ color: 'inherit' }}>
@@ -101,16 +78,10 @@ export function Sidebar({ active, collapsed, onToggle }: { active: Active; colla
           <span className="sb-text">{mode === 'dark' ? 'Light mode' : 'Dark mode'}</span>
         </button>
         <div className="sb-user">
-          <div className="sb-avatar" style={{ textTransform: 'uppercase' }}>
-            {userProfile ? userProfile.username.substring(0, 2) : 'DM'}
-          </div>
+          <div className="sb-avatar">DM</div>
           <div className="sb-user-meta sb-text">
-            <span className="sb-user-name" style={{ textTransform: 'capitalize' }}>
-              {userProfile ? userProfile.username : 'Demo User'}
-            </span>
-            <span className="sb-user-sub">
-              {userProfile ? `${userProfile.role} profile` : 'Read-only sandbox'}
-            </span>
+            <span className="sb-user-name">Demo User</span>
+            <span className="sb-user-sub">Read-only sandbox</span>
           </div>
         </div>
       </div>

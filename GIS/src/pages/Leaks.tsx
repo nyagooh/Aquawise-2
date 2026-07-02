@@ -7,6 +7,7 @@
  * type, cause, materials, cost, timing, crew, and photo evidence.
  */
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Shell } from '../components/Shell';
 import { leaks as initialLeaks, type Leak, type LeakStatus, type LeakSeverity, pipes as allPipes, zones as allZones } from '../data';
 import { zoneLabel as networkZoneLabel, isRealZone } from '../data/network';
@@ -34,6 +35,7 @@ const SEVERITY_COLOR: Record<LeakSeverity, string> = {
 };
 
 export default function Leaks() {
+  const navigate = useNavigate();
   const [leaks, setLeaks] = useState<Leak[]>(initialLeaks);
   const [filter, setFilter] = useState<Filter>('all');
   const [openId, setOpenId] = useState<string | null>(null);
@@ -114,7 +116,15 @@ export default function Leaks() {
                     <span className="dot" />{STATUS_LABEL[l.status]}
                   </span>
                 </td>
-                <td style={{ textAlign: 'right' }}>
+                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    title="Show this leak on the GIS map"
+                    onClick={(e) => { e.stopPropagation(); navigate(`/gis?focus=leak:${l.id}`); }}
+                    style={{ marginRight: 6 }}
+                  >
+                    Map
+                  </button>
                   <button
                     className="btn btn-primary btn-sm"
                     onClick={(e) => { e.stopPropagation(); setOpenId(l.id); }}

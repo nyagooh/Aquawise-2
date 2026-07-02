@@ -1,0 +1,18 @@
+# Lightweight demo backend (upload → GeoJSON + demo-request lead capture).
+# fiona/pyproj/shapely wheels bundle GDAL/GEOS/PROJ, so no apt geo packages.
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DJANGO_SETTINGS_MODULE=aquawise_gis.settings.demo
+
+WORKDIR /app
+
+COPY requirements/demo.txt requirements/demo.txt
+RUN pip install --no-cache-dir -r requirements/demo.txt
+
+COPY . .
+
+# Render/Railway provide $PORT; default to 8000 locally.
+ENV PORT=8000
+CMD ["sh", "-c", "python manage.py migrate --noinput && gunicorn aquawise_gis.wsgi:application --bind 0.0.0.0:${PORT} --workers 2 --timeout 120"]
