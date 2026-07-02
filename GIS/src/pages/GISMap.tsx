@@ -60,11 +60,14 @@ type Basemap = 'streets' | 'satellite' | 'none';
 /** Build the active basemap tile layer for the current mode + theme. */
 function makeTileLayer(basemap: Basemap, dark: boolean): L.TileLayer | null {
   if (basemap === 'none') return null;
+  // keepBuffer + updateWhenZooming:false keep already-loaded tiles painted while
+  // panning/zooming, so the map doesn't flash grey between tile fetches.
+  const common = { attribution: TILE_GOOGLE_ATTR, subdomains: '0123', maxZoom: 20, keepBuffer: 4, updateWhenZooming: false };
   if (basemap === 'satellite') {
-    return L.tileLayer(TILE_GOOGLE_SATELLITE, { attribution: TILE_GOOGLE_ATTR, subdomains: '0123', maxZoom: 20 });
+    return L.tileLayer(TILE_GOOGLE_SATELLITE, common);
   }
   // streets
-  return L.tileLayer(TILE_GOOGLE_STREETS, { attribution: TILE_GOOGLE_ATTR, subdomains: '0123', maxZoom: 20 });
+  return L.tileLayer(TILE_GOOGLE_STREETS, common);
 }
 
 /* ── Workspace toolbar + simulation model ── */

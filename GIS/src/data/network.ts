@@ -322,8 +322,8 @@ export const PIPE_STYLE: Record<PipeClass, {
   // service, gold closed/isolated, magenta DMA boundary. Heavy weights + full
   // opacity + white casing (see baseLineStyle) keep every class legible.
   main: {
-    color: '#1FA2FF',          // shiny blue — transmission trunk
-    hoverColor: '#7CC8FF',
+    color: '#00B4FF',          // shiny blue — transmission trunk
+    hoverColor: '#5CD1FF',
     weight: 5.5,
     hoverWeight: 7.5,
     opacity: 1,
@@ -332,8 +332,8 @@ export const PIPE_STYLE: Record<PipeClass, {
     description: 'Primary supply trunk · highest priority'
   },
   distribution: {
-    color: '#1FA2FF',          // shiny blue — distribution backbone
-    hoverColor: '#7CC8FF',
+    color: '#00B4FF',          // shiny blue — distribution backbone
+    hoverColor: '#5CD1FF',
     weight: 3,
     hoverWeight: 5,
     opacity: 1,
@@ -342,8 +342,8 @@ export const PIPE_STYLE: Record<PipeClass, {
     description: 'Neighbourhood feeder · zone backbone'
   },
   household: {
-    color: '#1FA2FF',          // shiny blue — service lines
-    hoverColor: '#7CC8FF',
+    color: '#00B4FF',          // shiny blue — service lines
+    hoverColor: '#5CD1FF',
     weight: 1.8,
     hoverWeight: 3.2,
     opacity: 0.95,
@@ -352,8 +352,8 @@ export const PIPE_STYLE: Record<PipeClass, {
     description: 'Service line to customer property'
   },
   backfeed: {
-    color: '#1FA2FF',          // shiny blue — closed / isolated (dashed)
-    hoverColor: '#7CC8FF',
+    color: '#00B4FF',          // shiny blue — closed / isolated (dashed)
+    hoverColor: '#5CD1FF',
     weight: 3,
     hoverWeight: 5,
     dashArray: '8 5',
@@ -363,8 +363,8 @@ export const PIPE_STYLE: Record<PipeClass, {
     description: 'Reversible supply path · currently closed'
   },
   boundary: {
-    color: '#1FA2FF',          // shiny blue — DMA outline (dashed)
-    hoverColor: '#7CC8FF',
+    color: '#00B4FF',          // shiny blue — DMA outline (dashed)
+    hoverColor: '#5CD1FF',
     weight: 3,
     hoverWeight: 4.5,
     dashArray: '6 4',
@@ -385,31 +385,31 @@ export const ASSET_STYLE: Record<AssetKind, {
   description: string;
 }> = {
   // Each asset kind is a distinct category — give it its own hue so icons
-  // read apart from the blue (#1FA2FF) pipe network and from each other.
+  // read apart from the blue (#00B4FF) pipe network and from each other.
   // Status semantics (green/amber/red) stay on the separate status dot.
   tank: {
-    color: '#8B5CF6',          // violet — reservoir / tank node
+    color: '#A855F7',          // bold violet — reservoir / tank node
     ring: '#DDD6FE',
     label: 'Reservoir / tank',
     shortLabel: 'Reservoirs',
     description: 'Reservoir level-sensor telemetry'
   },
   pressure_valve: {
-    color: '#14B8A6',          // teal — pressure valve
-    ring: '#99F6E4',
+    color: '#FACC15',          // bold gold — pressure valve (pops against the blue network)
+    ring: '#FEF08A',
     label: 'Valve (PRV)',
     shortLabel: 'Valves',
     description: 'Pressure-reducing valve · live drift'
   },
   meter_valve: {
-    color: '#EC4899',          // magenta — bulk meter / pump
+    color: '#FF2D8E',          // bold magenta — bulk meter / pump
     ring: '#FBCFE8',
     label: 'Meter / pump',
     shortLabel: 'Meters',
     description: 'Consumption-metered valve assembly'
   },
   sensor: {
-    color: '#F97316',          // orange — sensor node (telemetry)
+    color: '#FF7A18',          // bold orange — sensor node (telemetry)
     ring: '#FED7AA',
     label: 'Flow + pressure sensor',
     shortLabel: 'Sensors',
