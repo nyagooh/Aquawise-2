@@ -1,867 +1,683 @@
 /**
- * inspiration-note: Structure and alternating section rhythm inspired by
- * https://plane.so/ — adapted into an original experience for Aquawise.
- * Primary colour: TechBlue #2563EB. Alternating neutral / deep-navy-blue sections.
- * Layout: copy text centred at top, full-width product mockup below.
+ * Landing — premium editorial direction.
+ * Each section is its own composition (not eyebrow → heading → 3 cards).
+ * Product imagery is cropped from the real demo; every number is drawn from
+ * the same demo engine (series.ts / nrw.ts), so the page and the product agree.
+ * Styles: ../landing.css (.ed-*). Always light, independent of the app theme.
  */
-import { useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useTheme } from '../theme';
 import { hasDemoAccess } from '../access';
+import { zoneLabel } from '../data/network';
+import { buildNrwMonthly, ZONE_SEED } from '../demo/nrw';
+import {
+  series, seriesWindow, current, rangeSpec, toneFor, METRICS, QUALITY_POINTS, QUALITY_METRICS, NOW, HOURS,
+  type Metric, type Point, type Tone
+} from '../demo/series';
+import '../landing.css';
 
+/* ═════════════ motion helpers ═════════════ */
+const reduced = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+/** Adds `.in` to every `.rv` element as it scrolls into view. */
 function useReveal() {
   useEffect(() => {
-    const els = document.querySelectorAll('.reveal');
-    const io = new IntersectionObserver(
-      (entries) => entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('in-view'); }),
-      { threshold: 0.08 }
-    );
-    els.forEach(el => io.observe(el));
+    const els = document.querySelectorAll('.ed .rv');
+    if (reduced()) { els.forEach(e => e.classList.add('in')); return; }
+    const io = new IntersectionObserver(es => es.forEach(e => {
+      if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+    }), { threshold: 0.15, rootMargin: '0px 0px -8% 0px' });
+    els.forEach(e => io.observe(e));
     return () => io.disconnect();
   }, []);
 }
 
-export default function Landing() {
-  const { mode, toggle } = useTheme();
-  const navigate = useNavigate();
+function useInView<T extends Element>(threshold = 0.25): [React.RefObject<T>, boolean] {
+  const ref = useRef<T>(null);
+  const [seen, setSeen] = useState(false);
+  useEffect(() => {
+    const el = ref.current; if (!el) return;
+    if (reduced()) { setSeen(true); return; }
+    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setSeen(true); io.disconnect(); } }, { threshold });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [threshold]);
+  return [ref, seen];
+}
 
-  // Live demo is gated behind the lead form — unless this session already passed it.
-  const openDemo = useCallback(() => {
-    navigate(hasDemoAccess() ? '/demo' : '/request-demo');
-  }, [navigate]);
-  const bookWalkthrough = useCallback(() => navigate('/request-demo?mode=book'), [navigate]);
+function useWidth<T extends HTMLElement>(): [React.RefObject<T>, number] {
+  const ref = useRef<T>(null);
+  const [w, setW] = useState(900);
+  useLayoutEffect(() => {
+    const el = ref.current; if (!el) return;
+    const ro = new ResizeObserver(([e]) => setW(Math.max(280, Math.floor(e.contentRect.width))));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, w];
+}
+
+/** Counts up to `to` once visible. */
+function Count({ to, decimals = 0, prefix = '', suffix = '' }: { to: number; decimals?: number; prefix?: string; suffix?: string }) {
+  const [ref, seen] = useInView<HTMLSpanElement>(0.6);
+  const [v, setV] = useState(reduced() ? to : 0);
+  useEffect(() => {
+    if (!seen || reduced()) { if (seen) setV(to); return; }
+    let raf = 0; const start = performance.now(); const dur = 1100;
+    const tick = (now: number) => {
+      const k = Math.min(1, (now - start) / dur);
+      setV(to * (1 - (1 - k) ** 3));
+      if (k < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [seen, to]);
+  return <span ref={ref}>{prefix}{v.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}{suffix}</span>;
+}
+
+/* ═════════════ data from the demo engine ═════════════ */
+type AssetProps = Record<string, number | string>;
+/** Telemetry asset snapshot (19 KB) — used for reservoir and logger bases. */
+function useAssets(): Record<string, AssetProps> | null {
+  const [a, setA] = useState<Record<string, AssetProps> | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetch('/data/riverton-assets.geojson').then(r => r.json()).then(fc => {
+      if (!alive) return;
+      const m: Record<string, AssetProps> = {};
+      for (const f of fc.features) m[f.properties.id] = f.properties;
+      setA(m);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  return a;
+}
+
+const WQ_MIL = QUALITY_POINTS.find(q => q.id === 'WQ-MIL')!;
+const fmtClock = (t: number) => new Date(t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+/* ═════════════ page ═════════════ */
+export default function Landing() {
+  const navigate = useNavigate();
+  const openDemo = useCallback(() => navigate(hasDemoAccess() ? '/demo' : '/request-demo'), [navigate]);
+  const talkToUs = useCallback(() => navigate('/request-demo?mode=book'), [navigate]);
+  const assets = useAssets();
+  const nrw = useMemo(() => buildNrwMonthly(), []);
   useReveal();
 
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const on = () => setScrolled(window.scrollY > 12);
+    on(); window.addEventListener('scroll', on, { passive: true });
+    return () => window.removeEventListener('scroll', on);
+  }, []);
+
   return (
-    <div className="landing">
-
-      {/* ── Nav ── */}
-      <nav className="landing-nav">
-        <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, letterSpacing: '-0.015em', fontSize: '0.9375rem' }}>
-          <LogoMark size={22} />
-          Aqua<span style={{ color: 'hsl(var(--primary))' }}>wise</span>
-        </Link>
-        <div className="landing-nav-links">
-          <a href="#network">Network</a>
-          <a href="#sensors">Sensors</a>
-          <a href="#assets">Assets</a>
-          <a href="#how">How it works</a>
-          <button type="button" className="nav-as-link" onClick={openDemo}>Live demo</button>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button className="theme-toggle" onClick={toggle} title={`Switch to ${mode === 'dark' ? 'light' : 'dark'} mode`}>
-            {mode === 'dark' ? <SunIcon /> : <MoonIcon />}
-            {mode === 'dark' ? 'Light' : 'Dark'}
-          </button>
-          <button type="button" className="btn btn-primary btn-lg" onClick={openDemo}>
-            Explore Live Demo →
-          </button>
-        </div>
-      </nav>
-
-      {/* ═══════════════════════════════════════
-          HERO — neutral background
-      ════════════════════════════════════════ */}
-      <section className="hero">
-        <div className="reveal">
-          <div className="hero-pill">
-            <span className="live-dot" />
-            Smart water grid · live demo available
+    <div className="landing ed">
+      <header className={`ed-nav${scrolled ? ' scrolled' : ''}`}>
+        <div className="ed-wrap ed-nav-in">
+          <Link to="/" className="ed-brand" aria-label="AquaWise home"><Mark /><span>Aqua<b>Wise</b></span></Link>
+          <nav aria-label="Main">
+            <a href="#network">Network</a>
+            <a href="#monitor">Monitoring</a>
+            <a href="#nrw">NRW</a>
+            <a href="#product">Product</a>
+          </nav>
+          <div className="ed-nav-cta">
+            <button type="button" className="ed-link-btn" onClick={talkToUs}>Talk to us</button>
+            <button type="button" className="ed-btn ed-btn-blue sm" onClick={openDemo}>Explore AquaWise</button>
           </div>
         </div>
-        <h1 className="hero-title reveal reveal-delay-1">
-          The smart water grid<br />
-          <span className="hl">for water utilities.</span>
-        </h1>
-        <p className="hero-sub reveal reveal-delay-2">
-          Map every pipe. Monitor every sensor. Locate every leak.
-          Account for every asset — on one live platform.
+      </header>
+
+      <main>
+        <Hero onDemo={openDemo} onTalk={talkToUs} />
+        <OneNetwork assets={assets} />
+        <Mosaic assets={assets} nrw={nrw} />
+        <Monitor assets={assets} />
+        <QualityStory />
+        <Infrastructure />
+        <Losses nrw={nrw} />
+        <Explorer onDemo={openDemo} />
+        <Outcomes />
+      </main>
+
+      <Final onDemo={openDemo} onTalk={talkToUs} />
+    </div>
+  );
+}
+
+/* ═════════════ 1 · HERO ═════════════ */
+function Hero({ onDemo, onTalk }: { onDemo: () => void; onTalk: () => void }) {
+  return (
+    <section className="ed-hero">
+      <div className="ed-wrap ed-hero-copy">
+        <p className="ed-eyebrow rv">GIS · Monitoring · Water quality · NRW</p>
+        <h1 className="ed-hero-h rv">The smart water grid<br />for water utilities</h1>
+        <p className="ed-hero-sub rv">
+          AquaWise brings your pipe network, live monitoring, water quality and losses
+          into one operational view, so your team sees problems early and knows where to act.
         </p>
-        <div className="hero-ctas reveal reveal-delay-3">
-          <button type="button" className="btn btn-primary btn-lg" onClick={openDemo}>Explore Live Demo →</button>
-          <button type="button" className="btn btn-ghost btn-lg" onClick={bookWalkthrough}>Book a Walkthrough</button>
+        <div className="ed-row ed-hero-ctas rv">
+          <button type="button" className="ed-btn ed-btn-blue" onClick={onDemo}>Explore the live demo</button>
+          <button type="button" className="ed-btn ed-btn-line" onClick={onTalk}>Talk to us <span aria-hidden="true">→</span></button>
         </div>
-        <div className="hero-meta reveal reveal-delay-3">
-          <span><span className="dot" />Free 30-minute demo</span>
-          <span><span className="dot" />No credit card required</span>
-          <span><span className="dot" />Live Riverton network sandbox</span>
-        </div>
-      </section>
-
-      {/* Hero product screenshot */}
-      <div className="hero-preview reveal" style={{ marginBottom: 0 }}>
-        <button type="button" onClick={openDemo} className="hero-preview-frame" style={{ display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer', font: 'inherit', color: 'inherit' }}>
-          <div className="hero-preview-bar">
-            <span className="d" style={{ background: '#FF5F57' }} />
-            <span className="d" style={{ background: '#FEBC2E' }} />
-            <span className="d" style={{ background: '#28C840' }} />
-            <span style={{ flex: 1, marginLeft: 12, fontSize: 11, color: 'rgba(255,255,255,0.35)', fontFamily: 'var(--font-mono)' }}>
-              app.aquawise.io / gis — Riverton Water Supply Network
-            </span>
-            <span style={{ fontSize: 10, color: 'hsl(var(--primary))', fontFamily: 'var(--font-mono)', fontWeight: 600, marginRight: 4 }}>● LIVE</span>
-          </div>
-          <HeroPipeNetworkMockup />
-        </button>
       </div>
-
-      {/* Testimonials */}
-      <div className="testimonial-row" style={{ marginTop: 56, marginBottom: 0 }}>
-        {TESTIMONIALS.map((t, i) => (
-          <div key={t.name} className={`testimonial reveal${i > 0 ? ` reveal-delay-${i}` : ''}`}>
-            <q>{t.quote}</q>
-            <div className="testimonial-author">
-              <div className="testimonial-avatar">{t.initials}</div>
-              <div>
-                <div className="testimonial-name">{t.name}</div>
-                <div className="testimonial-org">{t.org}</div>
-              </div>
-            </div>
+      <div className="ed-wrap">
+        <div className="ed-hero-frame rv">
+          <img className="ed-hero-bg" src="/img/treatment-plant.jpg" alt="" />
+          <div className="ed-hero-shot">
+            <img src="/img/ui/view-overview.webp" alt="AquaWise Overview: network health, active alerts, water quality, NRW, network map and issues needing attention" />
           </div>
-        ))}
+        </div>
       </div>
-
-      {/* ═══════════════════════════════════════
-          STORY 1 — LIVE MAP (neutral)
-      ════════════════════════════════════════ */}
-      <section className="story-stacked" id="map" style={{ marginTop: 80 }}>
-        <div className="story-stacked-inner">
-          <div className="story-stacked-text reveal">
-            <div className="story-tag"><span className="tag-dot" />Live Network Map</div>
-            <h2>Your entire utility, on one live map.</h2>
-            <p>
-              Stop juggling paper drawings, scattered spreadsheets, and field photos.
-              Aquawise puts every pipe, sensor, tank, and DMA boundary on a single
-              aerial map — updated in real time, panned and zoomed by every team
-              member that needs it.
-            </p>
-            <ul className="story-check-list" style={{ maxWidth: 480, margin: '0 auto var(--s6)' }}>
-              <li>Aerial basemap with streets, buildings, and water features</li>
-              <li>DMA, pressure zone, and service area boundaries overlaid live</li>
-              <li>Search any pipe, valve, hydrant, or customer in one click</li>
-              <li>One source of truth shared by operations, planning, and field crews</li>
-            </ul>
-            <button type="button" className="btn btn-primary btn-lg" onClick={openDemo}>Open the live map →</button>
-          </div>
-          <div className="story-stacked-visual reveal reveal-delay-1">
-            <MockupBar url="Map · Riverton Service Area" />
-            <MapScreen />
-          </div>
-        </div>
-      </section>
-
-      {/* ═══════════════════════════════════════
-          STORY 2 — GIS PIPE NETWORK (neutral)
-      ════════════════════════════════════════ */}
-      <section className="story-stacked" id="network">
-        <div className="story-stacked-inner">
-          <div className="story-stacked-text reveal">
-            <div className="story-tag"><span className="tag-dot" />GIS Pipe Network</div>
-            <h2>Every pipe, mapped — every attribute, captured.</h2>
-            <p>
-              Click any segment and you get the full GIS profile: diameter, material,
-              install year, pressure class, condition grade, and live sensor feed.
-              Import your existing shapefiles or draw directly on the aerial map —
-              your network is data, not a memory.
-            </p>
-            <ul className="story-check-list" style={{ maxWidth: 480, margin: '0 auto var(--s6)' }}>
-              <li>Import shapefiles, GeoJSON, or draw directly on the aerial map</li>
-              <li>Each pipe carries: diameter, material, install year, pressure class</li>
-              <li>Colour-code by status, rehabilitation priority, or risk score</li>
-              <li>DMA and pressure zone boundaries overlaid on live imagery</li>
-            </ul>
-            <button type="button" className="btn btn-primary btn-lg" onClick={openDemo}>See the GIS network →</button>
-          </div>
-          <div className="story-stacked-visual reveal reveal-delay-1">
-            <MockupBar url="GIS · Pipe Network Detail" />
-            <GISScreen />
-          </div>
-        </div>
-      </section>
-
-      {/* ═══════════════════════════════════════
-          STORY 3 — ALERTS (BLUE — TechBlue)
-      ════════════════════════════════════════ */}
-      <section className="story-stacked section-blue" id="alerts">
-        <div className="story-stacked-inner">
-          <div className="story-stacked-text reveal">
-            <div className="story-tag"><span className="tag-dot" />Real-time Alerts</div>
-            <h2>Know about problems before your customers do.</h2>
-            <p>
-              Pressure drops, low tanks, flow anomalies, water quality breaches —
-              Aquawise monitors every signal 24/7 and pings the right team the
-              moment something goes wrong. Each alert ties straight to the pipe,
-              sensor, or asset on the map — so action is one click away.
-            </p>
-            <ul className="story-check-list" style={{ maxWidth: 480, margin: '0 auto var(--s6)' }}>
-              <li>Configurable thresholds for pressure, flow, level, and quality</li>
-              <li>Severity-graded routing — critical alerts page on-call instantly</li>
-              <li>Every alert links to the exact pipe segment or sensor on the map</li>
-              <li>Acknowledge, escalate, and resolve — full audit trail per incident</li>
-            </ul>
-            <Link to="/alerts" className="btn btn-primary btn-lg">See live alerts →</Link>
-          </div>
-          <div className="story-stacked-visual reveal reveal-delay-1">
-            <MockupBar url="Alerts · Live Incident Feed" />
-            <AlertsScreen />
-          </div>
-        </div>
-      </section>
-
-      {/* ═══════════════════════════════════════
-          STORY 4 — ASSET REGISTER (NEUTRAL)
-      ════════════════════════════════════════ */}
-      <section className="story-stacked" id="assets">
-        <div className="story-stacked-inner">
-          <div className="story-stacked-text reveal">
-            <div className="story-tag"><span className="tag-dot" />Asset Intelligence</div>
-            <h2>Know every pipe by name, age, and condition.</h2>
-            <p>
-              Deferred maintenance becomes a crisis when you don't know what you have.
-              Aquawise gives every pipe, valve, and meter a permanent profile —
-              tied directly to its location on the map — so you can prioritise
-              rehabilitation before the failures start.
-            </p>
-            <ul className="story-check-list" style={{ maxWidth: 480, margin: '0 auto var(--s6)' }}>
-              <li>Full pipe registry: diameter, material, install year, pressure class</li>
-              <li>Condition grades, maintenance history, and work order linkage</li>
-              <li>Filter your whole network by age, risk, or material type</li>
-              <li>Build replacement programmes from data — not guesswork</li>
-            </ul>
-            <button type="button" className="btn btn-primary btn-lg" onClick={openDemo}>Explore the asset register →</button>
-          </div>
-          <div className="story-stacked-visual reveal reveal-delay-1">
-            <MockupBar url="Asset Register · Pipe Segments" />
-            <AssetRegisterScreen />
-          </div>
-        </div>
-      </section>
-
-      {/* ═══════════════════════════════════════
-          STORY 5 — NRW ANALYTICS (neutral)
-      ════════════════════════════════════════ */}
-      <section className="story-stacked">
-        <div className="story-stacked-inner">
-          <div className="story-stacked-text reveal">
-            <div className="story-tag"><span className="tag-dot" />NRW & Loss Analytics</div>
-            <h2>See exactly where you're losing water. Act this week.</h2>
-            <p>
-              NRW reports that take two days to compile and arrive already stale
-              aren't analytics — they're history. Aquawise calculates your water
-              balance continuously, ranks every DMA by loss, and tells you where
-              to send your team — updated every hour.
-            </p>
-            <ul className="story-check-list" style={{ maxWidth: 480, margin: '0 auto var(--s6)' }}>
-              <li>Hourly NRW percentages by DMA — not monthly estimates</li>
-              <li>Zone ranking puts your worst-performing areas front and centre</li>
-              <li>Night minimum flow isolates background leakage from burst events</li>
-              <li>Regulatory-ready reports exported in one click</li>
-            </ul>
-            <Link to="/nrw" className="btn btn-primary btn-lg">See NRW analytics →</Link>
-          </div>
-          <div className="story-stacked-visual reveal reveal-delay-1">
-            <MockupBar url="NRW Analytics · DMA Zone Ranking" />
-            <NRWScreen />
-          </div>
-        </div>
-      </section>
-
-      {/* ═══════════════════════════════════════
-          HOW IT WORKS — blue background
-          (second blue: appears after 2 neutral story sections)
-      ════════════════════════════════════════ */}
-      <div className="hiw-outer section-blue">
-      <section className="hiw-section" id="how">
-        <div className="section-header reveal">
-          <div className="section-tag">How it works</div>
-          <h2>Up and running in three steps.</h2>
-          <p>Go from your existing GIS files to a fully live monitored network in under a day — no specialist consultants, no months of configuration.</p>
-        </div>
-        <div className="hiw-steps">
-          <div className="hiw-step reveal">
-            <div className="hiw-step-num">1</div>
-            <h3>Bring in your network</h3>
-            <p>Upload your shapefiles or GeoJSON exports. Pipe segments, DMAs, pressure zones, tanks, and valves are placed on the live aerial map automatically.</p>
-            <div className="hiw-mini-ui" style={{ position: 'relative', height: 66, padding: 8 }}>
-              <svg width="100%" height="100%" viewBox="0 0 200 50" fill="none">
-                <line x1="20" y1="25" x2="80" y2="13" stroke="hsl(var(--primary))" strokeWidth="2" />
-                <line x1="80" y1="13" x2="140" y2="28" stroke="hsl(var(--primary))" strokeWidth="2" />
-                <line x1="140" y1="28" x2="182" y2="16" stroke="hsl(var(--primary))" strokeWidth="2" />
-                <line x1="80" y1="13" x2="92" y2="38" stroke="hsl(var(--primary))" strokeWidth="1.5" opacity="0.6" />
-                <circle cx="20" cy="25" r="4" fill="hsl(var(--safe))" />
-                <circle cx="80" cy="13" r="4" fill="hsl(var(--primary))" />
-                <circle cx="140" cy="28" r="4" fill="hsl(var(--warning))" />
-                <circle cx="182" cy="16" r="4" fill="hsl(var(--safe))" />
-                <circle cx="92" cy="38" r="4" fill="hsl(var(--safe))" />
-              </svg>
-            </div>
-          </div>
-          <div className="hiw-step reveal reveal-delay-1">
-            <div className="hiw-step-num">2</div>
-            <h3>Connect your sensors</h3>
-            <p>Link pressure transducers, flow meters, and tank level sensors via SCADA or direct IoT feed. Live readings appear on the map immediately — no custom middleware.</p>
-            <div className="hiw-mini-ui">
-              <div className="hiw-mini-row accent" />
-              <div style={{ display: 'flex', gap: 6 }}>
-                <div style={{ flex: 1, height: 10, borderRadius: 4, background: 'hsl(var(--safe) / 0.45)' }} />
-                <div style={{ flex: 1, height: 10, borderRadius: 4, background: 'hsl(var(--warning) / 0.45)' }} />
-              </div>
-              <div className="hiw-mini-row" style={{ width: '60%' }} />
-            </div>
-          </div>
-          <div className="hiw-step reveal reveal-delay-2">
-            <div className="hiw-step-num">3</div>
-            <h3>Monitor live — and respond fast</h3>
-            <p>Your network is live on the map from day one. Alerts fire automatically on threshold breaches. One click takes you from the alert to the exact pipe segment and sensor — no digging through reports.</p>
-            <div className="hiw-mini-ui">
-              <div style={{ padding: '4px 6px', borderRadius: 4, background: 'hsl(var(--danger) / 0.12)', border: '1px solid hsl(var(--danger) / 0.3)', marginBottom: 4 }}>
-                <div style={{ height: 6, width: '70%', borderRadius: 3, background: 'hsl(var(--danger) / 0.5)' }} />
-              </div>
-              <div className="hiw-mini-row safe" />
-              <div className="hiw-mini-row" style={{ width: '70%' }} />
-            </div>
-          </div>
-        </div>
-      </section>
-      </div>{/* end hiw-outer */}
-
-      {/* ═══════════════════════════════════════
-          FEATURES — neutral background
-          (two neutral sections before the next blue)
-      ════════════════════════════════════════ */}
-      <section className="feat-section" id="features" style={{ maxWidth: '100%', padding: 0 }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto', padding: 'var(--s16) var(--s6)' }}>
-          <div className="section-header reveal">
-            <div className="section-tag">Platform</div>
-            <h2>Every tool your utility needs. One platform.</h2>
-            <p>From the control room to the field — Aquawise gives every person on your team the same live picture of the network.</p>
-          </div>
-          <div className="feat-deep-grid">
-            {FEATURES.map((f, i) => (
-              <div key={f.title} className={`feat-deep reveal reveal-delay-${(i % 3) + 1}`}>
-                <div className="feat-deep-icon">
-                  <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                    {f.icon}
-                  </svg>
-                </div>
-                <h3>{f.title}</h3>
-                <p>{f.desc}</p>
-                {f.badge && <div className="feat-deep-badge">✦ {f.badge}</div>}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ═══════════════════════════════════════
-          FINAL CTA — blue background
-          (third blue: after features neutral section)
-      ════════════════════════════════════════ */}
-      <section className="final-cta-section section-blue">
-        <div className="final-cta-inner reveal" style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.30)', borderRadius: 'var(--r-xl)', backdropFilter: 'blur(4px)', boxShadow: '0 12px 40px rgba(0,0,0,0.18)' }}>
-          <h2>The utilities winning on water loss<br />all made one change.</h2>
-          <p>
-            They stopped operating from reports and started operating from live data.
-            Book a free 30-minute demo — see your pipe network, your sensors, and your
-            assets the way they were meant to be seen.
-          </p>
-          <div className="final-cta-actions">
-            <button type="button" className="btn btn-primary btn-lg" onClick={openDemo}>Explore Live Demo →</button>
-            <button type="button" className="btn btn-ghost btn-lg" onClick={bookWalkthrough}>Book a Walkthrough</button>
-          </div>
-          <div className="final-trust">
-            <span><span className="dot-safe" />Free 30-minute demo</span>
-            <span><span className="dot-safe" />No credit card required</span>
-            <span><span className="dot-safe" />Up and running in under a day</span>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Footer ── */}
-      <footer className="landing-footer">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 12 }}>
-          <LogoMark size={18} />
-          <span style={{ fontWeight: 600 }}>Aquawise</span>
-          <span style={{ color: 'hsl(var(--border-strong))' }}>·</span>
-          <span>GIS-Powered Water Utility Platform</span>
-        </div>
-        <div style={{ display: 'flex', gap: 20, justifyContent: 'center', flexWrap: 'wrap' }}>
-          {[['Dashboard','/dashboard'],['GIS Map','/gis'],['Alerts','/alerts'],['NRW','/nrw'],['Sensors','/sensors'],['Reports','/reports']].map(([label,to]) => (
-            <Link key={to} to={to} style={{ color: 'hsl(var(--muted-foreground))' }}>{label}</Link>
-          ))}
-        </div>
-      </footer>
-    </div>
+    </section>
   );
 }
 
-/* ════════════════════════════════════════
-   SHARED MOCKUP CHROME
-   ════════════════════════════════════════ */
+/* ═════════════ 2 · ONE NETWORK ═════════════ */
+function OneNetwork({ assets }: { assets: Record<string, AssetProps> | null }) {
+  const [ref, seen] = useInView<HTMLDivElement>(0.2);
+  const tanks = ['TANK-01', 'TANK-02', 'TANK-03', 'TANK-04', 'TANK-05', 'TANK-06'];
+  const inflow = assets ? tanks.reduce((s, id) => s + Number(assets[id]?.inflow_lps ?? 0), 0) : null;
+  const capacity = assets ? tanks.reduce((s, id) => s + Number(assets[id]?.capacity_m3 ?? 0), 0) : null;
+  const wtw = QUALITY_POINTS.find(q => q.id === 'WQ-WTW')!;
+  const tapCl = QUALITY_POINTS.filter(q => q.zone !== 'WTW').map(q => current('chlorine', q.id, q.base.chlorine));
+  const avgCl = tapCl.reduce((a, b) => a + b, 0) / tapCl.length;
 
-function MockupBar({ url }: { url: string }) {
   return (
-    <div className="sv-bar">
-      <span className="d" style={{ background: '#FF5F57' }} />
-      <span className="d" style={{ background: '#FEBC2E' }} />
-      <span className="d" style={{ background: '#28C840' }} />
-      <span className="url">{url}</span>
-      <span style={{ marginLeft: 'auto', fontSize: 10, color: 'hsl(var(--primary))', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>● LIVE</span>
-    </div>
-  );
-}
+    <section className="ed-sec" id="network">
+      <div className="ed-wrap ed-grid">
+        <p className="ed-label rv" style={{ gridColumn: '1 / span 4' }}><b>01</b> / The network</p>
+        <h2 className="ed-h2 rv" style={{ gridColumn: '1 / span 9' }}>
+          From source to tap, <span className="muted">one connected view.</span>
+        </h2>
+        <p className="ed-aside rv" style={{ gridColumn: '9 / span 4' }}>
+          Storage, treatment and distribution report into the same picture. When pressure falls in one zone,
+          you see the reservoir feeding it and the water quality reaching customers — in the same place.
+        </p>
+      </div>
 
-/* ════════════════════════════════════════
-   SCREEN MOCKUPS  (all dark-themed inside
-   so they pop on both blue and neutral bg)
-   ════════════════════════════════════════ */
-
-const DARK = {
-  bg:       '#111318',
-  card:     '#1a1d26',
-  cardMut:  '#1e2130',
-  border:   'rgba(255,255,255,0.08)',
-  text:     '#f1f5f9',
-  muted:    '#64748b',
-  primary:  '#3b82f6',
-};
-
-function HeroPipeNetworkMockup() {
-  return (
-    <div style={{
-      height: 390, background: DARK.bg,
-      display: 'grid', gridTemplateColumns: '200px 1fr', overflow: 'hidden',
-    }}>
-      {/* Sidebar */}
-      <div style={{ background: DARK.card, borderRight: `1px solid ${DARK.border}`, padding: '14px 10px', display: 'flex', flexDirection: 'column', gap: 5 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 0', marginBottom: 8 }}>
-          <svg width={16} height={16} viewBox="0 0 28 28" fill="none">
-            <circle cx={14} cy={14} r={14} fill="rgba(37,99,235,0.2)" />
-            <path d="M14 4C14 4 6 12 6 18a8 8 0 0016 0c0-6-8-14-8-14z" fill="#3B82F6" />
+      <div className={`ed-flow${seen ? ' drawn' : ''}`} ref={ref}>
+        <div className="ed-flow-row">
+          <svg className="ed-flow-line" viewBox="0 0 1000 4" preserveAspectRatio="none" aria-hidden="true">
+            <line x1="0" y1="2" x2="1000" y2="2" pathLength={1} />
           </svg>
-          <div style={{ height: 7, width: 60, borderRadius: 4, background: DARK.border }} />
+          <Stage n="01" name="Source" top={<div className="fl-type"><b>{inflow ?? '—'}</b><span>L/s</span></div>}
+            data="Inflow to storage across six reservoirs" />
+          <Stage n="02" name="Storage" top={<img src="/img/reservoir-pipes.jpg" alt="Storage reservoir and mains" className="fl-img tall" style={{ objectPosition: '32% 40%' }} />}
+            data={capacity ? `${capacity.toLocaleString()} m³ of storage, level read every 15 minutes` : 'Reservoir levels read every 15 minutes'} />
+          <Stage n="03" name="Treatment" wide top={<img src="/img/treatment-plant.jpg" alt="Clarifiers at the treatment works" className="fl-img" />}
+            data={`Turbidity at the works outlet: ${current('turbidity', wtw.id, wtw.base.turbidity).toFixed(2)} NTU`} />
+          <Stage n="04" name="Distribution" below top={<div className="fl-type"><b>716</b><span>km</span></div>}
+            data="of mapped pipe, with 26 pressure and flow loggers"
+            extra={<img src="/img/field-engineers.jpg" alt="Field engineers at a valve" className="fl-img small" />} />
+          <Stage n="05" name="Customer" top={<div className="fl-type"><b>{avgCl.toFixed(2)}</b><span>mg/L</span></div>}
+            data="Average residual chlorine at 7 zone monitoring points" />
         </div>
-        {['GIS Map','Dashboard','Alerts','NRW','Sensors','Reports'].map((item, i) => (
-          <div key={item} style={{
-            height: 30, borderRadius: 6, display: 'flex', alignItems: 'center', gap: 8, padding: '0 8px',
-            background: i === 0 ? 'rgba(37,99,235,0.18)' : 'transparent',
-            border: i === 0 ? '1px solid rgba(59,130,246,0.35)' : '1px solid transparent',
-          }}>
-            <div style={{ width: 12, height: 12, borderRadius: 3, background: i === 0 ? 'rgba(59,130,246,0.6)' : DARK.border }} />
-            <div style={{ fontSize: 11, color: i === 0 ? DARK.text : DARK.muted, fontWeight: i === 0 ? 600 : 400 }}>{item}</div>
-          </div>
-        ))}
       </div>
-      {/* GIS canvas */}
-      <div style={{
-        position: 'relative', overflow: 'hidden', background: DARK.bg,
-        backgroundImage: `repeating-linear-gradient(0deg,rgba(255,255,255,0.025) 0 1px,transparent 1px 40px),repeating-linear-gradient(90deg,rgba(255,255,255,0.025) 0 1px,transparent 1px 40px)`,
-      }}>
-        <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} viewBox="0 0 600 420" preserveAspectRatio="xMidYMid slice">
-          <ellipse cx="300" cy="210" rx="220" ry="150" fill="rgba(37,99,235,0.05)" stroke="rgba(59,130,246,0.2)" strokeWidth="1.5" strokeDasharray="6 4" />
-          {/* Mains */}
-          <line x1="70" y1="210" x2="175" y2="150" stroke="#3b82f6" strokeWidth="3" opacity="0.75" />
-          <line x1="175" y1="150" x2="300" y2="168" stroke="#3b82f6" strokeWidth="3" opacity="0.75" />
-          <line x1="300" y1="168" x2="425" y2="138" stroke="#3b82f6" strokeWidth="3" opacity="0.7" />
-          <line x1="425" y1="138" x2="528" y2="168" stroke="#3b82f6" strokeWidth="2.5" opacity="0.6" />
-          {/* Secondaries */}
-          <line x1="175" y1="150" x2="195" y2="265" stroke="#3b82f6" strokeWidth="2" opacity="0.5" />
-          <line x1="300" y1="168" x2="308" y2="295" stroke="#3b82f6" strokeWidth="2" opacity="0.5" />
-          <line x1="425" y1="138" x2="432" y2="282" stroke="#3b82f6" strokeWidth="2" opacity="0.45" />
-          <line x1="195" y1="265" x2="308" y2="295" stroke="#3b82f6" strokeWidth="1.5" opacity="0.4" />
-          <line x1="308" y1="295" x2="432" y2="282" stroke="#3b82f6" strokeWidth="1.5" opacity="0.4" />
-          {/* Fault highlight */}
-          <line x1="300" y1="168" x2="425" y2="138" stroke="#ef4444" strokeWidth="4" opacity="0.85" />
-          {/* Nodes */}
-          <GPin cx={70} cy={210} c="#22c55e" pulse />
-          <GPin cx={175} cy={150} c="#22c55e" />
-          <GPin cx={300} cy={168} c="#ef4444" pulse />
-          <GPin cx={425} cy={138} c="#f59e0b" />
-          <GPin cx={528} cy={168} c="#22c55e" />
-          <GPin cx={195} cy={265} c="#22c55e" />
-          <GPin cx={308} cy={295} c="#22c55e" />
-          <GPin cx={432} cy={282} c="#f59e0b" />
-          {/* Tank */}
-          <rect x="52" y="188" width="36" height="22" rx="4" fill="#2563eb" opacity="0.9" />
-          <text x="70" y="202" textAnchor="middle" fill="white" fontSize="8" fontWeight="700">TANK</text>
-          {/* Fault callout */}
-          <rect x="314" y="106" width="138" height="40" rx="6" fill="#1a1d26" stroke="#ef4444" strokeWidth="1.5" />
-          <text x="325" y="122" fill="#ef4444" fontSize="9" fontWeight="700">⚠ Pressure drop detected</text>
-          <text x="325" y="137" fill="#64748b" fontSize="8">Pipe seg. 18 · Zone B3 · 2 min ago</text>
-        </svg>
-        {/* Chip row */}
-        <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 6 }}>
-          {[['Pipes','#3b82f6'],['Sensors','#94a3b8'],['Assets','#94a3b8']].map(([l,c]) => (
-            <div key={l} style={{ padding: '4px 10px', borderRadius: 9999, background: DARK.card, border: `1px solid ${DARK.border}`, fontSize: 10, fontWeight: 600, color: c }}>{l}</div>
-          ))}
-        </div>
-        {/* Legend */}
-        <div style={{ position: 'absolute', bottom: 12, left: 12, background: DARK.card, border: `1px solid ${DARK.border}`, borderRadius: 7, padding: '8px 12px', fontSize: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {[['#22c55e','Normal pressure'],['#f59e0b','Low pressure'],['#ef4444','Fault / leak risk']].map(([c,l]) => (
-            <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: c, display: 'block' }} />
-              <span style={{ color: DARK.text }}>{l}</span>
+    </section>
+  );
+}
+
+function Stage({ n, name, top, data, wide, below, extra }: { n: string; name: string; top: ReactNode; data: string; wide?: boolean; below?: boolean; extra?: ReactNode }) {
+  return (
+    <div className={`fl-stage${wide ? ' wide' : ''}${below ? ' below' : ''}`}>
+      <div className="fl-top">{top}</div>
+      <div className="fl-node"><i /></div>
+      <div className="fl-meta">
+        <span className="fl-n">{n}</span>
+        <h3>{name}</h3>
+        <p>{data}</p>
+        {extra}
+      </div>
+    </div>
+  );
+}
+
+/* ═════════════ 3 · PLATFORM MOSAIC ═════════════ */
+function Mosaic({ assets, nrw }: { assets: Record<string, AssetProps> | null; nrw: ReturnType<typeof buildNrwMonthly> }) {
+  const tb = series('turbidity', WQ_MIL.id, WQ_MIL.base.turbidity, rangeSpec('24H'));
+  const tbNow = tb[tb.length - 1].v;
+  const sn12 = assets?.['SN-12'] ? current('pressure', 'SN-12', Number(assets['SN-12'].pressure_bar)) : null;
+  const tanks = ['TANK-01', 'TANK-02', 'TANK-03', 'TANK-04', 'TANK-05', 'TANK-06'].map(id => ({
+    id, level: assets?.[id] ? current('level', id, Number(assets[id].level_pct)) : null
+  }));
+  const last = nrw[nrw.length - 1]; const prev = nrw[nrw.length - 2];
+
+  return (
+    <section className="ed-sec ed-tint">
+      <div className="ed-wrap ed-grid">
+        <p className="ed-label rv" style={{ gridColumn: '1 / span 3' }}><b>02</b> / The platform</p>
+        <h2 className="ed-h2 rv" style={{ gridColumn: '1 / span 7' }}>See everything. <span className="muted">Miss less.</span></h2>
+        <p className="ed-aside rv" style={{ gridColumn: '10 / span 3' }}>Network, quality, pressure, storage and losses in one operational view — each tied to a place on the map.</p>
+      </div>
+
+      <div className="ed-wrap">
+        <div className="ed-bento">
+          <figure className="bx bx-map rv">
+            <img src="/img/ui/crop-gis.webp" alt="" />
+            <figcaption><span className="ed-mini">Network</span><b>3,233 pipe segments · 716 km</b></figcaption>
+          </figure>
+
+          <div className="bx bx-wq rv">
+            <span className="ed-mini">Water quality · Riverside booster</span>
+            <div className="bx-big warn">{tbNow.toFixed(2)}<small>NTU</small></div>
+            <p>Turbidity above the 1.0 NTU limit since this morning. The other seven monitoring points are within range.</p>
+            <MiniLine points={tb} metric="turbidity" />
+          </div>
+
+          <div className="bx bx-blue rv">
+            <span className="ed-mini">Active alerts</span>
+            <div className="bx-big">06</div>
+            <p>2 critical · 3 warning · 1 info</p>
+          </div>
+
+          <div className="bx bx-navy rv">
+            <span className="ed-mini">Pressure · Northgate</span>
+            <div className="bx-big">{sn12 !== null ? sn12.toFixed(2) : '—'}<small>bar</small></div>
+            <p><i className="dot crit" />Below the 1.5 bar minimum</p>
+          </div>
+
+          <div className="bx bx-nrw rv">
+            <span className="ed-mini">Non-revenue water</span>
+            <div className="bx-big">{last.nrw.toFixed(1)}<small>%</small></div>
+            <p className="good">▼ {(prev.nrw - last.nrw).toFixed(1)} pts vs last month</p>
+            <div className="bx-bars" aria-hidden="true">
+              {nrw.map(m => <span key={m.t} style={{ height: `${((m.nrw - 28) / 10) * 100}%` }} title={`${m.month}: ${m.nrw}%`} />)}
             </div>
-          ))}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-            <span style={{ width: 16, height: 3, borderRadius: 2, background: '#ef4444', display: 'block' }} />
-            <span style={{ color: DARK.text }}>Affected pipe</span>
           </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
-function GPin({ cx, cy, c, pulse }: { cx: number; cy: number; c: string; pulse?: boolean }) {
-  return (
-    <g>
-      {pulse && <circle cx={cx} cy={cy} r={12} fill={c} opacity={0.18} />}
-      <circle cx={cx} cy={cy} r={5} fill={c} stroke="rgba(255,255,255,0.8)" strokeWidth={1.5} />
-    </g>
-  );
-}
-
-/* ─── MAP SCREEN — realistic aerial map look ─── */
-function MapScreen() {
-  return (
-    <div style={{ background: '#0e1726', position: 'relative', height: 380, overflow: 'hidden' }}>
-      <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} viewBox="0 0 900 380" preserveAspectRatio="xMidYMid slice">
-        {/* Base land */}
-        <rect width="900" height="380" fill="#15243a" />
-        {/* Park / green spaces */}
-        <ellipse cx="180" cy="120" rx="80" ry="40" fill="#1c3528" opacity="0.7" />
-        <ellipse cx="720" cy="280" rx="90" ry="36" fill="#1c3528" opacity="0.7" />
-        {/* Water body */}
-        <path d="M0,310 Q160,295 320,308 T640,300 L640,380 L0,380 Z" fill="#0f2742" />
-        <path d="M540,30 Q620,20 700,30 Q780,40 820,80 L820,140 Q780,150 720,140 Q660,128 600,130 Q540,128 540,90 Z" fill="#0f2742" opacity="0.85" />
-        {/* Street grid — minor */}
-        {[80, 160, 240, 320, 400, 480, 560, 640, 720, 800].map(x => (
-          <line key={'v'+x} x1={x} y1={0} x2={x} y2={380} stroke="rgba(255,255,255,0.04)" strokeWidth={1} />
-        ))}
-        {[60, 130, 200, 270].map(y => (
-          <line key={'h'+y} x1={0} y1={y} x2={900} y2={y} stroke="rgba(255,255,255,0.04)" strokeWidth={1} />
-        ))}
-        {/* Major streets */}
-        <path d="M0,180 L900,200" stroke="rgba(255,255,255,0.18)" strokeWidth={3} />
-        <path d="M380,0 L420,380" stroke="rgba(255,255,255,0.15)" strokeWidth={2.5} />
-        <path d="M0,90 L900,75" stroke="rgba(255,255,255,0.10)" strokeWidth={2} />
-        <path d="M620,0 L640,380" stroke="rgba(255,255,255,0.10)" strokeWidth={2} />
-        {/* Buildings (clusters) */}
-        {[
-          [80,140,22,16],[110,135,18,20],[135,148,20,14],[100,165,16,18],
-          [440,55,28,18],[475,50,22,22],[500,60,24,16],[450,80,18,20],
-          [680,180,24,16],[710,175,20,20],[735,185,22,14],
-          [240,235,18,14],[265,240,22,16],[290,232,16,18],
-          [780,110,20,18],[805,118,18,14],
-        ].map(([x,y,w,h], i) => (
-          <rect key={'b'+i} x={x as number} y={y as number} width={w as number} height={h as number} fill="rgba(255,255,255,0.10)" />
-        ))}
-        {/* DMA boundary */}
-        <path d="M50,40 L860,40 L860,260 L50,260 Z" stroke="rgba(96,165,250,0.5)" strokeWidth={1.5} strokeDasharray="6 4" fill="none" />
-        <text x="68" y="58" fill="rgba(147,197,253,0.85)" fontSize="10" fontWeight="700">DMA-North · 142 connections</text>
-        {/* Pipe network */}
-        <line x1="60" y1="180" x2="220" y2="120" stroke="#60a5fa" strokeWidth="2.5" />
-        <line x1="220" y1="120" x2="400" y2="135" stroke="#60a5fa" strokeWidth="2.5" />
-        <line x1="400" y1="135" x2="600" y2="115" stroke="#60a5fa" strokeWidth="2.5" />
-        <line x1="600" y1="115" x2="820" y2="135" stroke="#60a5fa" strokeWidth="2" />
-        <line x1="220" y1="120" x2="240" y2="240" stroke="#60a5fa" strokeWidth="1.5" opacity="0.6" />
-        <line x1="400" y1="135" x2="420" y2="245" stroke="#60a5fa" strokeWidth="1.5" opacity="0.6" />
-        <line x1="600" y1="115" x2="620" y2="240" stroke="#60a5fa" strokeWidth="1.5" opacity="0.6" />
-        <line x1="240" y1="240" x2="420" y2="245" stroke="#60a5fa" strokeWidth="1.2" opacity="0.45" />
-        <line x1="420" y1="245" x2="620" y2="240" stroke="#60a5fa" strokeWidth="1.2" opacity="0.45" />
-        {/* Tank icon */}
-        <rect x="44" y="168" width="32" height="22" rx="3" fill="#2563eb" />
-        <text x="60" y="183" textAnchor="middle" fill="white" fontSize="8" fontWeight="700">TANK</text>
-        {/* Pins */}
-        <GPin cx={220} cy={120} c="#22c55e" />
-        <GPin cx={400} cy={135} c="#f59e0b" />
-        <GPin cx={600} cy={115} c="#22c55e" />
-        <GPin cx={820} cy={135} c="#22c55e" />
-        <GPin cx={240} cy={240} c="#22c55e" />
-        <GPin cx={420} cy={245} c="#ef4444" pulse />
-        <GPin cx={620} cy={240} c="#22c55e" />
-      </svg>
-      {/* Top layer chips */}
-      <div style={{ position: 'absolute', top: 12, left: 12, display: 'flex', gap: 6 }}>
-        {[['Network', true], ['Zones', false], ['Sensors', false], ['Alerts', false]].map(([l, active]) => (
-          <div key={String(l)} style={{ padding: '5px 12px', borderRadius: 999, background: active ? 'rgba(37,99,235,0.85)' : DARK.card, border: `1px solid ${active ? 'rgba(96,165,250,0.6)' : DARK.border}`, fontSize: 10, fontWeight: 600, color: active ? '#fff' : DARK.muted }}>
-            {String(l)}
-          </div>
-        ))}
-      </div>
-      {/* Zoom controls */}
-      <div style={{ position: 'absolute', top: 56, left: 12, display: 'flex', flexDirection: 'column' }}>
-        <div style={{ width: 30, height: 30, background: DARK.card, border: `1px solid ${DARK.border}`, borderRadius: '6px 6px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, color: DARK.text }}>+</div>
-        <div style={{ width: 30, height: 30, background: DARK.card, borderLeft: `1px solid ${DARK.border}`, borderRight: `1px solid ${DARK.border}`, borderBottom: `1px solid ${DARK.border}`, borderRadius: '0 0 6px 6px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, color: DARK.text }}>−</div>
-      </div>
-      {/* Search bar */}
-      <div style={{ position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', background: DARK.card, border: `1px solid ${DARK.border}`, borderRadius: 6, padding: '6px 14px', fontSize: 11, color: DARK.muted, display: 'flex', alignItems: 'center', gap: 8, minWidth: 220 }}>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        </svg>
-        <span>Search pipe, sensor, valve…</span>
-      </div>
-      {/* Right info card */}
-      <div style={{ position: 'absolute', top: 12, right: 12, background: DARK.card, border: `1px solid ${DARK.border}`, borderRadius: 9, padding: '12px 14px', fontSize: 11, minWidth: 200 }}>
-        <div style={{ fontSize: 9, color: DARK.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, fontWeight: 700 }}>Live Network</div>
-        {[
-          ['Pipes monitored','142','#f1f5f9'],
-          ['Active sensors','38','#f1f5f9'],
-          ['Critical alerts','1','#ef4444'],
-          ['Coverage','87%','#22c55e'],
-        ].map(([k,v,c]) => (
-          <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '4px 0', borderTop: `1px solid ${DARK.border}` }}>
-            <span style={{ color: DARK.muted }}>{k}</span>
-            <span style={{ fontWeight: 700, color: c as string, fontFamily: 'var(--font-mono)' }}>{v}</span>
-          </div>
-        ))}
-      </div>
-      {/* Legend */}
-      <div style={{ position: 'absolute', bottom: 12, left: 12, background: DARK.card, border: `1px solid ${DARK.border}`, borderRadius: 6, padding: '6px 10px', fontSize: 10, display: 'flex', gap: 12 }}>
-        {[['#22c55e','Normal'],['#f59e0b','Warning'],['#ef4444','Critical']].map(([c,l]) => (
-          <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: c, display: 'block' }} />
-            <span style={{ color: DARK.text }}>{l}</span>
-          </div>
-        ))}
-      </div>
-      {/* Scale */}
-      <div style={{ position: 'absolute', bottom: 12, right: 12, background: DARK.card, border: `1px solid ${DARK.border}`, borderRadius: 5, padding: '4px 8px', fontSize: 9, color: DARK.muted, fontFamily: 'var(--font-mono)' }}>
-        ── 500 m
-      </div>
-    </div>
-  );
-}
-
-/* ─── GIS SCREEN — pipe network detail ─── */
-function GISScreen() {
-  return (
-    <div style={{ background: DARK.bg, position: 'relative', height: 380, overflow: 'hidden',
-      backgroundImage: `repeating-linear-gradient(0deg,rgba(255,255,255,0.025) 0 1px,transparent 1px 28px),repeating-linear-gradient(90deg,rgba(255,255,255,0.025) 0 1px,transparent 1px 28px)` }}>
-      <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} viewBox="0 0 900 320" preserveAspectRatio="xMidYMid slice">
-        <ellipse cx="450" cy="160" rx="340" ry="120" fill="rgba(37,99,235,0.05)" stroke="rgba(59,130,246,0.2)" strokeWidth="1" strokeDasharray="5 3" />
-        <text x="120" y="50" fill="rgba(96,165,250,0.7)" fontSize="9" fontWeight="700">DMA-NORTH · Pressure Zone B</text>
-        <line x1="80" y1="160" x2="220" y2="110" stroke="#3b82f6" strokeWidth="3.5" opacity="0.8" />
-        <line x1="220" y1="110" x2="420" y2="130" stroke="#3b82f6" strokeWidth="3.5" opacity="0.8" />
-        <line x1="420" y1="130" x2="620" y2="100" stroke="#3b82f6" strokeWidth="3" opacity="0.7" />
-        <line x1="620" y1="100" x2="780" y2="125" stroke="#3b82f6" strokeWidth="3" opacity="0.65" />
-        <line x1="220" y1="110" x2="240" y2="220" stroke="#3b82f6" strokeWidth="2" opacity="0.55" />
-        <line x1="420" y1="130" x2="440" y2="230" stroke="#3b82f6" strokeWidth="2" opacity="0.55" />
-        <line x1="620" y1="100" x2="640" y2="218" stroke="#3b82f6" strokeWidth="2" opacity="0.55" />
-        <line x1="240" y1="220" x2="440" y2="230" stroke="#3b82f6" strokeWidth="1.5" opacity="0.4" />
-        <line x1="440" y1="230" x2="640" y2="218" stroke="#3b82f6" strokeWidth="1.5" opacity="0.4" />
-        {/* segment labels */}
-        <text x="140" y="135" fill="rgba(147,197,253,0.6)" fontSize="8" fontFamily="monospace">SEG-018</text>
-        <text x="310" y="115" fill="rgba(147,197,253,0.6)" fontSize="8" fontFamily="monospace">SEG-024</text>
-        <text x="510" y="120" fill="rgba(255,255,255,0.95)" fontSize="9" fontWeight="700" fontFamily="monospace">SEG-034 ◀</text>
-        <text x="690" y="110" fill="rgba(147,197,253,0.6)" fontSize="8" fontFamily="monospace">SEG-047</text>
-        {/* highlighted selected segment */}
-        <line x1="420" y1="130" x2="620" y2="100" stroke="#facc15" strokeWidth="4" opacity="0.85" />
-        <GPin cx={80} cy={160} c="#22c55e" pulse />
-        <GPin cx={220} cy={110} c="#22c55e" />
-        <GPin cx={420} cy={130} c="#f59e0b" />
-        <GPin cx={620} cy={100} c="#22c55e" />
-        <GPin cx={780} cy={125} c="#22c55e" />
-        <GPin cx={240} cy={220} c="#22c55e" />
-        <GPin cx={440} cy={230} c="#22c55e" />
-        <GPin cx={640} cy={218} c="#f59e0b" />
-      </svg>
-      {/* Pipe attribute panel */}
-      <div style={{ position: 'absolute', top: 16, right: 16, background: DARK.card, border: `1px solid ${DARK.border}`, borderRadius: 9, padding: '12px 14px', fontSize: 11, minWidth: 180 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <div style={{ fontWeight: 700, color: DARK.text, fontSize: 12 }}>SEG-034</div>
-          <span style={{ padding: '2px 7px', borderRadius: 999, background: 'rgba(34,197,94,0.12)', color: '#22c55e', fontSize: 9, fontWeight: 700 }}>GOOD</span>
-        </div>
-        {[['Diameter','150 mm'],['Material','uPVC'],['Installed','2008'],['Length','187 m'],['Pressure class','PN16'],['Last inspect','Mar 2025']].map(([k,v]) => (
-          <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, borderTop: `1px solid ${DARK.border}`, paddingTop: 5, marginTop: 5 }}>
-            <span style={{ color: DARK.muted }}>{k}</span>
-            <span style={{ fontWeight: 600, color: DARK.text, fontFamily: 'var(--font-mono)' }}>{v}</span>
-          </div>
-        ))}
-      </div>
-      {/* Layer toggles */}
-      <div style={{ position: 'absolute', top: 16, left: 16, background: DARK.card, border: `1px solid ${DARK.border}`, borderRadius: 8, padding: '8px 10px', fontSize: 10, display: 'flex', flexDirection: 'column', gap: 5, minWidth: 110 }}>
-        <div style={{ fontSize: 9, color: DARK.muted, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, marginBottom: 2 }}>Layers</div>
-        {[['Mains', true], ['Service lines', true], ['DMAs', true], ['Valves', false]].map(([l, on]) => (
-          <div key={String(l)} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10 }}>
-            <span style={{ width: 10, height: 10, borderRadius: 3, background: on ? '#3b82f6' : 'transparent', border: `1px solid ${on ? '#3b82f6' : DARK.border}` }} />
-            <span style={{ color: on ? DARK.text : DARK.muted }}>{String(l)}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ─── ALERTS SCREEN — incident feed ─── */
-function AlertsScreen() {
-  const alerts: Array<{ sev: 'CRITICAL' | 'WARNING' | 'RESOLVED'; title: string; loc: string; time: string; color: string }> = [
-    { sev: 'CRITICAL', title: 'Pressure drop · Zone B3',       loc: 'Pipe SEG-018 · Milimani',       time: '2 min ago',  color: '#ef4444' },
-    { sev: 'CRITICAL', title: 'Tank level critical',           loc: 'Industrial Tank · 3h to empty', time: '14 min ago', color: '#ef4444' },
-    { sev: 'WARNING',  title: 'Flow anomaly detected',         loc: 'Flow M2 · DMA South',           time: '38 min ago', color: '#f59e0b' },
-    { sev: 'WARNING',  title: 'Chlorine residual below 0.2',   loc: 'Node 21 · Zone C1',             time: '1h ago',     color: '#f59e0b' },
-    { sev: 'RESOLVED', title: 'Pressure restored',             loc: 'Zone A2 · Resolved by team',    time: '2h ago',     color: '#22c55e' },
-  ];
-  return (
-    <div style={{ background: DARK.bg, padding: 0 }}>
-      {/* Filter tabs */}
-      <div style={{ display: 'flex', gap: 6, padding: '12px 16px', borderBottom: `1px solid ${DARK.border}`, background: DARK.cardMut, alignItems: 'center' }}>
-        {[['All','12',true],['Critical','2',false],['Warning','5',false],['Resolved','5',false]].map(([l,n,active]) => (
-          <div key={String(l)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 11px', borderRadius: 999, background: active ? 'rgba(37,99,235,0.18)' : 'transparent', border: `1px solid ${active ? 'rgba(96,165,250,0.4)' : DARK.border}`, fontSize: 11, fontWeight: 600, color: active ? '#60a5fa' : DARK.muted }}>
-            {String(l)}
-            <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 999, background: active ? 'rgba(96,165,250,0.25)' : 'rgba(255,255,255,0.06)', color: active ? '#60a5fa' : DARK.muted, fontFamily: 'var(--font-mono)' }}>{String(n)}</span>
-          </div>
-        ))}
-        <div style={{ marginLeft: 'auto', fontSize: 10, color: DARK.muted, fontFamily: 'var(--font-mono)' }}>● Updated 12s ago</div>
-      </div>
-      {/* List */}
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
-        {alerts.map((a, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 18px', borderBottom: i < alerts.length - 1 ? `1px solid ${DARK.border}` : 'none', borderLeft: `3px solid ${a.color}` }}>
-            <div style={{ width: 10, height: 10, borderRadius: '50%', background: a.color, boxShadow: `0 0 0 4px ${a.color}22`, flexShrink: 0 }} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: DARK.text, marginBottom: 3 }}>{a.title}</div>
-              <div style={{ fontSize: 10, color: DARK.muted }}>{a.loc}</div>
+          <div className="bx bx-store rv">
+            <img src="/img/reservoir-pipes.jpg" alt="" />
+            <div className="bx-store-data">
+              <span className="ed-mini">Storage · six reservoirs</span>
+              <div className="bx-tanks">
+                {tanks.map((t, i) => (
+                  <div key={t.id} className={t.level !== null && t.level < 35 ? 'low' : ''}>
+                    <span className="lvl" style={{ height: `${t.level ?? 0}%` }} />
+                    <b>{t.level !== null ? Math.round(t.level) : '—'}%</b>
+                    <small>R{String(i + 1).padStart(2, '0')}</small>
+                  </div>
+                ))}
+              </div>
+              <p>Reservoir 01 is draining faster than at the same time yesterday.</p>
             </div>
-            <span style={{ padding: '3px 9px', borderRadius: 4, background: `${a.color}1A`, color: a.color, fontSize: 9, fontWeight: 800, letterSpacing: '0.06em', border: `1px solid ${a.color}44` }}>{a.sev}</span>
-            <span style={{ fontSize: 10, color: DARK.muted, minWidth: 70, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{a.time}</span>
-            <button style={{ background: 'transparent', border: `1px solid ${DARK.border}`, color: DARK.text, fontSize: 10, padding: '5px 10px', borderRadius: 5, cursor: 'pointer', fontWeight: 600 }}>View</button>
           </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function AssetRegisterScreen() {
-  return (
-    <div className="sv-body" style={{ padding: 0 }}>
-      {/* Table header */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr 0.8fr 0.7fr 0.9fr', gap: 8, padding: '8px 16px', background: DARK.cardMut, borderBottom: `1px solid ${DARK.border}`, fontSize: 10, fontWeight: 700, color: DARK.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-        <span>Segment ID</span><span>Diameter</span><span>Material</span><span>Age</span><span>Condition</span>
-      </div>
-      {[
-        { id: 'SEG-018', dia: '150 mm', mat: 'uPVC',      age: '16 yr', cond: 'Good',      c: '#22c55e' },
-        { id: 'SEG-024', dia: '100 mm', mat: 'Cast Iron', age: '42 yr', cond: 'Poor',      c: '#ef4444' },
-        { id: 'SEG-031', dia: '200 mm', mat: 'HDPE',      age: '8 yr',  cond: 'Excellent', c: '#22c55e' },
-        { id: 'SEG-047', dia: '75 mm',  mat: 'GI',        age: '35 yr', cond: 'Fair',      c: '#f59e0b' },
-        { id: 'SEG-052', dia: '150 mm', mat: 'uPVC',      age: '12 yr', cond: 'Good',      c: '#22c55e' },
-        { id: 'SEG-061', dia: '250 mm', mat: 'Ductile CI',age: '28 yr', cond: 'Fair',      c: '#f59e0b' },
-      ].map((row, i) => (
-        <div key={row.id} style={{
-          display: 'grid', gridTemplateColumns: '1.2fr 0.8fr 0.8fr 0.7fr 0.9fr', gap: 8,
-          padding: '10px 16px', borderBottom: `1px solid ${DARK.border}`,
-          background: i % 2 === 0 ? 'transparent' : DARK.cardMut,
-          fontSize: 11, alignItems: 'center',
-        }}>
-          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)', fontSize: 11, color: DARK.text }}>{row.id}</span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: DARK.text }}>{row.dia}</span>
-          <span style={{ color: DARK.muted }}>{row.mat}</span>
-          <span style={{ color: DARK.muted }}>{row.age}</span>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 9999, background: `${row.c}1A`, color: row.c, fontSize: 10, fontWeight: 700, border: `1px solid ${row.c}44`, width: 'fit-content' }}>{row.cond}</span>
         </div>
-      ))}
-      {/* Summary */}
-      <div style={{ padding: '10px 16px', display: 'flex', gap: 24, background: DARK.cardMut, borderTop: `1px solid ${DARK.border}` }}>
-        {[['142','total segments'],['23%','need review'],['4','critical age']].map(([v,l]) => (
-          <div key={l}>
-            <span style={{ fontSize: 16, fontWeight: 700, color: DARK.text, fontFamily: 'var(--font-mono)' }}>{v} </span>
-            <span style={{ fontSize: 11, color: DARK.muted }}>{l}</span>
-          </div>
-        ))}
       </div>
-    </div>
+    </section>
   );
 }
 
-function NRWScreen() {
-  const bars = [
-    { zone: 'DMA North', pct: 18, c: '#ef4444' },
-    { zone: 'DMA South', pct: 11, c: '#f59e0b' },
-    { zone: 'Industrial', pct:  8, c: '#3b82f6' },
-    { zone: 'CBD',        pct:  6, c: '#22c55e' },
-    { zone: 'Residential E', pct: 5, c: '#22c55e' },
-  ];
+function MiniLine({ points, metric }: { points: Point[]; metric: Metric }) {
+  const w = 300, h = 70;
+  const lo = Math.min(...points.map(p => p.v), METRICS[metric].normal[0] === -Infinity ? 0 : METRICS[metric].normal[0]);
+  const hi = Math.max(...points.map(p => p.v));
+  const x = (i: number) => (i / (points.length - 1)) * w;
+  const y = (v: number) => h - 4 - ((v - lo) / (hi - lo || 1)) * (h - 8);
+  const lim = METRICS[metric].normal[1];
   return (
-    <div className="sv-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: DARK.text }}>Loss by DMA Zone</div>
-        <div style={{ fontSize: 11, color: DARK.muted }}>Last 30 days · updated hourly</div>
-      </div>
-      {/* KPI row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
-        {[['Total NRW','12.4%','#ef4444'],['Billed Water','87.6%','#22c55e'],['Night Min Flow','1.8 L/s','#f59e0b']].map(([l,v,c]) => (
-          <div key={l} style={{ background: DARK.card, border: `1px solid ${DARK.border}`, borderRadius: 8, padding: '10px 12px' }}>
-            <div style={{ fontSize: 9, color: DARK.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{l}</div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: c, fontFamily: 'var(--font-mono)' }}>{v}</div>
-          </div>
-        ))}
-      </div>
-      {/* Bar chart */}
-      <div style={{ background: DARK.card, border: `1px solid ${DARK.border}`, borderRadius: 8, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {bars.map(b => (
-          <div key={b.zone} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ width: 100, fontSize: 11, color: DARK.text, flexShrink: 0 }}>{b.zone}</div>
-            <div style={{ flex: 1, height: 12, borderRadius: 6, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
-              <div style={{ width: `${(b.pct / 20) * 100}%`, height: '100%', background: b.c, borderRadius: 6 }} />
-            </div>
-            <div style={{ width: 38, fontSize: 12, fontWeight: 700, color: b.c, fontFamily: 'var(--font-mono)', textAlign: 'right', flexShrink: 0 }}>{b.pct}%</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ─── Data ─── */
-const TESTIMONIALS = [
-  { quote: 'We can now see every pipe segment on the map with its diameter and material. Before, that data lived in spreadsheets nobody could find.', name: 'Michael Grant', org: 'Head of Operations · Riverton Water & Sanitation Co.', initials: 'MG' },
-  { quote: 'The pressure sensor feeds caught a zone anomaly at 02:30 AM. We had a crew on site before the first customer complaint came in.', name: 'Amina Odhiambo', org: 'Network Engineer · Nakuru Urban Water', initials: 'AO' },
-  { quote: 'Tank level alerts mean operations know a reservoir is getting low before it ever hits a service interruption. It changed our night shifts.', name: 'Samuel Kipchoge', org: 'Operations Director · Eldoret Water', initials: 'SK' },
-];
-
-const FEATURES = [
-  { title: 'GIS Pipe Network Map', desc: 'Import shapefiles or draw your distribution network. Every pipe mapped with diameter, material, age, and pressure rating.', badge: 'Core module', icon: <><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></> },
-  { title: 'Pressure & Flow Sensors', desc: 'Real-time readings from every sensor node. Pressure charts, flow meter feeds, and threshold monitoring across all DMAs.', badge: null, icon: <><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></> },
-  { title: 'Leak Detection & Localisation', desc: 'Pressure-drop pattern analysis flags anomalies within seconds and highlights the probable pipe segment on the GIS map.', badge: 'Differentiator', icon: <><path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z"/></> },
-  { title: 'Tank & Reservoir Levels', desc: 'Water level sensors on every tank stream live fill percentage, fill rate, drain rate, and estimated time-to-empty.', badge: null, icon: <><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></> },
-  { title: 'Asset Register', desc: 'Click any asset on the map to see its full profile. Query your network by age, material, or condition to plan rehabilitation.', badge: null, icon: <><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></> },
-  { title: 'NRW & Loss Analytics', desc: 'Hourly non-revenue water percentages by DMA. Night minimum flow analysis for background leakage baseline.', badge: null, icon: <><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></> },
-  { title: 'Water Quality Monitoring', desc: 'pH, chlorine residual, turbidity, and conductivity sensors tracked alongside pressure and flow in the same dashboard.', badge: null, icon: <><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></> },
-  { title: 'Historical Replay', desc: 'Replay any sensor, zone, or network event over 90 days. Compare against baselines and seasonal patterns.', badge: null, icon: <><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></> },
-  { title: 'Operational Reports', desc: 'Daily, weekly, and monthly exports for regulators, board meetings, and internal reviews. Scheduled or on demand.', badge: null, icon: <><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></> },
-];
-
-/* ─── Icon helpers ─── */
-/**
- * Aperture A — Aquawise primary mark.
- * Three nested chevrons sharing an apex at (32, 14), baseline y=50,
- * stroke 3.5u, round caps, layer opacities 1.0 / 0.50 / 0.22.
- */
-function LogoMark({ size }: { size: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 64 64" fill="none" aria-label="Aquawise">
-      <path d="M12 50 L32 14 L52 50" stroke="currentColor" strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M21 50 L32 14 L43 50" stroke="currentColor" strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round" opacity={0.5} />
-      <path d="M29 50 L32 14 L35 50" stroke="currentColor" strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round" opacity={0.22} />
+    <svg className="bx-spark" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden="true">
+      {Number.isFinite(lim) && lim < hi && <line x1={0} x2={w} y1={y(lim)} y2={y(lim)} className="lim" />}
+      <path d={points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.v).toFixed(1)}`).join('')} />
     </svg>
   );
 }
-function SunIcon() {
+
+/* ═════════════ shared editorial chart ═════════════ */
+interface Annotation { t: number; title: string; sub?: string; tone: Tone }
+function EdChart({ points, metric, dark, height = 380, annotations = [], drawn }: {
+  points: Point[]; metric: Metric; dark?: boolean; height?: number; annotations?: Annotation[]; drawn: boolean;
+}) {
+  const [ref, W] = useWidth<HTMLDivElement>();
+  const def = METRICS[metric];
+  const pad = { l: 0, r: 0, t: annotations.length ? 30 + annotations.length * 38 : 16, b: 30 };
+  const iw = W - pad.l - pad.r; const ih = height - pad.t - pad.b;
+  const t0 = points[0].t; const t1 = points[points.length - 1].t;
+  let lo = Math.min(...points.map(p => p.v)); let hi = Math.max(...points.map(p => p.v));
+  if (Number.isFinite(def.normal[1]) && def.normal[1] < hi * 1.6) hi = Math.max(hi, def.normal[1]);
+  if (Number.isFinite(def.normal[0]) && def.normal[0] > lo - (hi - lo)) lo = Math.min(lo, def.normal[0]);
+  const span = hi - lo || 1; lo -= span * 0.1; hi += span * 0.12;
+  const x = (t: number) => pad.l + ((t - t0) / (t1 - t0 || 1)) * iw;
+  const y = (v: number) => pad.t + (1 - (v - lo) / (hi - lo)) * ih;
+  const d = points.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join('');
+  const bandTop = y(Math.min(Number.isFinite(def.normal[1]) ? def.normal[1] : hi, hi));
+  const bandBot = y(Math.max(Number.isFinite(def.normal[0]) ? def.normal[0] : lo, lo));
+  // contiguous out-of-range runs, drawn over the base line
+  const runs: Array<{ d: string; tone: Tone }> = [];
+  let cur: Point[] = []; let curTone: Tone = 'ok';
+  points.forEach((p, i) => {
+    const tone = toneFor(metric, p.v);
+    if (tone !== 'ok') { if (!cur.length && i) cur.push(points[i - 1]); cur.push(p); if (tone === 'crit') curTone = 'crit'; else if (curTone !== 'crit') curTone = 'warn'; }
+    else if (cur.length) { cur.push(p); runs.push({ d: cur.map((q, j) => `${j ? 'L' : 'M'}${x(q.t).toFixed(1)},${y(q.v).toFixed(1)}`).join(''), tone: curTone }); cur = []; curTone = 'ok'; }
+  });
+  if (cur.length > 1) runs.push({ d: cur.map((q, j) => `${j ? 'L' : 'M'}${x(q.t).toFixed(1)},${y(q.v).toFixed(1)}`).join(''), tone: curTone });
+  const spanMs = t1 - t0;
+  const tick = (t: number) => spanMs <= 2.2 * 86_400_000 ? fmtClock(t) : new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  const nTicks = Math.max(3, Math.min(8, Math.floor(iw / 150)));
+  const ticks = Array.from({ length: nTicks }, (_, i) => t0 + (spanMs * i) / (nTicks - 1));
+
   return (
-    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-      <circle cx={12} cy={12} r={4} />
-      <line x1={12} y1={2} x2={12} y2={4}/><line x1={12} y1={20} x2={12} y2={22}/>
-      <line x1={4.93} y1={4.93} x2={6.34} y2={6.34}/><line x1={17.66} y1={17.66} x2={19.07} y2={19.07}/>
-      <line x1={2} y1={12} x2={4} y2={12}/><line x1={20} y1={12} x2={22} y2={12}/>
-      <line x1={4.93} y1={19.07} x2={6.34} y2={17.66}/><line x1={17.66} y1={6.34} x2={19.07} y2={4.93}/>
+    <div className={`ed-chart${dark ? ' dark' : ''}${drawn ? ' drawn' : ''}`} ref={ref} style={{ height }}>
+      <svg width={W} height={height} role="img" aria-label={`${def.label} over time`}>
+        {bandBot > bandTop && <rect x={pad.l} width={iw} y={bandTop} height={bandBot - bandTop} className="band" />}
+        {(['normal', 'crit'] as const).flatMap(k => def[k].map((v, j) => Number.isFinite(v) && v > lo && v < hi
+          ? <g key={`${k}${j}`}><line x1={pad.l} x2={W} y1={y(v)} y2={y(v)} className={`thr ${k === 'crit' ? 'crit' : 'warn'}`} /><text x={W - 4} y={y(v) - 6} textAnchor="end" className="thr-l">{k === 'crit' ? 'critical' : 'limit'} {v}{def.unit ? ` ${def.unit}` : ''}</text></g>
+          : null))}
+        <path d={`${d}L${x(t1)},${pad.t + ih}L${x(t0)},${pad.t + ih}Z`} className="area" />
+        <path d={d} className="line" pathLength={1} />
+        {runs.map((r, i) => <path key={i} d={r.d} className={`run ${r.tone}`} />)}
+        {annotations.map((a, i) => {
+          const ax = x(a.t); const right = ax > W * 0.72;
+          const ly = 14 + i * 38;
+          const v = points.reduce((best, p) => Math.abs(p.t - a.t) < Math.abs(best.t - a.t) ? p : best, points[0]).v;
+          return (
+            <g key={i} className={`ann ${a.tone}`} style={{ transitionDelay: `${1.1 + i * 0.25}s` }}>
+              <line x1={ax} x2={ax} y1={ly + 22} y2={y(v)} />
+              <circle cx={ax} cy={y(v)} r={4.5} />
+              <text x={right ? ax - 8 : ax + 8} y={ly} textAnchor={right ? 'end' : 'start'} className="ann-t">{a.title}</text>
+              {a.sub && <text x={right ? ax - 8 : ax + 8} y={ly + 15} textAnchor={right ? 'end' : 'start'} className="ann-s">{a.sub}</text>}
+            </g>
+          );
+        })}
+        {ticks.map((t, i) => <text key={i} x={x(t)} y={height - 8} className="axis" textAnchor={i === 0 ? 'start' : i === ticks.length - 1 ? 'end' : 'middle'}>{tick(t)}</text>)}
+      </svg>
+    </div>
+  );
+}
+
+/* ═════════════ 4 · MONITORING (dark) ═════════════ */
+type MonKey = 'quality' | 'pressure' | 'tanks' | 'sensors';
+function Monitor({ assets }: { assets: Record<string, AssetProps> | null }) {
+  const [ref, seen] = useInView<HTMLDivElement>(0.25);
+  const [view, setView] = useState<MonKey>('quality');
+  const [param, setParam] = useState<Metric>('turbidity');
+  const spec = rangeSpec('7D');
+  const data = useMemo(() => {
+    if (view === 'pressure' && assets?.['SN-12']) return { metric: 'pressure' as Metric, label: 'Pressure · Northgate logger SN-12', pts: series('pressure', 'SN-12', Number(assets['SN-12'].pressure_bar), spec) };
+    if (view === 'tanks' && assets?.['TANK-01']) return { metric: 'level' as Metric, label: 'Level · Reservoir 01', pts: series('level', 'TANK-01', Number(assets['TANK-01'].level_pct), spec) };
+    return { metric: param, label: `${METRICS[param].label} · Riverside booster`, pts: series(param, WQ_MIL.id, WQ_MIL.base[param as keyof typeof WQ_MIL.base], spec) };
+  }, [view, param, assets, spec]);
+  const now = data.pts[data.pts.length - 1].v;
+  const tone = toneFor(data.metric, now);
+  const items: Array<{ k: MonKey; label: string; sub: string }> = [
+    { k: 'quality', label: 'Water Quality', sub: 'Turbidity, pH, chlorine, conductivity, temperature' },
+    { k: 'pressure', label: 'Pressure', sub: '26 loggers, anomalies marked' },
+    { k: 'tanks', label: 'Tank Levels', sub: 'Six reservoirs, fill and drawdown' },
+    { k: 'sensors', label: 'Sensors', sub: '40 devices · battery, signal, last contact' }
+  ];
+
+  return (
+    <section className="ed-sec ed-dark" id="monitor">
+      <div className="ed-wrap ed-grid">
+        <p className="ed-label rv" style={{ gridColumn: '1 / span 4' }}><b>03</b> / Monitor</p>
+        <h2 className="ed-h1 rv" style={{ gridColumn: '1 / span 11' }}>Water changes. <span className="muted">AquaWise watches.</span></h2>
+      </div>
+      <div className="ed-wrap ed-grid ed-mon" ref={ref}>
+        <ul className="ed-mon-nav rv" style={{ gridColumn: '1 / span 3' }}>
+          {items.map(i => (
+            <li key={i.k}>
+              <button type="button" className={view === i.k ? 'on' : ''} onClick={() => setView(i.k)} aria-pressed={view === i.k}>
+                <b>{i.label}</b><span>{i.sub}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+        <div className="ed-mon-main" style={{ gridColumn: '4 / -1' }}>
+          {view === 'sensors' ? (
+            <div className="ed-sensors">
+              <div><b><Count to={36} /></b><span>online</span></div>
+              <div><b className="warn">2</b><span>low battery or weak signal</span></div>
+              <div><b className="off">2</b><span>offline · flagged automatically</span></div>
+              <p>Sensors are how readings reach AquaWise. Their health is monitored separately from what they measure, so a silent logger is never mistaken for a quiet network.</p>
+            </div>
+          ) : (
+            <>
+              <div className="ed-mon-head">
+                <div>
+                  <span className="ed-mini">{data.label} · last 7 days</span>
+                  <div className={`ed-mon-now ${tone}`}>{now.toFixed(METRICS[data.metric].decimals)}<small>{METRICS[data.metric].unit}</small></div>
+                </div>
+                {view === 'quality' && (
+                  <div className="ed-params" role="radiogroup" aria-label="Parameter">
+                    {QUALITY_METRICS.map(m => (
+                      <button key={m} type="button" role="radio" aria-checked={param === m} className={param === m ? 'on' : ''} onClick={() => setParam(m)}>
+                        {METRICS[m].label.replace('Residual chlorine', 'Chlorine')}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="ed-bleed">
+                <EdChart key={`${view}-${param}`} points={data.pts} metric={data.metric} dark height={420} drawn={seen} />
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ═════════════ 5 · WATER QUALITY STORY ═════════════ */
+function QualityStory() {
+  const [ref, seen] = useInView<HTMLDivElement>(0.3);
+  // A resolved Riverside turbidity event from the demo history (22 days ago).
+  const story = useMemo(() => {
+    const evStart = NOW - 22 * 24 * HOURS; const evEnd = NOW - (22 * 24 - 10) * HOURS;
+    const pts = seriesWindow('turbidity', WQ_MIL.id, WQ_MIL.base.turbidity, evStart - 14 * HOURS, evEnd + 14 * HOURS, 220);
+    const over = pts.find(p => p.v > 1.0);
+    const peak = pts.reduce((a, b) => (b.v > a.v ? b : a), pts[0]);
+    const back = pts.find(p => p.t > peak.t && p.v <= 1.0);
+    const anns: Annotation[] = [];
+    if (over) anns.push({ t: over.t, title: fmtClock(over.t), sub: 'Turbidity threshold exceeded', tone: 'warn' });
+    anns.push({ t: peak.t, title: `${peak.v.toFixed(2)} NTU`, sub: 'Peak reading', tone: 'warn' });
+    if (back) anns.push({ t: back.t, title: fmtClock(back.t), sub: 'Returned to acceptable range', tone: 'ok' });
+    return { pts, anns, date: new Date(evStart).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' }), hours: over && back ? Math.round((back.t - over.t) / HOURS) : null };
+  }, []);
+
+  return (
+    <section className="ed-sec">
+      <div className="ed-wrap ed-grid">
+        <p className="ed-label rv" style={{ gridColumn: '1 / span 4' }}><b>04</b> / Water quality</p>
+        <h2 className="ed-h1 rv" style={{ gridColumn: '1 / -1' }}>
+          Not just what the water <br className="br-lg" />looks like now. <span className="muted">How it’s changing.</span>
+        </h2>
+      </div>
+      <div className="ed-wrap" ref={ref}>
+        <div className="ed-story-meta rv">
+          <span>Riverside · Elm Rd booster</span><span>Turbidity, NTU</span><span>{story.date}</span>
+          {story.hours !== null && <span>Out of range for {story.hours} h</span>}
+        </div>
+        <EdChart points={story.pts} metric="turbidity" height={460} annotations={story.anns} drawn={seen} />
+        <div className="ed-grid ed-story-foot">
+          <p className="rv" style={{ gridColumn: '1 / span 5' }}>Every reading is kept. Thresholds are drawn on the history itself, so a breach shows when it started, how far it went and when it cleared — not just that an alarm fired.</p>
+          <p className="ed-mini rv" style={{ gridColumn: '9 / span 4', alignSelf: 'end' }}>Shaded band: acceptable range (≤ 1.0 NTU). Amber: above limit.</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ═════════════ 6 · INFRASTRUCTURE ═════════════ */
+function Infrastructure() {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current; if (!el || reduced()) return;
+    const img = el.querySelector('.ed-infra-layer') as HTMLDivElement;
+    let raf = 0;
+    const on = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const r = el.getBoundingClientRect();
+        const k = Math.max(-1, Math.min(1, (r.top + r.height / 2 - innerHeight / 2) / innerHeight));
+        img.style.transform = `translate3d(0, ${(k * -4).toFixed(2)}%, 0) scale(1.12)`;
+      });
+    };
+    on(); addEventListener('scroll', on, { passive: true });
+    return () => { removeEventListener('scroll', on); cancelAnimationFrame(raf); };
+  }, []);
+  const labels: Array<{ x: number; y: number; t: string; s: string; side?: 'l' }> = [
+    { x: 43, y: 50, t: 'Pressure & flow logger', s: 'reports every 15 min' },
+    { x: 33, y: 22, t: 'Storage reservoir', s: 'level sensor · capacity in m³', side: 'l' },
+    { x: 62, y: 62, t: 'Gate valve', s: 'in the asset register, on the map' },
+    { x: 84, y: 66, t: 'Treatment basin', s: 'quality sampling point', side: 'l' }
+  ];
+  return (
+    <section className="ed-infra" ref={ref} aria-label="Physical infrastructure, digital intelligence">
+      <div className="ed-infra-layer">
+        <img src="/img/reservoir-pipes.jpg" alt="Water reservoir, distribution mains and a telemetry unit at sunset" />
+        {labels.map((l, i) => (
+          <span key={i} className={`ed-pin rv${l.side ? ' l' : ''}`} style={{ left: `${l.x}%`, top: `${l.y}%`, transitionDelay: `${0.2 + i * 0.15}s` }}>
+            <i /><span><b>{l.t}</b>{l.s}</span>
+          </span>
+        ))}
+      </div>
+      <div className="ed-infra-shade" />
+      <div className="ed-wrap ed-infra-text">
+        <h2 className="ed-h1 rv">Physical infrastructure. <span className="muted">Digital intelligence.</span></h2>
+      </div>
+    </section>
+  );
+}
+
+/* ═════════════ 7 · LOSSES ═════════════ */
+function Losses({ nrw }: { nrw: ReturnType<typeof buildNrwMonthly> }) {
+  const [ref, seen] = useInView<HTMLDivElement>(0.3);
+  const last = nrw[nrw.length - 1]; const prev = nrw[nrw.length - 2];
+  const zones = [...ZONE_SEED].sort((a, b) => b.nrw - a.nrw);
+  return (
+    <section className="ed-sec" id="nrw">
+      <div className="ed-wrap ed-grid">
+        <p className="ed-label rv" style={{ gridColumn: '1 / span 4' }}><b>05</b> / Non-revenue water</p>
+        <h2 className="ed-h1 rv" style={{ gridColumn: '1 / span 7' }}>Find the water <span className="muted">you’re losing.</span></h2>
+        <div className="ed-nrw-big rv" style={{ gridColumn: '9 / span 4' }}>
+          <b><Count to={last.nrw} decimals={1} />%</b>
+          <span>Current NRW across seven zones</span>
+          <span className="good">▼ {(prev.nrw - last.nrw).toFixed(1)} pts on last month</span>
+        </div>
+      </div>
+      <div className="ed-wrap ed-grid ed-nrw-body">
+        <div className={`ed-rank${seen ? ' drawn' : ''}`} ref={ref} style={{ gridColumn: '1 / span 6' }}>
+          {zones.map((z, i) => {
+            const tone = z.nrw >= 35 ? 'crit' : z.nrw >= 25 ? 'warn' : 'ok';
+            return (
+              <div key={z.code} className="ed-rank-row" style={{ transitionDelay: `${i * 0.07}s` }}>
+                <span className="nm">{zoneLabel(z.code)}</span>
+                <span className="tr"><span className={`fill ${tone}`} style={{ width: `${(z.nrw / 45) * 100}%`, transitionDelay: `${0.15 + i * 0.07}s` }} /></span>
+                <span className="v">{z.nrw.toFixed(1)}%</span>
+                <span className={`d ${z.nrw > z.nrwPrev ? 'up' : 'down'}`}>{z.nrw > z.nrwPrev ? '▲' : '▼'} {Math.abs(z.nrw - z.nrwPrev).toFixed(1)}</span>
+              </div>
+            );
+          })}
+          <p className="ed-note">Riverside has the highest loss and it is still rising, alongside three pressure anomalies this month. That is where to look first.</p>
+        </div>
+        <figure className="ed-nrw-map rv" style={{ gridColumn: '7 / -1' }}>
+          <img src="/img/ui/crop-nrw-map.webp" alt="AquaWise map with pipes coloured by zone NRW and open leak reports" />
+        </figure>
+      </div>
+    </section>
+  );
+}
+
+/* ═════════════ 8 · PRODUCT EXPLORER ═════════════ */
+const VIEWS = [
+  { k: 'overview', label: 'Overview', cap: 'What is happening across the utility right now — status first, readings second.' },
+  { k: 'network', label: 'Network', cap: 'The physical network on the map, every element one click from its data.' },
+  { k: 'monitoring', label: 'Monitoring', cap: 'Water quality, pressure and storage over time, with thresholds on the history.' },
+  { k: 'alerts', label: 'Alerts', cap: 'Incidents with the data around the event, ready to acknowledge and resolve.' },
+  { k: 'nrw', label: 'NRW', cap: 'Losses ranked by zone, so investigation starts where it matters.' },
+  { k: 'reports', label: 'Reports', cap: 'Regulator-ready reports generated from the same monitored data.' }
+] as const;
+
+function Explorer({ onDemo }: { onDemo: () => void }) {
+  const [i, setI] = useState(0);
+  return (
+    <section className="ed-sec ed-tint ed-explorer" id="product">
+      <div className="ed-wrap ed-center">
+        <p className="ed-label rv"><b>06</b> / The product</p>
+        <h2 className="ed-h1 rv">One platform. <span className="muted">Your entire network.</span></h2>
+        <div className="ed-tabs rv" role="tablist" aria-label="Product views">
+          {VIEWS.map((v, j) => (
+            <button key={v.k} role="tab" type="button" aria-selected={i === j} className={i === j ? 'on' : ''} onClick={() => setI(j)}>{v.label}</button>
+          ))}
+        </div>
+        <p className="ed-tab-cap" aria-live="polite">{VIEWS[i].cap}</p>
+      </div>
+      <div className="ed-shot-wrap rv">
+        <div className="ed-shot">
+          {VIEWS.map((v, j) => (
+            <img key={v.k} src={`/img/ui/view-${v.k}.webp`} alt={`AquaWise ${v.label} screen`} className={i === j ? 'on' : ''} loading={j ? 'lazy' : undefined} />
+          ))}
+        </div>
+        <button type="button" className="ed-btn ed-btn-blue ed-shot-cta" onClick={onDemo}>Open the live demo <Arrow /></button>
+      </div>
+    </section>
+  );
+}
+
+/* ═════════════ 9 · OUTCOMES ═════════════ */
+function Outcomes() {
+  return (
+    <section className="ed-sec">
+      <div className="ed-wrap ed-grid">
+        <p className="ed-label rv" style={{ gridColumn: '1 / span 4' }}><b>07</b> / In the Riverton network</p>
+        <h2 className="ed-h2 rv" style={{ gridColumn: '1 / span 8' }}>What a utility sees <span className="muted">on day one.</span></h2>
+      </div>
+      <div className="ed-wrap">
+        <div className="ed-report">
+          <div className="rv"><b><Count to={716} /><small>km</small></b><span>of pipe network mapped</span></div>
+          <div className="rv"><b><Count to={3317} /></b><span>assets in one register</span></div>
+          <div className="rv"><b><Count to={40} /></b><span>monitoring points and sensors</span></div>
+          <div className="rv"><b><Count to={15} /><small>min</small></b><span>between readings</span></div>
+          <div className="rv"><b>24/7</b><span>monitoring, with thresholds on every parameter</span></div>
+          <div className="rv"><b>One</b><span>connected operational view</span></div>
+        </div>
+        <p className="ed-mini ed-source rv">Figures describe the Riverton demonstration network in the live demo.</p>
+      </div>
+    </section>
+  );
+}
+
+/* ═════════════ FINAL ═════════════ */
+function Final({ onDemo, onTalk }: { onDemo: () => void; onTalk: () => void }) {
+  return (
+    <footer className="ed-final">
+      <div className="ed-wrap ed-final-in">
+        <p className="ed-label light rv">Ready to see your network differently?</p>
+        <h2 className="ed-giant rv">Your water network <span className="muted">shouldn’t be invisible.</span></h2>
+        <div className="ed-row rv">
+          <button type="button" className="ed-btn ed-btn-white" onClick={onDemo}>Explore AquaWise <Arrow /></button>
+          <button type="button" className="ed-btn ed-btn-ghost" onClick={onTalk}>Talk to us</button>
+        </div>
+      </div>
+      <div className="ed-wrap ed-foot">
+        <Link to="/" className="ed-brand light"><Mark /><span>Aqua<b>Wise</b></span></Link>
+        <nav aria-label="Footer">
+          <Link to="/overview">Overview</Link><Link to="/network">Network</Link><Link to="/monitoring">Monitoring</Link>
+          <Link to="/alerts">Alerts</Link><Link to="/nrw">NRW</Link><Link to="/assets">Assets</Link><Link to="/reports">Reports</Link>
+        </nav>
+        <span>© {new Date().getFullYear()} AquaWise · The smart water grid for water utilities</span>
+      </div>
+    </footer>
+  );
+}
+
+/* ═════════════ marks ═════════════ */
+function Mark() {
+  return (
+    <svg width={22} height={22} viewBox="0 0 64 64" fill="none" aria-hidden="true">
+      <path d="M12 50 L32 14 L52 50" stroke="currentColor" strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M21 50 L32 14 L43 50" stroke="currentColor" strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" opacity={0.5} />
+      <path d="M29 50 L32 14 L35 50" stroke="currentColor" strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" opacity={0.22} />
     </svg>
   );
 }
-function MoonIcon() {
+function Arrow() {
   return (
-    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-      <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+    <svg width={14} height={14} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M5 11 11 5M6 5h5v5" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
