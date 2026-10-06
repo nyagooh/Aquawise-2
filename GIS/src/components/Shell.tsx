@@ -1,18 +1,24 @@
 import { ReactNode, useEffect, useState } from 'react';
-import { Sidebar } from './Sidebar';
+import { Sidebar, type Active } from './Sidebar';
 import { Topbar } from './Topbar';
+import '../demo/demo.css';
 
 type Props = {
-  active: 'dashboard' | 'gis' | 'alerts' | 'leaks' | 'nrw' | 'sensors' | 'reports';
+  active: Active;
   title: string;
   sub?: string;
   children: ReactNode;
   pagePadding?: boolean;
+  /** Which global filters this page responds to. */
+  filters?: { zone?: boolean; range?: boolean };
+  /** Overrides the page heading (e.g. a greeting on Overview). */
+  greeting?: string;
+  headRight?: ReactNode;
   /** @deprecated retained for source compatibility — the right rail has been removed. */
   hideRightRail?: boolean;
 };
 
-export function Shell({ active, title, sub, children, pagePadding = true }: Props) {
+export function Shell({ active, title, sub, children, pagePadding = true, filters, greeting, headRight }: Props) {
   const [navCollapsed, setNavCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('aw-nav-collapsed') === '1';
@@ -33,9 +39,19 @@ export function Shell({ active, title, sub, children, pagePadding = true }: Prop
         <Topbar
           title={title}
           sub={sub}
+          filters={filters}
           onToggleNav={() => setNavCollapsed(v => !v)}
         />
         <div className="page" style={pagePadding ? undefined : { padding: 0, flex: 1 }}>
+          {pagePadding && (
+            <div className="aw-pagehead">
+              <div>
+                <h1>{greeting ?? title}</h1>
+                {sub && <p>{sub}</p>}
+              </div>
+              {headRight}
+            </div>
+          )}
           {children}
         </div>
         <footer className="app-footer">

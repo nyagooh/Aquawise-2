@@ -1,14 +1,22 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { zones, sensors, pipes } from '../data';
+import { useFilters } from '../demo/filters';
+import { useTheme } from '../theme';
+import { useOps } from '../demo/model';
+import { withState, useIncidentState } from '../demo/incidentState';
+import type { RangeKey } from '../demo/series';
+import { ZONE_CODES, zoneName } from '../demo/model';
 
 type Props = {
   title: string;
   sub?: string;
   onToggleNav?: () => void;
+  filters?: { zone?: boolean; range?: boolean };
 };
 
-export function Topbar({ title, sub, onToggleNav }: Props) {
+export function Topbar({ title, sub, onToggleNav, filters }: Props) {
+  const f = useFilters();
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -44,36 +52,31 @@ export function Topbar({ title, sub, onToggleNav }: Props) {
   const go = (kind: 'zone' | 'sensor' | 'pipe', id: string) => {
     setOpen(false);
     setQuery('');
-    navigate(`/gis?focus=${kind}:${id}`);
+    navigate(`/network?focus=${kind}:${id}`);
   };
 
+  const { mode, toggle } = useTheme();
+  const ops = useOps();
+  useIncidentState();
+  const active = ops ? withState(ops.incidents).filter(i => i.status === 'active').length : 0;
   return (
-    <header className="topbar">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        {onToggleNav && (
-          <button className="topbar-icon-btn" onClick={onToggleNav} title="Toggle navigation">
-            <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-              <line x1={3} y1={6} x2={21} y2={6} />
-              <line x1={3} y1={12} x2={21} y2={12} />
-              <line x1={3} y1={18} x2={21} y2={18} />
-            </svg>
-          </button>
-        )}
-        <div>
-        <div className="tb-title">{title}</div>
-        {sub && <div className="tb-sub">{sub}</div>}
-        </div>
-      </div>
+    <header className="topbar aw-tb">
+      {onToggleNav && (
+        <button className="aw-tb-icon" onClick={onToggleNav} title="Collapse navigation" aria-label="Collapse navigation">
+          <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><rect x={3} y={4} width={18} height={16} rx={2} /><path d="M9 4v16" /></svg>
+        </button>
+      )}
       <div className="search" ref={containerRef}>
         <svg className="search-icon" width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
           <circle cx={11} cy={11} r={8} />
           <line x1={21} y1={21} x2={16.65} y2={16.65} />
         </svg>
+        <kbd className="aw-kbd">⌘ K</kbd>
         <input
           ref={inputRef}
           className="search-input"
           type="search"
-          placeholder="Search zones, sensors, pipes…"
+          placeholder="Search network, sensors, assets…"
           autoComplete="off"
           value={query}
           onChange={e => { setQuery(e.target.value); setOpen(!!e.target.value); }}
@@ -140,6 +143,35 @@ export function Topbar({ title, sub, onToggleNav }: Props) {
             )}
           </div>
         )}
+      </div>
+      <div className="aw-tb-right">
+        {filters?.range && (
+          <label className="aw-pill-select">
+            <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden="true"><rect x={3} y={5} width={18} height={16} rx={2} /><path d="M3 10h18M8 3v4M16 3v4" /></svg>
+            <select value={f.range} onChange={e => f.setRange(e.target.value as RangeKey)} aria-label="Date range">
+              <option value="24H">Last 24 hours</option><option value="7D">Last 7 days</option><option value="30D">Last 30 days</option><option value="3M">Last 3 months</option>
+            </select>
+          </label>
+        )}
+        {filters?.zone && (
+          <label className="aw-pill-select">
+            <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden="true"><path d="M4 21V9l5-3v15M9 21V4l6 3v14M15 21v-9l5 2v7" /></svg>
+            <select value={f.zone} onChange={e => f.setZone(e.target.value)} aria-label="Zone">
+              <option value="ALL">Riverton · all zones</option>
+              {ZONE_CODES.map(z => <option key={z} value={z}>{zoneName(z)}</option>)}
+            </select>
+          </label>
+        )}
+        <button className="aw-tb-icon" onClick={toggle} title={`Switch to ${mode === 'dark' ? 'light' : 'dark'} mode`} aria-label="Toggle theme">
+          {mode === 'dark'
+            ? <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><circle cx={12} cy={12} r={4} /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>
+            : <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z" /></svg>}
+        </button>
+        <Link to="/alerts" className="aw-tb-icon aw-bell" aria-label={`Alerts, ${active} active`}>
+          <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4l2-2z" /><path d="M10 21h4" /></svg>
+          {active > 0 && <i />}
+        </Link>
+        <span className="aw-avatar" title="Demo user · read-only">AM</span>
       </div>
     </header>
   );
