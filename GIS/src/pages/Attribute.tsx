@@ -84,7 +84,7 @@ export default function Attribute() {
       : 'Loading attribute table…';
 
   return (
-    <Shell active="gis" title="Attribute Table" sub={sub}>
+    <Shell active="assets" title="Pipe attribute table" sub={sub}>
       <section style={{ display: 'flex', flexDirection: 'column', gap: 'var(--s3)', minHeight: 0 }}>
         <div style={{ display: 'flex', gap: 'var(--s3)', alignItems: 'center', flexWrap: 'wrap' }}>
           <input
