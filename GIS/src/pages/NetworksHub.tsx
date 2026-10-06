@@ -85,7 +85,7 @@ function ChooserView() {
   const selectNetwork = (id: string) => {
     localStorage.setItem('activeNetworkId', id);
     clearNetworkCache();
-    navigate('/gis');
+    navigate('/overview');
   };
 
   const deleteNetwork = async (id: string, e: React.MouseEvent) => {
@@ -348,7 +348,7 @@ function UploadView() {
       }
 
       clearNetworkCache();
-      navigate('/gis');
+      navigate('/overview');
     } catch (err: any) {
       alert(`Ingestion error: ${err.message}`);
     } finally {
@@ -472,7 +472,7 @@ function UploadView() {
                 >
                   {busy ? 'Ingesting…' : 'Ingest & render on live map →'}
                 </button>
-                <button className="btn btn-ghost btn-lg" onClick={() => navigate('/gis')}>
+                <button className="btn btn-ghost btn-lg" onClick={() => navigate('/overview')}>
                   Skip — use Kisumu sandbox
                 </button>
               </div>
