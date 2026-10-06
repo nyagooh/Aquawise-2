@@ -8,10 +8,14 @@
  * profile in the side panel.
  */
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import L from 'leaflet';
 import { Shell } from '../components/Shell';
 import { SidePanel, SpRow } from '../components/SidePanel';
+import { useOps, ago } from '../demo/model';
+import { withState, useIncidentState } from '../demo/incidentState';
+import { LineChart } from '../demo/charts';
+import { series, rangeSpec, type Metric } from '../demo/series';
 import { useTheme } from '../theme';
 import {
   loadNetwork,
@@ -27,14 +31,16 @@ import {
   ASSET_STYLE,
   ASSET_ORDER,
   STATUS_COLOR,
+  QUALITY_SENSOR_COLOR,
+  assetGlyph,
   zoneLabel
 } from '../data/network';
 import { leaks as leakData, type Leak, type LeakSeverity } from '../data';
 
 const LEAK_SEVERITY_COLOR: Record<LeakSeverity, string> = {
-  minor: '#7FAFD2',
-  major: '#D9A156',
-  critical: '#D4675E'
+  minor: '#F59E0B',
+  major: '#EF4444',
+  critical: '#EF4444'
 };
 const LEAK_SEVERITY_LABEL: Record<LeakSeverity, string> = {
   minor: 'Minor', major: 'Major', critical: 'Critical'
@@ -487,7 +493,7 @@ export default function GISMap() {
   }, [network]);
 
   return (
-    <Shell active="gis" title="GIS Map" sub="Water Supply Network · live operational view" pagePadding={false} hideRightRail>
+    <Shell active="network" title="Network" sub="GIS operational view · Riverton water supply network" pagePadding={false} hideRightRail>
       <div className="gis-workspace">
       <WorkspaceToolbar
         basemap={basemap}
@@ -583,13 +589,13 @@ function baseLineStyle(
 ): L.PolylineOptions {
   const p = feat.properties;
   const style = PIPE_STYLE[p.ui_class];
-  const dashArray = p.status === 'closed' ? '8 5' : style.dashArray;
+  const dashArray = p.status === 'closed' ? '6 5' : style.dashArray;
   let color = style.color;
   if (linkBy === 'diameter') {
     const d = p.diameter_mm || 0;
     color = rampColor((d - 25) / (400 - 25));
   } else if (linkBy === 'status') {
-    color = p.status === 'closed' ? '#D4675E' : p.service === 'out-of-service' ? '#D9A156' : '#4FA877';
+    color = p.status === 'closed' ? '#64748B' : p.service === 'out-of-service' ? '#F59E0B' : '#10B981';
   } else if (hasResults && (linkBy === 'flow' || linkBy === 'velocity' || linkBy === 'headloss')) {
     const flow = simFlow(p);
     const dia = p.diameter_mm || 80;
@@ -618,54 +624,33 @@ function assetIcon(feat: AssetFeature): L.DivIcon {
   const status = props.status;
   const palette = ASSET_STYLE[kind];
   const statusColor = STATUS_COLOR[status];
+  const flag = status !== 'ok' ? `<span class="aw-badge-status" style="background:${statusColor}"></span>` : '';
   if (kind === 'tank') {
     const level = (props as { level_pct: number }).level_pct;
-    const lvlColor = level > 70 ? '#22C55E' : level > 35 ? '#F59E0B' : '#EF4444';
+    const lvlColor = level >= 35 ? '#10B981' : level >= 20 ? '#F59E0B' : '#EF4444';
     return L.divIcon({
       className: 'aw-marker',
-      html: `<div class="aw-asset-marker aw-tank" style="--ac:${palette.color};--sc:${statusColor};--lc:${lvlColor}">
-        <div class="aw-tank-shell">
-          <div class="aw-tank-fill" style="height:${level}%"></div>
-          <span class="aw-tank-label">${level}%</span>
-        </div>
+      html: `<div class="aw-pin aw-pin-tank" style="--ac:${palette.color};--lc:${lvlColor}">
+        <div class="aw-pin-head">${assetGlyph('tank', palette.color, 18)}<span class="aw-pin-level"><i style="width:${level}%"></i></span></div>
+        <span class="aw-pin-tag">${level}%</span>
       </div>`,
-      iconSize: [34, 34],
-      iconAnchor: [17, 17]
+      iconSize: [40, 48],
+      iconAnchor: [20, 40]
     });
   }
-  if (kind === 'pressure_valve') {
-    // Standard hydraulic valve bowtie.
+  if (kind === 'pressure_valve' || kind === 'meter_valve') {
     return L.divIcon({
       className: 'aw-marker',
-      html: `<div class="aw-asset-marker aw-prv" style="--ac:${palette.color};--sc:${statusColor}">
-        <svg viewBox="0 0 24 24" width="28" height="28">
-          <polygon points="3,5 3,19 12,12" fill="var(--ac)" stroke="white" stroke-width="2"/>
-          <polygon points="21,5 21,19 12,12" fill="var(--ac)" stroke="white" stroke-width="2"/>
-        </svg>
-        <span class="aw-status-dot" style="background:${statusColor}"></span>
-      </div>`,
-      iconSize: [30, 30],
-      iconAnchor: [15, 15]
+      html: `<div class="aw-badge" style="--ac:${palette.color}">${assetGlyph(kind === 'pressure_valve' ? 'valve' : 'meter', palette.color, 16)}${flag}</div>`,
+      iconSize: [26, 26],
+      iconAnchor: [13, 13]
     });
   }
-  if (kind === 'meter_valve') {
-    // Pump / bulk meter — circle with drive wedge.
-    return L.divIcon({
-      className: 'aw-marker',
-      html: `<div class="aw-asset-marker aw-mv" style="--ac:${palette.color};--sc:${statusColor}">
-        <svg viewBox="0 0 24 24" width="28" height="28">
-          <circle cx="10" cy="14" r="7" fill="var(--ac)" stroke="white" stroke-width="2"/>
-          <polygon points="10,14 19,5 19,14" fill="var(--ac)" stroke="white" stroke-width="2"/>
-        </svg>
-        <span class="aw-status-dot" style="background:${statusColor}"></span>
-      </div>`,
-      iconSize: [30, 30],
-      iconAnchor: [15, 15]
-    });
-  }
+  const sub = (props as { subtype?: string }).subtype;
+  const sensorColor = sub === 'ph' || sub === 'turbidity' ? QUALITY_SENSOR_COLOR : palette.color;
   return L.divIcon({
     className: 'aw-marker',
-    html: `<div class="aw-asset-marker aw-sensor" style="--ac:${palette.color};--sc:${statusColor}">
+    html: `<div class="aw-asset-marker aw-sensor${status !== 'ok' ? ` is-${status}` : ''}" style="--ac:${sensorColor};--sc:${statusColor}">
       <span class="aw-sensor-pulse"></span>
       <span class="aw-sensor-dot"></span>
     </div>`,
@@ -691,12 +676,12 @@ function leakIcon(leak: Leak): L.DivIcon {
   const fixed = leak.status === 'fixed';
   return L.divIcon({
     className: 'aw-marker',
-    html: `<div class="aw-leak-marker${fixed ? ' fixed' : ''}" style="--lk:${color}">
-      ${fixed ? '' : '<span class="aw-leak-pulse"></span>'}
-      <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 2C12 2 5 10 5 15a7 7 0 0 0 14 0c0-5-7-13-7-13z" fill="var(--lk)" stroke="white" stroke-width="1.5"/></svg>
+    html: `<div class="aw-leakpin${fixed ? ' fixed' : ''}" style="--lk:${color}">
+      <svg viewBox="0 0 32 40" width="28" height="35"><path d="M16 1.5C8 1.5 2 7.4 2 15c0 9.6 14 23.5 14 23.5S30 24.6 30 15C30 7.4 24 1.5 16 1.5z" fill="${color}" stroke="#fff" stroke-width="2"/></svg>
+      <span class="aw-leakpin-glyph">${assetGlyph('leak', '#fff', 14)}</span>
     </div>`,
-    iconSize: [22, 22],
-    iconAnchor: [11, 20]
+    iconSize: [28, 35],
+    iconAnchor: [14, 34]
   });
 }
 
@@ -1082,42 +1067,15 @@ function PipeSwatch({ cls }: { cls: PipeClass }) {
 
 function AssetSwatch({ kind }: { kind: AssetKind }) {
   const c = ASSET_STYLE[kind].color;
-  if (kind === 'tank') {
-    // Reservoir / tank — cylinder with a waterline.
+  if (kind === 'sensor') {
     return (
-      <svg width={22} height={22} viewBox="0 0 22 22">
-        <rect x={5} y={3} width={12} height={16} rx={2} fill={c} stroke="#fff" strokeWidth={1.6} />
-        <rect x={5} y={11} width={12} height={8} rx={2} fill="#fff" opacity={0.3} />
-        <line x1={5} y1={11} x2={17} y2={11} stroke="#fff" strokeWidth={1.4} opacity={0.8} />
-      </svg>
+      <span className="aw-swatch-sensors" aria-hidden="true">
+        <i style={{ background: c }} /><i style={{ background: QUALITY_SENSOR_COLOR }} />
+      </span>
     );
   }
-  if (kind === 'pressure_valve') {
-    // Valve (PRV) — standard hydraulic bowtie.
-    return (
-      <svg width={22} height={22} viewBox="0 0 22 22">
-        <polygon points="3,4 3,18 11,11" fill={c} stroke="#fff" strokeWidth={1.6} strokeLinejoin="round" />
-        <polygon points="19,4 19,18 11,11" fill={c} stroke="#fff" strokeWidth={1.6} strokeLinejoin="round" />
-      </svg>
-    );
-  }
-  if (kind === 'meter_valve') {
-    // Pump / bulk meter — circle with drive wedge.
-    return (
-      <svg width={22} height={22} viewBox="0 0 22 22">
-        <circle cx={10} cy={12} r={7} fill={c} stroke="#fff" strokeWidth={1.6} />
-        <polygon points="10,12 19,3 19,12" fill={c} stroke="#fff" strokeWidth={1.6} strokeLinejoin="round" />
-      </svg>
-    );
-  }
-  // Sensor — telemetry node with broadcast arcs.
-  return (
-    <svg width={22} height={22} viewBox="0 0 22 22" fill="none" stroke={c} strokeWidth={2.2} strokeLinecap="round">
-      <circle cx={11} cy={15} r={2.6} fill={c} stroke="none" />
-      <path d="M6.5 10.5a6 6 0 0 1 9 0" opacity={0.85} />
-      <path d="M4 7.5a9.5 9.5 0 0 1 14 0" opacity={0.5} />
-    </svg>
-  );
+  const glyph = assetGlyph(kind === 'tank' ? 'tank' : kind === 'pressure_valve' ? 'valve' : 'meter', c, 14);
+  return <span className={`aw-badge sm${kind === 'tank' ? ' sq' : ''}`} style={{ ['--ac' as string]: c }} dangerouslySetInnerHTML={{ __html: glyph }} />;
 }
 
 /* Legend was merged into LayerControl — see status block + per-row swatches. */
@@ -1252,6 +1210,7 @@ function PipePanel({ feature, onClose }: { feature: PipeFeature; onClose: () => 
       />
       <SpRow label="Flow estimate" value={p.diameter_mm ? `${Math.round((p.diameter_mm / 25) ** 1.6 * 0.8)} L/s` : '—'} mono />
       <SpRow label="Anomaly score" value="0.04" mono />
+      <NetworkInsights pipeId={p.id} />
     </SidePanel>
   );
 }
@@ -1285,6 +1244,7 @@ function AssetPanel({ feature, onClose }: { feature: AssetFeature; onClose: () =
         <SectionLabel>Identifier</SectionLabel>
         <SpRow label="Tank ID" value={p.id} mono />
         <SpRow label="Connecting pipes" value={p.junction_degree} mono />
+        <NetworkInsights assetId={p.id} />
       </SidePanel>
     );
   }
@@ -1313,6 +1273,7 @@ function AssetPanel({ feature, onClose }: { feature: AssetFeature; onClose: () =
         <div style={{ height: 14 }} />
         <SectionLabel>Identifier</SectionLabel>
         <SpRow label="Valve ID" value={p.id} mono />
+        <NetworkInsights assetId={p.id} />
       </SidePanel>
     );
   }
@@ -1336,6 +1297,26 @@ function AssetPanel({ feature, onClose }: { feature: AssetFeature; onClose: () =
         <div style={{ height: 14 }} />
         <SectionLabel>Identifier</SectionLabel>
         <SpRow label="Meter ID" value={p.id} mono />
+        <NetworkInsights assetId={p.id} />
+      </SidePanel>
+    );
+  }
+  if (p.subtype === 'ph' || p.subtype === 'turbidity') {
+    const isPh = p.subtype === 'ph';
+    return (
+      <SidePanel
+        open
+        onClose={onClose}
+        kind="Water-quality monitoring point"
+        title={p.name}
+        pill={{ tone: p.status === 'ok' ? 'safe' : p.status === 'warn' ? 'warn' : 'danger', label: p.status === 'ok' ? 'Normal' : p.status === 'warn' ? 'Warning' : 'Critical' }}
+      >
+        <SectionLabel>Latest reading</SectionLabel>
+        <SpRow label={isPh ? 'pH' : 'Turbidity'} value={isPh ? `${p.ph}` : `${p.turbidity_ntu} NTU`} mono />
+        <SpRow label="Acceptable range" value={isPh ? '6.5 – 8.5' : '≤ 1.0 NTU'} mono />
+        <SpRow label="Last reading" value={p.last_seen} mono />
+        <SpRow label="Probe ID" value={p.id} mono />
+        <NetworkInsights assetId={p.id} />
       </SidePanel>
     );
   }
@@ -1345,11 +1326,11 @@ function AssetPanel({ feature, onClose }: { feature: AssetFeature; onClose: () =
       onClose={onClose}
       kind="Flow + pressure sensor"
       title={p.name}
-      pill={{ tone: p.status === 'ok' ? 'safe' : 'danger', label: p.status === 'ok' ? 'Online' : 'Alert' }}
+      pill={{ tone: p.status === 'ok' ? 'safe' : p.status === 'warn' ? 'warn' : 'danger', label: p.status === 'ok' ? 'Normal' : p.status === 'warn' ? 'Warning' : 'Critical' }}
     >
       <SectionLabel>Live reading</SectionLabel>
-      <SpRow label="Flow rate" value={`${p.flow_lps} L/s`} mono color="#0B5FFF" />
-      <SpRow label="Pressure" value={`${p.pressure_bar} bar`} mono color="#22c55e" />
+      <SpRow label="Flow rate" value={`${p.flow_lps} L/s`} mono color="#2563EB" />
+      <SpRow label="Pressure" value={`${p.pressure_bar} bar`} mono color={STATUS_COLOR[p.status]} />
       <SpRow label="Sensor type" value={p.type} />
       <SpRow label="Last reading" value={p.last_seen} mono />
       <div style={{ height: 14 }} />
@@ -1360,6 +1341,7 @@ function AssetPanel({ feature, onClose }: { feature: AssetFeature; onClose: () =
       <SectionLabel>Linkage</SectionLabel>
       <SpRow label="On pipe" value={p.pipe_id} mono />
       <SpRow label="Sensor ID" value={p.id} mono />
+      <NetworkInsights assetId={p.id} />
     </SidePanel>
   );
 }
@@ -1435,6 +1417,52 @@ function Sparkline({ base }: { base: number }) {
       <path d={`${path} L${w},${h} L0,${h} Z`} fill="rgba(11,95,255,0.12)" />
       <path d={path} fill="none" stroke="#0B5FFF" strokeWidth={2} />
     </svg>
+  );
+}
+
+/**
+ * Operational context for any selected network element: 24 h trend from the
+ * monitoring engine, recent alerts, and a jump to the full monitoring view.
+ * Location → condition → data → incident.
+ */
+function NetworkInsights({ assetId, pipeId }: { assetId?: string; pipeId?: string }) {
+  const ops = useOps();
+  const navigate = useNavigate();
+  useIncidentState();
+  if (!ops) return null;
+  const day = rangeSpec('24H');
+  let trend: { metric: Metric; entity: string; base: number; label: string } | null = null;
+  let link = '/assets';
+  let linkLabel = 'View in Assets';
+  const id = assetId ?? '';
+  const pressure = ops.pressure.find(p => p.id === id || (pipeId && p.pipeId === pipeId));
+  const tank = ops.tanks.find(t => t.id === id);
+  const qZone = /^(PH|TB)-(.+)$/.exec(id)?.[2];
+  const qp = qZone ? ops.quality.find(q => q.zone === qZone) : undefined;
+  if (tank) { trend = { metric: 'level', entity: tank.id, base: tank.base, label: 'Tank level' }; link = '/monitoring/tank-levels'; linkLabel = 'View in Monitoring'; }
+  else if (qp) { const m: Metric = id.startsWith('PH') ? 'ph' : 'turbidity'; trend = { metric: m, entity: qp.id, base: qp.base[m as 'ph' | 'turbidity'], label: m === 'ph' ? 'pH' : 'Turbidity' }; link = '/monitoring/water-quality'; linkLabel = 'View in Monitoring'; }
+  else if (pressure) { trend = { metric: 'pressure', entity: pressure.id, base: pressure.base, label: pipeId ? `Pressure at ${pressure.id}` : 'Pressure' }; link = '/monitoring/pressure'; linkLabel = 'View in Monitoring'; }
+  const entities = [id, pipeId, pressure?.id, tank?.id, qp?.id].filter(Boolean) as string[];
+  const alerts = withState(ops.incidents)
+    .filter(i => entities.includes(i.entityId) || (pipeId && i.focus === `pipe:${pipeId}`) || (assetId && i.focus === `asset:${assetId}`))
+    .sort((a, b) => b.startedAt - a.startedAt).slice(0, 4);
+  return (
+    <>
+      {trend && (
+        <>
+          <div style={{ height: 14 }} />
+          <SectionLabel>Historical trend · {trend.label} · 24 h</SectionLabel>
+          <LineChart series={[{ id: trend.entity, label: trend.label, points: series(trend.metric, trend.entity, trend.base, day) }]} metric={trend.metric} band={trend.metric === 'level' ? null : undefined} height={150} />
+        </>
+      )}
+      <div style={{ height: 14 }} />
+      <SectionLabel>Recent alerts</SectionLabel>
+      {alerts.length ? alerts.map(a => (
+        <SpRow key={a.id} label={`${a.title}`} value={a.status === 'resolved' ? `resolved · ${ago(a.startedAt)}` : ago(a.startedAt)} color={a.status === 'resolved' ? undefined : a.severity === 'critical' ? 'hsl(var(--danger))' : 'hsl(var(--warning))'} onClick={() => navigate(`/alerts?id=${a.id}`)} />
+      )) : <p style={{ fontSize: '0.8125rem', color: 'hsl(var(--muted-foreground))', margin: '6px 0' }}>No alerts in the last 30 days.</p>}
+      <div style={{ height: 14 }} />
+      <button className="dx-btn primary" style={{ width: '100%' }} onClick={() => navigate(link)}>{linkLabel} →</button>
+    </>
   );
 }
 
