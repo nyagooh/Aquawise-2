@@ -6,29 +6,31 @@
 @import 'leaflet/dist/leaflet.css';
 
 :root, [data-theme="light"] {
-  --background:        0 0% 100%;
-  --foreground:        240 10% 3.9%;
-  --card:              0 0% 100%;
-  --card-muted:        240 4.8% 97.5%;
+  /* AquaWise palette — see demo brief. Surfaces stay neutral; status colours carry meaning. */
+  --background:        220 23% 97.5%;        /* #F7F8FA app background */
+  --foreground:        221 39% 11%;          /* #111827 primary text */
+  --card:              0 0% 100%;            /* #FFFFFF surface */
+  --card-muted:        220 23% 97.5%;
   --popover:           0 0% 100%;
-  --muted:             240 4.8% 95.9%;
-  --muted-foreground:  240 3.8% 46.1%;
-  --accent-bg:         214 82% 95%;
-  --border:            240 5.9% 90%;
-  --border-strong:     240 5.9% 82%;
-  --input:             240 5.9% 90%;
-  --ring:              217 91% 60%;
-  --primary:           218 79% 47%;          /* TechBlue #2563EB */
-  --primary-strong:    218 83% 41%;
+  --muted:             220 14% 95%;
+  --muted-foreground:  221 13% 46.1%;        /* #667085 secondary text */
+  --accent-bg:         217 100% 95.9%;       /* #EAF2FF selected states */
+  --border:            220 13% 91%;          /* #E5E7EB */
+  --border-strong:     220 11% 84%;
+  --input:             220 13% 91%;
+  --ring:              216 82% 50%;
+  --primary:           216 82% 50%;          /* #1769E8 AquaWise blue */
+  --primary-strong:    217 83% 42%;
   --primary-foreground: 0 0% 100%;
-  --safe:              142 71% 45%;
-  --warning:           38 92% 50%;
-  --danger:            0 84% 60%;
-  --info:              217 91% 60%;
-  --safe-bg:           142 76% 36% / 0.10;
-  --warning-bg:        38 92% 50% / 0.10;
-  --danger-bg:         0 84% 60% / 0.10;
-  --info-bg:           217 91% 60% / 0.10;
+  --safe:              155 77% 36.9%;        /* #16A66A normal */
+  --warning:           38 82% 49.4%;         /* #E59A17 attention */
+  --danger:            358 75% 59%;          /* #E5484D critical */
+  --offline:           218 15% 64.9%;        /* #98A2B3 offline / unknown */
+  --info:              216 82% 50%;
+  --safe-bg:           155 77% 36.9% / 0.10;
+  --warning-bg:        38 82% 49.4% / 0.12;
+  --danger-bg:         358 75% 59% / 0.10;
+  --info-bg:           216 82% 50% / 0.10;
   --map-overlay:       0 0% 0% / 0;
 
   --map-tile: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
@@ -47,17 +49,18 @@
   --border-strong:     240 4% 22%;
   --input:             240 3.7% 15.9%;
   --ring:              217 91% 60%;
-  --primary:           218 79% 47%;          /* TechBlue #2563EB */
-  --primary-strong:    218 83% 41%;
+  --primary:           216 82% 54%;
+  --primary-strong:    216 82% 47%;
   --primary-foreground: 0 0% 100%;
-  --safe:              142 71% 45%;
-  --warning:           38 92% 50%;
-  --danger:            0 84% 60%;
-  --info:              217 91% 60%;
-  --safe-bg:           142 71% 45% / 0.14;
-  --warning-bg:        38 92% 50% / 0.14;
-  --danger-bg:         0 84% 60% / 0.14;
-  --info-bg:           217 91% 60% / 0.14;
+  --safe:              155 65% 42%;
+  --warning:           38 82% 52%;
+  --danger:            358 75% 62%;
+  --offline:           218 12% 55%;
+  --info:              216 82% 58%;
+  --safe-bg:           155 65% 42% / 0.16;
+  --warning-bg:        38 82% 52% / 0.16;
+  --danger-bg:         358 75% 62% / 0.16;
+  --info-bg:           216 82% 58% / 0.16;
 
   --map-tile: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
 }
@@ -73,7 +76,7 @@
 
   --r-sm: 4px; --r-md: 6px; --r-lg: 8px; --r-xl: 12px; --r-full: 9999px;
 
-  --sidebar-w: 232px;
+  --sidebar-w: 252px;
   --t-fast: 150ms ease;
   --t-base: 200ms ease;
 }
@@ -478,7 +481,7 @@ button { font-family: inherit; }
   border-left: 1px solid hsl(var(--border));
   transform: translateX(100%);
   transition: transform var(--t-base);
-  z-index: 45;
+  z-index: 1100; /* above Leaflet panes and controls (≤ 1000) */
   display: flex;
   flex-direction: column;
 }
@@ -515,7 +518,7 @@ button { font-family: inherit; }
 .gis-canvas {
   position: relative;
   flex: 1;
-  height: calc(100vh - 56px);
+  height: calc(100vh - 68px);
   overflow: hidden;
 }
 .gis-canvas.danger-active::after {
@@ -670,9 +673,9 @@ button { font-family: inherit; }
 }
 .right-edge-rail {
   position: fixed;
-  top: 56px;
+  top: 68px;
   right: 0;
-  height: calc(100vh - 56px);
+  height: calc(100vh - 68px);
   width: 44px;
   z-index: 62;
   background: hsl(var(--card-muted));
@@ -2462,12 +2465,15 @@ button { font-family: inherit; }
 }
 .aw-sensor .aw-sensor-dot {
   position: relative;
-  width: 10px; height: 10px;
+  width: 11px; height: 11px;
   border-radius: 50%;
-  background: var(--sc);
-  border: 2px solid hsl(var(--background));
+  background: var(--ac);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.35);
   z-index: 2;
 }
+/* Abnormal sensors get a status ring; healthy ones show only their type colour. */
+.aw-sensor.is-warn .aw-sensor-dot, .aw-sensor.is-alert .aw-sensor-dot { box-shadow: 0 0 0 2.5px var(--sc), 0 1px 3px rgb(0 0 0 / 0.4); }
 .aw-sensor .aw-sensor-pulse { display: none; }
 @keyframes sensorPulse {
   0%   { transform: scale(0.6); opacity: 0.6; }
@@ -4134,7 +4140,7 @@ button { font-family: inherit; }
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  height: calc(100vh - 56px);
+  height: calc(100vh - 68px);
 }
 .gis-workspace .gis-canvas {
   flex: 1;
@@ -4363,3 +4369,34 @@ button { font-family: inherit; }
 .app-footer a { color: inherit; text-decoration: none; }
 .app-footer a:hover { color: hsl(var(--foreground)); text-decoration: underline; }
 .app-footer-copy { flex: 0 0 auto; opacity: 0.8; }
+
+/* ─── Map markers v2: white badges with coloured ring + engineering glyph ─── */
+.aw-badge {
+  position: relative; width: 26px; height: 26px; border-radius: 50%;
+  background: #fff; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 2px var(--ac), 0 2px 5px rgb(0 0 0 / 0.45);
+}
+.aw-badge svg { display: block; }
+.aw-badge.sm { width: 20px; height: 20px; box-shadow: 0 0 0 1.5px var(--ac), 0 1px 2px rgb(0 0 0 / 0.2); display: inline-flex; flex-shrink: 0; }
+.aw-badge.sq { border-radius: 6px; }
+.aw-badge-status { position: absolute; top: -3px; right: -3px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 2px rgb(0 0 0 / 0.4); }
+.aw-pin { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.aw-pin-head {
+  position: relative; width: 34px; height: 34px; border-radius: 9px; background: #fff;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  box-shadow: 0 0 0 2px var(--ac), 0 3px 8px rgb(0 0 0 / 0.45);
+}
+.aw-pin-head::after { content: ''; position: absolute; bottom: -7px; left: 50%; margin-left: -5px; border: 5px solid transparent; border-top: 5px solid var(--ac); border-bottom: 0; }
+.aw-pin-level { width: 20px; height: 4px; border-radius: 2px; background: #E5E7EB; overflow: hidden; }
+.aw-pin-level i { display: block; height: 100%; background: var(--lc); border-radius: 2px; }
+.aw-pin-tag {
+  margin-top: 6px; padding: 1px 6px; border-radius: 6px; background: var(--ac); color: #fff;
+  font: 700 10px/1.5 var(--font); font-variant-numeric: tabular-nums; box-shadow: 0 1px 3px rgb(0 0 0 / 0.4);
+}
+.aw-leakpin { position: relative; width: 28px; height: 35px; filter: drop-shadow(0 3px 4px rgb(0 0 0 / 0.45)); }
+.aw-leakpin svg { display: block; }
+.aw-leakpin-glyph { position: absolute; left: 7px; top: 5px; }
+.aw-leakpin.fixed { opacity: 0.55; }
+.aw-sensor .aw-sensor-dot { width: 12px; height: 12px; box-shadow: 0 0 0 1px rgb(0 0 0 / 0.15), 0 1px 3px rgb(0 0 0 / 0.45); }
+.aw-swatch-sensors { display: inline-flex; gap: 3px; }
+.aw-swatch-sensors i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgb(0 0 0 / 0.12); }
