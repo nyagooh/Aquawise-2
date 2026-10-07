@@ -69,7 +69,7 @@ function ChooserView() {
       <section className="demo-hub-options">
         <button
           className="demo-hub-card primary"
-          onClick={() => { clearUploadedNetwork(); navigate('/gis'); }}
+          onClick={() => { clearUploadedNetwork(); navigate('/overview'); }}
         >
           <div className="demo-hub-card-inner">
             <div className="demo-hub-card-head">
@@ -81,8 +81,8 @@ function ChooserView() {
               </div>
               <div className="demo-hub-card-tag">Sandbox · live</div>
             </div>
-            <h2>View Your Network</h2>
-            <p>Open the live Riverton map — every pipe, valve and sensor.</p>
+            <h2>Riverton Water &amp; Sanitation</h2>
+            <p>Open the utility command centre: network, monitoring, alerts, NRW, assets and reports.</p>
             <ul className="demo-hub-card-stats">
               <li>
                 <strong>{meta ? meta.feature_count.toLocaleString() : '—'}</strong>
@@ -102,7 +102,7 @@ function ChooserView() {
               </li>
             </ul>
             <div className="demo-hub-card-cta">
-              Enter the live map
+              Enter the platform
               <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                 <line x1={5} y1={12} x2={19} y2={12}/><polyline points="12 5 19 12 12 19"/>
               </svg>

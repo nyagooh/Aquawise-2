@@ -1,14 +1,20 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Landing from './pages/Landing';
 import DemoHub from './pages/DemoHub';
-import Dashboard from './pages/Dashboard';
+import Overview from './pages/Overview';
 import GISMap from './pages/GISMap';
+import Monitoring from './pages/Monitoring';
 import Alerts from './pages/Alerts';
-import Leaks from './pages/Leaks';
 import NRW from './pages/NRW';
-import Sensors from './pages/Sensors';
+import Assets from './pages/Assets';
 import Reports from './pages/Reports';
 import Attribute from './pages/Attribute';
+
+/** Redirect that keeps the query string (e.g. ?focus=asset:SN-12). */
+function Moved({ to }: { to: string }) {
+  const { search } = useLocation();
+  return <Navigate to={`${to}${search}`} replace />;
+}
 
 export default function App() {
   return (
@@ -18,14 +24,21 @@ export default function App() {
       <Route path="/request-demo" element={<Navigate to="/demo" replace />} />
       <Route path="/demo" element={<DemoHub />} />
       <Route path="/demo/upload" element={<Navigate to="/demo" replace />} />
-      <Route path="/dashboard" element={<Dashboard />} />
-      <Route path="/gis" element={<GISMap />} />
+      <Route path="/overview" element={<Overview />} />
+      <Route path="/network" element={<GISMap />} />
+      <Route path="/monitoring" element={<Monitoring />} />
+      <Route path="/monitoring/:tab" element={<Monitoring />} />
       <Route path="/alerts" element={<Alerts />} />
-      <Route path="/leaks" element={<Leaks />} />
       <Route path="/nrw" element={<NRW />} />
-      <Route path="/sensors" element={<Sensors />} />
+      <Route path="/assets" element={<Assets />} />
+      <Route path="/assets/attributes" element={<Attribute />} />
       <Route path="/reports" element={<Reports />} />
-      <Route path="/attribute" element={<Attribute />} />
+      {/* Previous information architecture */}
+      <Route path="/dashboard" element={<Moved to="/overview" />} />
+      <Route path="/gis" element={<Moved to="/network" />} />
+      <Route path="/sensors" element={<Moved to="/monitoring/sensors" />} />
+      <Route path="/leaks" element={<Moved to="/alerts" />} />
+      <Route path="/attribute" element={<Moved to="/assets/attributes" />} />
       <Route path="*" element={<Landing />} />
     </Routes>
   );

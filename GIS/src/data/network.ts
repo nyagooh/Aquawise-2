@@ -8,6 +8,7 @@
  *   - riverton-meta.json        (rich aggregates: km by class/zone/material,
  *                              status counts, age/diameter distribution, bbox)
  */
+import { current, currentQualityForZone, toneFor, QUALITY_POINTS, type Tone } from '../demo/series';
 
 export type PipeClass = 'main' | 'distribution' | 'household' | 'backfeed' | 'boundary';
 export type PipeStatus = 'open' | 'closed' | 'unknown';
@@ -183,7 +184,7 @@ export function loadNetwork(): Promise<NetworkData> {
     const rawMeta: NetworkMeta = await metaRes.json();
 
     const pipes = pipesFc.features as PipeFeature[];
-    const assets = assetsFc.features as AssetFeature[];
+    const assets = applyLiveReadings(assetsFc.features as AssetFeature[]);
     const synthetic = synthesizeQualitySensors(pipes);
     // Reflect synthetic sensors in the meta counts so KPIs match the rendered list.
     const meta: NetworkMeta = synthetic.length
@@ -262,52 +263,24 @@ export function loadUploadedNetwork(): NetworkData | null {
  * Sensors page can demo them alongside the real flow/pressure nodes.
  */
 function synthesizeQualitySensors(pipes: PipeFeature[]): AssetFeature[] {
-  const zones = Array.from(new Set(
-    pipes.map((p) => p.properties.zone).filter((z): z is string => !!z && isRealZone(z))
-  )).slice(0, 5);
-
-  // Pick a representative coordinate per zone from any pipe segment in that zone.
-  const zonePoint: Record<string, [number, number]> = {};
-  for (const z of zones) {
-    const sample = pipes.find((p) => p.properties.zone === z);
-    if (sample) {
-      const coords = sample.geometry.coordinates;
-      zonePoint[z] = coords[Math.floor(coords.length / 2)] as [number, number];
-    }
-  }
-
-  const phReadings: Array<{ ph: number; status: AssetStatus }> = [
-    { ph: 7.2, status: 'ok' },
-    { ph: 6.9, status: 'ok' },
-    { ph: 7.6, status: 'warn' },
-    { ph: 6.4, status: 'alert' },
-    { ph: 7.1, status: 'ok' }
-  ];
-  const turbidityReadings: Array<{ ntu: number; status: AssetStatus }> = [
-    { ntu: 0.8, status: 'ok' },
-    { ntu: 1.2, status: 'ok' },
-    { ntu: 4.6, status: 'warn' },
-    { ntu: 6.1, status: 'alert' },
-    { ntu: 0.6, status: 'ok' }
-  ];
-
   const out: AssetFeature[] = [];
-  zones.forEach((z, i) => {
-    const pt = zonePoint[z];
-    if (!pt) return;
-    const phr = phReadings[i % phReadings.length];
-    const tbr = turbidityReadings[i % turbidityReadings.length];
-    const phId = `PH-${String(i + 1).padStart(2, '0')}`;
-    const tbId = `TB-${String(i + 1).padStart(2, '0')}`;
+  for (const point of QUALITY_POINTS) {
+    const sample = pipes.find((p) => p.properties.zone === point.zone);
+    const q = currentQualityForZone(point.zone);
+    if (!sample || !q) continue;
+    const coords = sample.geometry.coordinates;
+    const pt = coords[Math.floor(coords.length / 2)] as [number, number];
+    const phId = `PH-${point.zone}`;
+    const tbId = `TB-${point.zone}`;
     out.push({
       type: 'Feature',
       id: phId,
       geometry: { type: 'Point', coordinates: [pt[0] + 0.0006, pt[1] + 0.0006] },
       properties: {
-        asset: 'sensor', id: phId, name: `pH probe · ${zoneLabel(z)}`,
-        type: 'pH', subtype: 'ph', ph: phr.ph,
+        asset: 'sensor', id: phId, name: `pH probe · ${zoneLabel(point.zone)}`,
+        type: 'pH', subtype: 'ph', ph: Math.round(q.ph * 10) / 10,
         flow_lps: 0, pressure_bar: 0,
-        last_seen: '1m ago', status: phr.status, pipe_id: ''
+        last_seen: '1m ago', status: toAssetStatus(q.phTone), pipe_id: ''
       }
     });
     out.push({
@@ -315,14 +288,36 @@ function synthesizeQualitySensors(pipes: PipeFeature[]): AssetFeature[] {
       id: tbId,
       geometry: { type: 'Point', coordinates: [pt[0] - 0.0006, pt[1] + 0.0006] },
       properties: {
-        asset: 'sensor', id: tbId, name: `Turbidity probe · ${zoneLabel(z)}`,
-        type: 'Turbidity', subtype: 'turbidity', turbidity_ntu: tbr.ntu,
+        asset: 'sensor', id: tbId, name: `Turbidity probe · ${zoneLabel(point.zone)}`,
+        type: 'Turbidity', subtype: 'turbidity', turbidity_ntu: Math.round(q.ntu * 100) / 100,
         flow_lps: 0, pressure_bar: 0,
-        last_seen: '30s ago', status: tbr.status, pipe_id: ''
+        last_seen: '30s ago', status: toAssetStatus(q.ntuTone), pipe_id: ''
       }
     });
-  });
+  }
   return out;
+}
+
+const toAssetStatus = (t: Tone): AssetStatus => (t === 'crit' ? 'alert' : t === 'warn' ? 'warn' : 'ok');
+
+/**
+ * Overwrite the static snapshot values on real telemetry assets with the
+ * demo engine's current readings, so the map agrees with Monitoring.
+ */
+function applyLiveReadings(assets: AssetFeature[]): AssetFeature[] {
+  return assets.map((a) => {
+    const p = a.properties;
+    if (p.asset === 'sensor' && !p.subtype) {
+      const bar = current('pressure', p.id, p.pressure_bar);
+      const lps = current('flow', p.id, p.flow_lps);
+      return { ...a, properties: { ...p, pressure_bar: Math.round(bar * 100) / 100, flow_lps: Math.round(lps * 10) / 10, status: toAssetStatus(toneFor('pressure', bar)) } };
+    }
+    if (p.asset === 'tank') {
+      const lvl = current('level', p.id, p.level_pct);
+      return { ...a, properties: { ...p, level_pct: Math.round(lvl), status: toAssetStatus(toneFor('level', lvl)) } };
+    }
+    return a;
+  });
 }
 
 /* ============================================================
@@ -342,61 +337,56 @@ export const PIPE_STYLE: Record<PipeClass, {
   shortLabel: string;
   description: string;
 }> = {
-  // Distinct categorical data palette (Tableau-style), full opacity, tuned to
-  // read over label-free satellite imagery: blue trunk, cyan distribution,
-  // light service, amber closed, pink DMA.
-  // Bold, high-visibility engineering palette tuned for dark satellite imagery
-  // — water-utility GIS convention: red trunk mains, blue distribution, light
-  // service, gold closed/isolated, magenta DMA boundary. Heavy weights + full
-  // opacity + white casing (see baseLineStyle) keep every class legible.
+  // Functional palette: hue + width encode pipe class, so classes stay
+  // distinguishable without relying on colour alone.
   main: {
-    color: '#00B4FF',          // shiny blue — transmission trunk
-    hoverColor: '#5CD1FF',
-    weight: 5.5,
-    hoverWeight: 7.5,
+    color: '#F97316',
+    hoverColor: '#FB923C',
+    weight: 4,
+    hoverWeight: 6,
     opacity: 1,
     label: 'Transmission main',
     shortLabel: 'Mains',
     description: 'Primary supply trunk · highest priority'
   },
   distribution: {
-    color: '#00B4FF',          // shiny blue — distribution backbone
-    hoverColor: '#5CD1FF',
-    weight: 3,
-    hoverWeight: 5,
+    color: '#18AEEA',
+    hoverColor: '#5CC8F2',
+    weight: 2.5,
+    hoverWeight: 4,
     opacity: 1,
     label: 'Distribution main',
     shortLabel: 'Distribution',
     description: 'Neighbourhood feeder · zone backbone'
   },
   household: {
-    color: '#00B4FF',          // shiny blue — service lines
-    hoverColor: '#5CD1FF',
-    weight: 1.8,
-    hoverWeight: 3.2,
+    color: '#20C997',
+    hoverColor: '#5ADBB3',
+    weight: 1.5,
+    hoverWeight: 3,
     opacity: 0.95,
     label: 'Service connection',
     shortLabel: 'Service',
     description: 'Service line to customer property'
   },
   backfeed: {
-    color: '#00B4FF',          // shiny blue — closed / isolated (dashed)
-    hoverColor: '#5CD1FF',
-    weight: 3,
-    hoverWeight: 5,
-    dashArray: '8 5',
+    color: '#64748B',
+    hoverColor: '#94A3B8',
+    weight: 2,
+    hoverWeight: 3.5,
+    dashArray: '6 5',
     opacity: 1,
     label: 'Backfeed / closed',
     shortLabel: 'Backfeed',
     description: 'Reversible supply path · currently closed'
   },
   boundary: {
-    color: '#00B4FF',          // shiny blue — DMA outline (dashed)
-    hoverColor: '#5CD1FF',
-    weight: 3,
-    hoverWeight: 4.5,
+    color: '#94A3B8',
+    hoverColor: '#CBD5E1',
+    weight: 1.5,
+    hoverWeight: 3,
     dashArray: '6 4',
-    opacity: 0.95,
+    opacity: 0.9,
     label: 'Zone boundary',
     shortLabel: 'DMA boundary',
     description: 'District metered area or service zone outline'
@@ -416,42 +406,63 @@ export const ASSET_STYLE: Record<AssetKind, {
   // read apart from the blue (#00B4FF) pipe network and from each other.
   // Status semantics (green/amber/red) stay on the separate status dot.
   tank: {
-    color: '#A855F7',          // bold violet — reservoir / tank node
+    color: '#7C3AED',
     ring: '#DDD6FE',
     label: 'Reservoir / tank',
     shortLabel: 'Reservoirs',
     description: 'Reservoir level-sensor telemetry'
   },
   pressure_valve: {
-    color: '#FACC15',          // bold gold — pressure valve (pops against the blue network)
-    ring: '#FEF08A',
+    color: '#F59E0B',
+    ring: '#FDE68A',
     label: 'Valve (PRV)',
     shortLabel: 'Valves',
     description: 'Pressure-reducing valve · live drift'
   },
   meter_valve: {
-    color: '#FF2D8E',          // bold magenta — bulk meter / pump
+    color: '#EC4899',
     ring: '#FBCFE8',
     label: 'Meter / pump',
     shortLabel: 'Meters',
     description: 'Consumption-metered valve assembly'
   },
   sensor: {
-    color: '#FF7A18',          // bold orange — sensor node (telemetry)
-    ring: '#FED7AA',
-    label: 'Flow + pressure sensor',
+    color: '#2563EB',
+    ring: '#BFDBFE',
+    label: 'Sensors',
     shortLabel: 'Sensors',
-    description: 'Live flow & pressure telemetry node'
+    description: 'Pressure (blue) and water-quality (violet) sensors'
   }
 };
 
 export const ASSET_ORDER: AssetKind[] = ['tank', 'pressure_valve', 'meter_valve', 'sensor'];
 
 export const STATUS_COLOR: Record<AssetStatus, string> = {
-  ok: '#4FA877',     // muted green — healthy
-  warn: '#D9A156',   // amber — watch
-  alert: '#D4675E'   // coral — critical
+  ok: '#10B981',     // healthy / normal
+  warn: '#F59E0B',   // warning / anomaly
+  alert: '#EF4444'   // critical / leak
 };
+export const OFFLINE_COLOR = '#94A3B8';
+export const QUALITY_SENSOR_COLOR = '#8B5CF6';
+export const DMA_BOUNDARY_COLOR = '#8B5CF6';
+
+/**
+ * Map glyphs shared by markers and the legend: white badge, coloured ring,
+ * engineering symbol inside. Returned as SVG strings for Leaflet divIcons.
+ */
+export function assetGlyph(kind: 'tank' | 'valve' | 'meter' | 'leak', color: string, size = 18): string {
+  const st = `fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"`;
+  switch (kind) {
+    case 'valve': // gate valve: bowtie body, stem and handwheel
+      return `<svg viewBox="0 0 24 24" width="${size}" height="${size}"><path d="M3.5 10.5v9l8.5-4.5zM20.5 10.5v9L12 15z" fill="${color}"/><path d="M12 15V7" ${st}/><path d="M7.5 5.5h9" ${st} stroke-width="2.4"/></svg>`;
+    case 'meter': // flow meter: dial with needle and pipe stubs
+      return `<svg viewBox="0 0 24 24" width="${size}" height="${size}"><path d="M1.5 13h3.5M19 13h3.5" ${st}/><circle cx="12" cy="13" r="6.5" ${st}/><path d="M12 13l3.2-3.4" ${st}/><circle cx="12" cy="13" r="1.4" fill="${color}"/><path d="M8.6 9.3h.01M12 7.9h.01" ${st} stroke-width="2.4"/></svg>`;
+    case 'tank': // reservoir: cylinder
+      return `<svg viewBox="0 0 24 24" width="${size}" height="${size}"><ellipse cx="12" cy="6" rx="7" ry="2.6" ${st}/><path d="M5 6v12c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6V6" ${st}/><path d="M5 12c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6" ${st} opacity="0.55"/></svg>`;
+    case 'leak':
+      return `<svg viewBox="0 0 24 24" width="${size}" height="${size}"><path d="M12 3.5s5.5 6 5.5 10a5.5 5.5 0 0 1-11 0c0-4 5.5-10 5.5-10z" fill="${color}"/><path d="M9.6 14.2a2.6 2.6 0 0 0 2.4 2.4" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+  }
+}
 
 export const MATERIAL_TINT: Record<string, string> = {
   PVC: '#0EA5E9',
