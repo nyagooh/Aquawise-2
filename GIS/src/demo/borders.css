@@ -139,6 +139,7 @@ button.dx-item:hover { background: hsl(var(--row-hover)) !important; }
 .gis-layer-control-head { border-bottom: 1px solid hsl(var(--hair)); }
 .gis-basemap-tabs { background: none; border: 1px solid hsl(var(--hair-strong)); border-radius: 6px; padding: 0; gap: 0; overflow: hidden; }
 .gis-basemap-tab { border-radius: 0 !important; }
+.gis-basemap-label { display: inline-flex; align-items: center; font-size: 0.8125rem; font-weight: 600; padding: 6px 12px; border: 1px solid hsl(var(--hair-strong)); border-radius: 6px; }
 .gis-basemap-tab + .gis-basemap-tab { border-left: 1px solid hsl(var(--hair)); }
 .gis-basemap-tab.active { background: hsl(var(--row-hover)); box-shadow: none; font-weight: 600; }
 .gis-toolbar { border-bottom: 1px solid hsl(var(--hair)); padding: 8px 16px; }
@@ -223,6 +224,10 @@ button.dx-item:hover { background: hsl(var(--row-hover)) !important; }
 /* icon markers: line icon over a white halo, no tiles */
 .mk { display: inline-flex; align-items: center; justify-content: center; filter: drop-shadow(0 0 0.5px rgb(15 23 42 / 0.5)); }
 .mk svg { display: block; overflow: visible; }
+/* On the satellite basemap every marker sits on a white disc with a dark rim,
+   so the coloured icon reads against any imagery. */
+.leaflet-marker-icon .mk { background: #fff; border-radius: 50%; box-shadow: 0 0 0 1.5px rgb(15 23 42 / 0.85), 0 2px 5px rgb(0 0 0 / 0.55); filter: none; }
+.leaflet-marker-icon .mk svg { transform: scale(0.72); }
 .eg-sym { filter: none; }
 .eg-sym.alert::before { inset: -3px; border-radius: 50%; border-width: 2px; box-shadow: none; background: color-mix(in srgb, var(--halo) 14%, transparent); }
 .eg-swatch .mk { filter: none; }

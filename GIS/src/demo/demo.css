@@ -438,8 +438,8 @@ button.dx-item:hover { background: hsl(var(--accent-bg)); }
 .dx-donut-c span { font-size: 0.75rem; color: hsl(var(--muted-foreground)); }
 .ov-sw { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
 .ov-lg { display: inline-block; flex-shrink: 0; }
-.ov-lg.pipe { width: 14px; height: 3px; border-radius: 2px; background: #9333EA; }
-.ov-lg.pipe.main { height: 4px; background: #EA580C; }
+.ov-lg.pipe { width: 14px; height: 3px; border-radius: 2px; background: #E879F9; }
+.ov-lg.pipe.main { height: 4px; background: #FB923C; }
 .ov-lg.sq { width: 10px; height: 10px; border-radius: 2px; background: #0284C7; }
 .ov-lg.dia { width: 9px; height: 9px; transform: rotate(45deg); background: hsl(var(--primary) / 0.7); }
 .dx-grid-kpi { gap: 20px; }

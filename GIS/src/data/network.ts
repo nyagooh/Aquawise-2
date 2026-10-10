@@ -359,8 +359,8 @@ export const PIPE_STYLE: Record<PipeClass, {
   // Functional palette: hue + width encode pipe class, so classes stay
   // distinguishable without relying on colour alone.
   main: {
-    color: '#EA580C',          // bright orange — reads on street, satellite and dark maps
-    hoverColor: '#F97316',
+    color: '#FB923C',          // bright orange — reads on satellite imagery
+    hoverColor: '#FDBA74',
     weight: 6,
     hoverWeight: 6,
     opacity: 1,
@@ -369,8 +369,8 @@ export const PIPE_STYLE: Record<PipeClass, {
     description: 'Primary supply trunk · highest priority'
   },
   distribution: {
-    color: '#9333EA',          // vivid purple — distinct from orange mains on every basemap
-    hoverColor: '#A855F7',
+    color: '#F0ABFC',          // light fuchsia — bright against green/brown satellite imagery
+    hoverColor: '#FAE8FF',
     weight: 3.5,
     hoverWeight: 4,
     opacity: 1,
@@ -400,8 +400,8 @@ export const PIPE_STYLE: Record<PipeClass, {
     description: 'Reversible supply path · currently closed'
   },
   boundary: {
-    color: '#64748B',
-    hoverColor: '#94A3B8',
+    color: '#F8FAFC',          // white dashed outline — visible on imagery
+    hoverColor: '#FFFFFF',
     weight: 2,
     hoverWeight: 3,
     dashArray: '6 4',

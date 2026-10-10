@@ -1,6 +1,6 @@
 /**
- * Compact operational map: the real Erline Water pipe network on a street
- * basemap, with status-coloured monitoring points. Used on Overview and Monitoring.
+ * Compact operational map: the real Erline Water pipe network on satellite
+ * imagery, with status-coloured monitoring points. Used on Overview and Monitoring.
  * The full GIS workspace lives on the Network page.
  */
 import { useEffect, useRef } from 'react';
@@ -20,10 +20,9 @@ export interface MapPoint {
 }
 
 const TONE_HEX: Record<Tone, string> = { ok: '#059669', warn: '#D97706', crit: '#DC2626', off: '#64748B' }; // map status palette
-// Same street basemap as the Network page, shown as-is in both themes so the
-// map is always readable behind the network.
-const TILE = 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
-const ATTR = 'Map data &copy; Google';
+// Same satellite imagery as the Network page, in both themes.
+const TILE = 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}';
+const ATTR = 'Imagery &copy; Google';
 
 /** Canvas renderer that ignores redraws scheduled after the map was torn down (route change / StrictMode remount). */
 const SafeCanvas = L.Canvas.extend({
@@ -102,8 +101,8 @@ export function NetworkMap({ ops, points, height = 360, zone = 'ALL', zoneColor,
       const color = custom ?? PIPE_STYLE[cls].color;
       L.polyline(p.geometry.coordinates.map(c => [c[1], c[0]] as LatLng), {
         renderer: canvas, interactive: false,
-        color, weight: cls === 'main' ? 4.5 : cls === 'backfeed' ? 2.2 : 2.2, dashArray: cls === 'backfeed' && !custom ? '5 4' : undefined,
-        opacity: inZone ? (cls === 'main' ? 1 : 0.85) : 0.15
+        color, weight: cls === 'main' ? 4.5 : 2.8, dashArray: cls === 'backfeed' && !custom ? '5 4' : undefined,
+        opacity: inZone ? 1 : 0.25
       }).addTo(g);
     }
     m.fitBounds(coreBounds(ops, zone), { padding: [16, 16], maxZoom: 15, animate: false });

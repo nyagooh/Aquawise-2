@@ -16,7 +16,6 @@ import { useOps, ago, zoneName, type Ops } from '../demo/model';
 import { withState, useIncidentState } from '../demo/incidentState';
 import { LineChart } from '../demo/charts';
 import { series, rangeSpec, METRICS, toneFor, type Metric, type Tone } from '../demo/series';
-import { useTheme } from '../theme';
 import {
   loadNetwork,
   loadUploadedNetwork,
@@ -47,28 +46,19 @@ const TILE_ATTR =
 // NO labels/roads (clean backdrop for the network); `lyrs=m` is the street map.
 const GOOGLE_KEY = (import.meta as { env?: { VITE_GOOGLE_MAPS_API_KEY?: string } }).env?.VITE_GOOGLE_MAPS_API_KEY || '';
 // apistyle hides points of interest and transit so only the network carries icons
-const TILE_GOOGLE_STREETS = 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&apistyle=s.t%3A2%7Cp.v%3Aoff%2Cs.t%3A4%7Cp.v%3Aoff';
 const TILE_GOOGLE_SATELLITE = 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}';
 const TILE_GOOGLE_ATTR = 'Imagery &copy; <a href="https://www.google.com/maps">Google</a> · Erline Water';
 
-/** Basemap mode — street map, label-free satellite, or bare engineering canvas. */
-type Basemap = 'dark' | 'streets' | 'satellite' | 'none';
+/** Basemap mode — satellite imagery, or the bare canvas for schematic (non-geographic) models. */
+type Basemap = 'satellite' | 'none';
 
-/** Build the active basemap tile layer for the current mode + theme. */
-function makeTileLayer(basemap: Basemap, dark: boolean): L.TileLayer | null {
+/** Build the basemap tile layer (none for schematic models). */
+function makeTileLayer(basemap: Basemap): L.TileLayer | null {
   if (basemap === 'none') return null;
   // keepBuffer + updateWhenZooming:false keep already-loaded tiles painted while
   // panning/zooming, so the map doesn't flash grey between tile fetches.
   const common = { attribution: TILE_GOOGLE_ATTR, subdomains: '0123', maxZoom: 20, keepBuffer: 4, updateWhenZooming: false };
-  if (basemap === 'dark') {
-    // Street map darkened in CSS (.aw-tiles-dark) so network colours carry the view.
-    return L.tileLayer(TILE_GOOGLE_STREETS, { ...common, className: 'aw-tiles-dark' });
-  }
-  if (basemap === 'satellite') {
-    return L.tileLayer(TILE_GOOGLE_SATELLITE, common);
-  }
-  // streets
-  return L.tileLayer(TILE_GOOGLE_STREETS, common);
+  return L.tileLayer(TILE_GOOGLE_SATELLITE, common);
 }
 
 /* ── Workspace toolbar + simulation model ── */
@@ -134,13 +124,12 @@ const PIPE_KEYS: PipeClass[] = PIPE_CLASS_ORDER;
 const ASSET_KEYS: AssetKind[] = ASSET_ORDER;
 
 export default function GISMap() {
-  const { mode } = useTheme();
   const [searchParams, setSearchParams] = useSearchParams();
   const [network, setNetwork] = useState<NetworkData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [layers, setLayers] = useState<LayerVis>(DEFAULT_LAYERS);
   const [focus, setFocus] = useState<Focus>(null);
-  const [basemap, setBasemap] = useState<Basemap>('streets');
+  const [basemap, setBasemap] = useState<Basemap>('satellite');
   const [sim, setSim] = useState<SimState>('idle');
   const [linkBy, setLinkBy] = useState<LinkSymbology>('class');
   const [nodeBy, setNodeBy] = useState<NodeSymbology>('asset');
@@ -208,7 +197,7 @@ export default function GISMap() {
     // makes them clickable without forcing the operator to pixel-hunt.
     rendererRef.current = L.canvas({ padding: 0.4, tolerance: 6 });
 
-    const tile = makeTileLayer(basemap, mode === 'dark');
+    const tile = makeTileLayer(basemap);
     if (tile) { tile.addTo(map); tileRef.current = tile; }
 
     /* layer groups */
@@ -300,18 +289,18 @@ export default function GISMap() {
       layerGroupsRef.current = {};
       tileRef.current = null;
     };
-    // mode is read at init; subsequent changes handled by the tile-swap effect below
+    // basemap is read at init; subsequent changes handled by the tile-swap effect below
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [network]);
 
-  /* ── 3. swap tiles on theme / basemap change without recreating map ── */
+  /* ── 3. swap tiles on basemap change without recreating map ── */
   useEffect(() => {
     const map = leafletRef.current;
     if (!map) return;
     if (tileRef.current) { map.removeLayer(tileRef.current); tileRef.current = null; }
-    const tile = makeTileLayer(basemap, mode === 'dark');
+    const tile = makeTileLayer(basemap);
     if (tile) { tile.addTo(map); tileRef.current = tile; }
-  }, [mode, basemap]);
+  }, [basemap]);
 
   /* ── 4. layer toggles ── */
   useEffect(() => {
@@ -471,8 +460,6 @@ export default function GISMap() {
     <Shell active="network" title="Network" sub="GIS operational view · Erline Water supply network" pagePadding={false} hideRightRail>
       <div className="gis-workspace">
       <WorkspaceToolbar
-        basemap={basemap}
-        onBasemap={setBasemap}
         onFit={fitView}
         sim={sim}
         onSimulate={runSimulate}
@@ -1026,33 +1013,14 @@ function AssetSwatch({ kind }: { kind: AssetKind }) {
    Workspace toolbar (top) + simulation strip (bottom)
    ───────────────────────────────────────── */
 
-const BASEMAP_TABS: Array<{ key: Basemap; label: string; title: string }> = [
-  { key: 'streets', label: 'Map', title: 'Street map' },
-  { key: 'satellite', label: 'Satellite', title: 'Aerial imagery — no labels' },
-  { key: 'dark', label: 'Dark', title: 'Dark street map' },
-];
-
-function WorkspaceToolbar({ basemap, onBasemap, onFit, sim, onSimulate }: {
-  basemap: Basemap;
-  onBasemap: (b: Basemap) => void;
+function WorkspaceToolbar({ onFit, sim, onSimulate }: {
   onFit: () => void;
   sim: SimState;
   onSimulate: () => void;
 }) {
   return (
     <div className="gis-toolbar">
-      <div className="gis-basemap-tabs" role="tablist" aria-label="Basemap">
-        {BASEMAP_TABS.map((t) => (
-          <button
-            key={t.key}
-            className={`gis-basemap-tab${basemap === t.key ? ' active' : ''}`}
-            onClick={() => onBasemap(t.key)}
-            title={t.title}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <span className="gis-basemap-label">Satellite</span>
       <button type="button" className="gis-tool" onClick={onFit} title="Fit view" aria-label="Fit view">
         <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
           <path d="M4 9V4h5 M20 9V4h-5 M4 15v5h5 M20 15v5h-5" />
