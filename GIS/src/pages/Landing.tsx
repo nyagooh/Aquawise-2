@@ -139,7 +139,6 @@ export default function Landing() {
         <Mosaic assets={assets} nrw={nrw} />
         <Monitor assets={assets} />
         <Parameters />
-        <QualityStory />
         <Infrastructure />
         <Explorer onDemo={openDemo} />
         <Outcomes />
@@ -158,7 +157,7 @@ function Hero({ onDemo, onTalk }: { onDemo: () => void; onTalk: () => void }) {
         <p className="ed-eyebrow rv">Water quality · Pressure · Tank levels · GIS</p>
         <h1 className="ed-hero-h rv">The smart water grid<br />for water utilities</h1>
         <p className="ed-hero-sub rv">
-          Your whole network, live on one map. Spot a burst, a dirty reading or a draining tank
+          Your whole network, live on one map. Spot a pressure drop, a dirty reading or a draining tank
           the moment it happens — and fix it before your customers ever notice.
         </p>
         <div className="ed-row ed-hero-ctas rv">
@@ -255,21 +254,24 @@ function Mosaic({ assets }: { assets: Record<string, AssetProps> | null; nrw?: u
             <img src="/img/ui/crop-gis.webp" alt="AquaWise network map with pipes, valves, meters, reservoirs and sensors" />
             <figcaption><span className="ed-mini">Network map</span><b>121 km of pipe, every asset in place</b></figcaption>
           </figure>
-          <StatTile label="Water quality · Shauri, Ndothua" value={last(tb)} unit="NTU" decimals={2} tone="warn"
-            note="Above the safe limit since this morning." points={tb} color="amber" />
-          <StatTile label="Pressure · Ziwani 3" value={last(sn14)} unit="bar" decimals={2} tone="crit"
-            note="Below the 1.5 bar minimum — a likely burst." points={sn14} color="red" />
-          <StatTile label="Storage · Ziwani Reservoir 2" value={last(t2)} unit="%" decimals={0} tone="warn"
-            note="Emptying faster than yesterday." points={t2} color="amber" />
+          <StatTile label="Water quality · Shauri, Ndothua" metric="turbidity" value={last(tb)} unit="NTU" decimals={2} points={tb} />
+          <StatTile label="Pressure · Ziwani 3" metric="pressure" value={last(sn14)} unit="bar" decimals={2} points={sn14} />
+          <StatTile label="Storage · Ziwani Reservoir 2" metric="level" value={last(t2)} unit="%" decimals={0} points={t2} />
         </div>
       </div>
     </section>
   );
 }
 
-function StatTile({ label, value, unit, decimals, tone, note, points, color }: {
-  label: string; value: number | null; unit: string; decimals: number; tone: Tone; note: string; points: Point[] | null; color: string;
+const TONE_SPARK: Record<Tone, string> = { ok: 'blue', warn: 'amber', crit: 'red', off: 'slate' };
+/** A live reading with its 24 h trend; tone and note come from the metric's thresholds. */
+function StatTile({ label, metric, value, unit, decimals, points }: {
+  label: string; metric: Metric; value: number | null; unit: string; decimals: number; points: Point[] | null;
 }) {
+  const tone: Tone = value === null ? 'off' : toneFor(metric, value);
+  const range = METRICS[metric].rangeText;
+  const note = value === null ? 'Waiting for data.' : tone === 'ok' ? `Within the normal range (${range}).` : `Outside the normal range (${range}).`;
+  const color = TONE_SPARK[tone];
   return (
     <div className="bx bx-stat rv">
       <span className="ed-mini">{label}</span>
@@ -305,7 +307,7 @@ function Monitor({ assets }: { assets: Record<string, AssetProps> | null }) {
   const tone = toneFor(data.metric, now);
   const items: Array<{ k: MonKey; label: string; sub: string }> = [
     { k: 'quality', label: 'Water quality', sub: 'Five parameters, every 15 minutes' },
-    { k: 'pressure', label: 'Pressure', sub: '26 loggers, drops flagged as they happen' },
+    { k: 'pressure', label: 'Pressure', sub: '24 loggers, drops flagged as they happen' },
     { k: 'tanks', label: 'Tank levels', sub: 'Five reservoirs, filling and emptying live' },
     { k: 'sensors', label: 'Sensors', sub: 'Battery, signal and last contact' }
   ];
@@ -439,91 +441,6 @@ function Parameters() {
               </div>
             );
           })}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ═════════════ 5 · WATER QUALITY STORY ═════════════ */
-function QualityStory() {
-  // A resolved Shauri turbidity event from the demo history (22 days ago).
-  const story = useMemo(() => {
-    const evStart = NOW - 22 * 24 * HOURS; const evEnd = NOW - (22 * 24 - 10) * HOURS;
-    const pts = seriesWindow('turbidity', WQ_SHAURI.id, WQ_SHAURI.base.turbidity, evStart - 10 * HOURS, evEnd + 12 * HOURS, 240);
-    const over = pts.find(p => p.v > 1.0)!;
-    const peak = pts.reduce((a, b) => (b.v > a.v ? b : a), pts[0]);
-    const back = pts.find(p => p.t > peak.t && p.v <= 1.0)!;
-    const rows = pts.map((p, i) => {
-      const bad = (j: number) => pts[j] && pts[j].v > 1.0;
-      return { t: p.t, v: p.v, hi: bad(i) || bad(i - 1) || bad(i + 1) ? p.v : null };
-    });
-    return {
-      rows, over, peak, back,
-      date: new Date(evStart).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }),
-      hours: Math.round((back.t - over.t) / HOURS)
-    };
-  }, []);
-  const tick = { fontSize: 12, fill: '#667085' };
-  const Marker = (n: number, color: string) => (props: { cx?: number; cy?: number }) => (
-    <g>
-      <circle cx={props.cx} cy={props.cy} r={13} fill="#fff" stroke={color} strokeWidth={2} />
-      <text x={props.cx} y={(props.cy ?? 0) + 4.5} textAnchor="middle" fontSize={12} fontWeight={700} fill={color}>{n}</text>
-    </g>
-  );
-  const steps = [
-    { n: 1, color: '#E59A17', when: fmtClock(story.over.t), title: 'Breach detected', text: 'Turbidity crosses the limit and your quality team is alerted straight away.' },
-    { n: 2, color: '#E59A17', when: `${story.peak.v.toFixed(2)} NTU`, title: 'Peak recorded', text: 'You see how far it went. Every reading is kept.' },
-    { n: 3, color: '#16A66A', when: fmtClock(story.back.t), title: 'Back in range', text: `Clear after ${story.hours} hours, logged and ready for your report.` }
-  ];
-  return (
-    <section className="ed-sec">
-      <div className="ed-wrap ed-grid">
-        <p className="ed-label rv" style={{ gridColumn: '1 / span 4' }}><b>05</b> / Over time</p>
-        <h2 className="ed-h1 rv" style={{ gridColumn: '1 / span 9' }}>Every reading recorded. <span className="muted">Every event explained.</span></h2>
-      </div>
-      <div className="ed-wrap">
-        <div className="ed-story-card rv">
-          <div className="ed-story-top">
-            <div>
-              <span className="ed-mini">Turbidity · Shauri, Ndothua kiosk · {story.date}</span>
-              <h3>An eleven-hour turbidity event, start to finish</h3>
-            </div>
-            <div className="ed-story-key">
-              <span><i className="band" />Safe range</span><span><i className="dash" />1.0 NTU limit</span><span><i className="amb" />Above limit</span>
-            </div>
-          </div>
-          <div style={{ height: 380 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={story.rows} margin={{ top: 24, right: 16, bottom: 0, left: 0 }}>
-                <defs>
-                  <linearGradient id="storyFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#1769E8" stopOpacity={0.18} />
-                    <stop offset="100%" stopColor="#1769E8" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid vertical={false} stroke="#EEF0F3" />
-                <XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']} tickFormatter={fmtClock} tick={tick} axisLine={false} tickLine={false} minTickGap={56} tickMargin={10} />
-                <YAxis domain={[0, 3]} ticks={[0, 1, 2, 3]} tick={tick} axisLine={false} tickLine={false} width={40} tickFormatter={(v: number) => `${v}`} />
-                <ReferenceArea y1={0} y2={1} fill="#16A66A" fillOpacity={0.07} stroke="none" />
-                <ReferenceLine y={1} stroke="#E59A17" strokeDasharray="5 5" />
-                <ReferenceArea x1={story.over.t} x2={story.back.t} fill="#E59A17" fillOpacity={0.05} stroke="none" />
-                <Area dataKey="v" type="monotone" stroke="#1769E8" strokeWidth={2.25} fill="url(#storyFill)" dot={false} activeDot={false} isAnimationActive={false} />
-                <Line dataKey="hi" type="monotone" stroke="#E59A17" strokeWidth={3} dot={false} activeDot={false} isAnimationActive={false} connectNulls={false} />
-                <ReferenceDot x={story.over.t} y={story.over.v} r={0} shape={Marker(1, '#E59A17')} />
-                <ReferenceDot x={story.peak.t} y={story.peak.v} r={0} shape={Marker(2, '#E59A17')} />
-                <ReferenceDot x={story.back.t} y={story.back.v} r={0} shape={Marker(3, '#16A66A')} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-          <ol className="ed-story-steps">
-            {steps.map(s => (
-              <li key={s.n}>
-                <span className="num" style={{ color: s.color, borderColor: s.color }}>{s.n}</span>
-                <div><b>{s.when}</b><strong>{s.title}</strong><p>{s.text}</p></div>
-              </li>
-            ))}
-          </ol>
         </div>
       </div>
     </section>
