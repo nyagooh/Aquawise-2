@@ -1,12 +1,12 @@
 /**
- * Operational model for the demo — built once from the real Riverton network
+ * Operational model for the demo — built once from the real Erline Water network
  * (pipes + telemetry assets) and the deterministic series engine.
  */
 import { useEffect, useState } from 'react';
 import {
   loadNetwork, zoneLabel,
   type NetworkData, type PipeFeature, type TankProps, type SensorProps,
-  type PressureValveProps, type MeterValveProps
+  type PressureValveProps, type MeterValveProps, type FacilityProps
 } from '../data/network';
 import { ZONE_SEED, ZONE_CODES, buildNrwMonthly, type NrwMonth } from './nrw';
 import {
@@ -95,7 +95,7 @@ export interface Incident {
   startedAt: number;
   resolvedAt?: number;
   status: IncidentStatus;
-  focus: string;          // network deep link, e.g. asset:SN-12
+  focus: string;          // network deep link, e.g. asset:SN-14
   summary: string;
 }
 
@@ -121,7 +121,7 @@ export const zoneName = (code: string) => (code === 'WTW' ? 'Treatment works' : 
 const toLatLng = (c: [number, number]): LatLng => [c[1], c[0]];
 const mid = (p: PipeFeature): LatLng => toLatLng(p.geometry.coordinates[Math.floor(p.geometry.coordinates.length / 2)] as [number, number]);
 
-const OFFLINE = new Set(['SN-07', 'SN-23']);
+const OFFLINE = new Set(['SN-22', 'SN-23']);
 
 function build(network: NetworkData): Ops {
   const { pipes, assets } = network;
@@ -133,7 +133,7 @@ function build(network: NetworkData): Ops {
       const d = (m.ll[0] - ll[0]) ** 2 + (m.ll[1] - ll[1]) ** 2;
       if (d < bd) { bd = d; best = m; }
     }
-    return best?.zone ?? 'MIL';
+    return best?.zone ?? 'SHAURI';
   };
 
   /* pressure points: real flow + pressure sensors */
@@ -171,9 +171,8 @@ function build(network: NetworkData): Ops {
       // Project only abnormal drawdown: the usual daytime fall refills overnight.
       const rate = vsYesterday / 6; // % per hour beyond the normal pattern
       const hoursToLow = abnormal && level > 20 ? (level - 20) / -rate : null;
-      const n = p.id.replace('TANK-', '');
       return {
-        id: p.id, name: `Reservoir ${n}`, zone: nearestZone(pos), pos,
+        id: p.id, name: p.name, zone: nearestZone(pos), pos,
         capacity: p.capacity_m3, base, level, volume: (level / 100) * p.capacity_m3,
         tone: toneFor('level', level), inflow: p.inflow_lps, outflow: p.outflow_lps,
         change6h: ago, vsYesterday, abnormal, hoursToLow
@@ -187,6 +186,8 @@ function build(network: NetworkData): Ops {
     if (z && !zoneSample[z]) zoneSample[z] = mid(p);
   }
   const tank1 = tanks[0]?.pos ?? [0, 0];
+  const wtp = assets.find(a => a.properties.asset === 'facility' && (a.properties as FacilityProps).facility_type === 'wtp');
+  const works: LatLng = wtp ? toLatLng(wtp.geometry.coordinates) : [tank1[0] + 0.004, tank1[1] - 0.004];
   const quality: QualityPointOps[] = QUALITY_POINTS.map((q, i) => {
     const values = {} as Record<Metric, number>;
     const tones: Partial<Record<Metric, Tone>> = {};
@@ -194,7 +195,7 @@ function build(network: NetworkData): Ops {
       values[m] = current(m, q.id, q.base[m as keyof QualityBase]);
       tones[m] = toneFor(m, values[m]);
     }
-    const pos: LatLng = q.zone === 'WTW' ? [tank1[0] + 0.004, tank1[1] - 0.004] : (zoneSample[q.zone] ?? tank1);
+    const pos: LatLng = q.zone === 'WTW' ? works : (zoneSample[q.zone] ?? tank1);
     return { id: q.id, name: q.name, zone: q.zone, pos, base: q.base, values, tones, tone: worstTone(Object.values(tones) as Tone[]), updatedMin: 1 + (i % 4) };
   });
 
@@ -235,15 +236,15 @@ function build(network: NetworkData): Ops {
   const sensors: SensorDevice[] = [];
   pressure.forEach(p => {
     const r = stableRand(`bat:${p.id}`);
-    const battery = p.id === 'SN-14' ? 14 : Math.round(38 + r * 60);
+    const battery = p.id === 'SN-24' ? 14 : Math.round(38 + r * 60);
     const signal = Math.round(-62 - stableRand(`sig:${p.id}`) * 38);
     const health: Tone = !p.online ? 'off' : battery < 20 ? 'warn' : 'ok';
     sensors.push({
       id: p.id, name: `Flow + pressure logger ${p.id.replace('SN-', '')}`, kind: 'Pressure & flow', measures: 'Pressure, flow',
       zone: p.zone, pos: p.pos, health,
-      healthNote: !p.online ? (p.id === 'SN-07' ? 'No data for 3 h 10 min' : 'No data for 2 days') : battery < 20 ? 'Low battery' : 'Reporting normally',
+      healthNote: !p.online ? (p.id === 'SN-22' ? 'No data for 3 h 10 min' : 'No data for 2 days') : battery < 20 ? 'Low battery' : 'Reporting normally',
       battery, signal,
-      lastCommMin: p.id === 'SN-07' ? 190 : p.id === 'SN-23' ? 2 * 24 * 60 + 35 : Math.max(1, Math.round(stableRand(`lc:${p.id}`) * 4)),
+      lastCommMin: p.id === 'SN-22' ? 190 : p.id === 'SN-23' ? 2 * 24 * 60 + 35 : Math.max(1, Math.round(stableRand(`lc:${p.id}`) * 4)),
       reading: p.online ? `${p.value.toFixed(2)} bar · ${p.flow.toFixed(1)} L/s` : '—',
       entityId: p.id, metric: 'pressure', base: p.base,
       installed: 2019 + Math.floor(stableRand(`yr:${p.id}`) * 6)
@@ -277,76 +278,76 @@ function build(network: NetworkData): Ops {
   const Q = (id: string) => quality.find(q => q.id === id)!;
   const T = (id: string) => tanks.find(t => t.id === id)!;
   const ago = (h: number) => NOW - h * HOURS;
-  const sn12 = P('SN-12'); const sn24 = P('SN-24');
-  const wqMil = Q('WQ-MIL'); const wqMe = Q('WQ-ME');
-  const t1 = T('TANK-01');
+  const sn14 = P('SN-14'); const sn15 = P('SN-15');
+  const wqShauri = Q('WQ-SHAURI'); const wqKwn = Q('WQ-KWANJORA');
+  const t2 = T('TANK-02'); const t4 = T('TANK-04'); const t3 = T('TANK-03');
   const inc = (i: Omit<Incident, 'base'> & { base?: number }): Incident => ({ base: 0, ...i });
   const incidents: Incident[] = [
-    inc({ id: 'INC-2318', type: 'Pressure anomaly', severity: 'critical', status: 'active', title: 'Pressure anomaly detected — Northgate',
-      zone: 'MYT', location: `Logger SN-12 · pipe ${sn12.pipeId}`, metric: 'pressure', entityId: 'SN-12', base: sn12.base,
-      trigger: `${sn12.value.toFixed(2)} bar, below the 1.5 bar minimum`, startedAt: ago(3.1), focus: 'asset:SN-12',
-      summary: 'Pressure fell by more than 2 bar in under an hour while flow at the same logger rose. The pattern is consistent with a main break downstream of SN-12.' }),
-    inc({ id: 'INC-2317', type: 'Possible leak', severity: 'critical', status: 'active', title: 'Possible leak — Northgate, Kingsway',
-      zone: 'MYT', location: `Pipe ${sn12.pipeId} near SN-12`, metric: 'flow', entityId: 'SN-12', base: sn12.flowBase,
-      trigger: `Flow ${sn12.flow.toFixed(1)} L/s, about ${(sn12.flow - sn12.flowBase).toFixed(0)} L/s above the expected profile`, startedAt: ago(3.0), focus: `pipe:${sn12.pipeId}`,
+    inc({ id: 'INC-2318', type: 'Pressure anomaly', severity: 'critical', status: 'active', title: 'Pressure anomaly detected — Ziwani 3',
+      zone: 'ZIWANI3', location: `Logger SN-14 · pipe ${sn14.pipeId}`, metric: 'pressure', entityId: 'SN-14', base: sn14.base,
+      trigger: `${sn14.value.toFixed(2)} bar, below the 1.5 bar minimum`, startedAt: ago(3.1), focus: 'asset:SN-14',
+      summary: 'Pressure fell by more than 2 bar in under an hour while flow at the same logger rose. The pattern is consistent with a main break downstream of SN-14.' }),
+    inc({ id: 'INC-2317', type: 'Possible leak', severity: 'critical', status: 'active', title: 'Possible leak — Ziwani 3, Kahembe',
+      zone: 'ZIWANI3', location: `Pipe ${sn14.pipeId} near SN-14`, metric: 'flow', entityId: 'SN-14', base: sn14.flowBase,
+      trigger: `Flow ${sn14.flow.toFixed(1)} L/s, about ${(sn14.flow - sn14.flowBase).toFixed(0)} L/s above the expected profile`, startedAt: ago(3.0), focus: `pipe:${sn14.pipeId}`,
       summary: 'Sustained excess flow together with the pressure drop. A customer also reported water on the road surface (ticket LK-2041).' }),
-    inc({ id: 'INC-2316', type: 'Water quality breach', severity: 'warning', status: 'active', title: 'Turbidity above threshold — Riverside',
-      zone: 'MIL', location: wqMil.name, metric: 'turbidity', entityId: 'WQ-MIL', base: wqMil.base.turbidity,
-      trigger: `${wqMil.values.turbidity.toFixed(2)} NTU, limit 1.0 NTU`, startedAt: ago(5.2), focus: 'asset:TB-MIL',
-      summary: 'Turbidity has been rising for several hours at the Riverside booster. Check upstream works and flush if it continues.' }),
-    inc({ id: 'INC-2315', type: 'Low tank level', severity: 'warning', status: 'active', title: 'Reservoir 01 approaching low level',
-      zone: t1.zone, location: 'Reservoir 01', metric: 'level', entityId: 'TANK-01', base: t1.base,
-      trigger: `${Math.round(t1.level)} % of ${t1.capacity.toLocaleString()} m³, warning level 35 %, low level 20 %`, startedAt: ago(1.6), focus: 'asset:TANK-01',
-      summary: `Outflow has exceeded inflow for most of the day. At the current rate the reservoir reaches its 20 % low level in about ${t1.hoursToLow ? Math.max(1, Math.round(t1.hoursToLow)) : 'a few'} hours.` }),
-    inc({ id: 'INC-2314', type: 'Pressure anomaly', severity: 'warning', status: 'active', title: 'Low pressure — Northgate',
-      zone: 'MYT', location: `Logger SN-24 · pipe ${sn24.pipeId}`, metric: 'pressure', entityId: 'SN-24', base: sn24.base,
-      trigger: `${sn24.value.toFixed(2)} bar, below the 1.5 bar minimum`, startedAt: ago(2.6), focus: 'asset:SN-24',
-      summary: 'Neighbouring logger is also low, which supports a single event in the Kingsway area rather than a sensor fault.' }),
-    inc({ id: 'INC-2312', type: 'Sensor offline', severity: 'info', status: 'active', title: 'Logger SN-07 not reporting — East Meadows',
-      zone: 'KREKAJ', location: 'Logger SN-07', metric: 'pressure', entityId: 'SN-07', base: P('SN-07').base,
-      trigger: 'No data for 3 h 10 min', startedAt: ago(3.17), focus: 'asset:SN-07',
+    inc({ id: 'INC-2316', type: 'Water quality breach', severity: 'warning', status: 'active', title: 'Turbidity above threshold — Shauri',
+      zone: 'SHAURI', location: wqShauri.name, metric: 'turbidity', entityId: 'WQ-SHAURI', base: wqShauri.base.turbidity,
+      trigger: `${wqShauri.values.turbidity.toFixed(2)} NTU, limit 1.0 NTU`, startedAt: ago(5.2), focus: 'asset:TB-SHAURI',
+      summary: 'Turbidity has been rising for several hours at the Ndothua kiosk. Check the Mairo Inya works and flush if it continues.' }),
+    inc({ id: 'INC-2315', type: 'Low tank level', severity: 'warning', status: 'active', title: `${t2.name} approaching low level`,
+      zone: t2.zone, location: t2.name, metric: 'level', entityId: 'TANK-02', base: t2.base,
+      trigger: `${Math.round(t2.level)} % of ${t2.capacity.toLocaleString()} m³, warning level 35 %, low level 20 %`, startedAt: ago(1.6), focus: 'asset:TANK-02',
+      summary: `Outflow has exceeded inflow for most of the day. At the current rate the reservoir reaches its 20 % low level in about ${t2.hoursToLow ? Math.max(1, Math.round(t2.hoursToLow)) : 'a few'} hours.` }),
+    inc({ id: 'INC-2314', type: 'Pressure anomaly', severity: 'warning', status: 'active', title: 'Low pressure — Ziwani 3',
+      zone: 'ZIWANI3', location: `Logger SN-15 · pipe ${sn15.pipeId}`, metric: 'pressure', entityId: 'SN-15', base: sn15.base,
+      trigger: `${sn15.value.toFixed(2)} bar, below the 1.5 bar minimum`, startedAt: ago(2.6), focus: 'asset:SN-15',
+      summary: 'Neighbouring logger is also low, which supports a single event in the Kahembe area rather than a sensor fault.' }),
+    inc({ id: 'INC-2312', type: 'Sensor offline', severity: 'info', status: 'active', title: 'Logger SN-22 not reporting — Ziwani 1',
+      zone: 'ZIWANI1', location: 'Logger SN-22', metric: 'pressure', entityId: 'SN-22', base: P('SN-22').base,
+      trigger: 'No data for 3 h 10 min', startedAt: ago(3.17), focus: 'asset:SN-22',
       summary: 'Last message received with 41 % battery and good signal. Likely a modem or power issue on site.' }),
-    inc({ id: 'INC-2313', type: 'Water quality breach', severity: 'warning', status: 'acknowledged', title: 'Chlorine residual below range — Millbrook East',
-      zone: 'ME', location: wqMe.name, metric: 'chlorine', entityId: 'WQ-ME', base: wqMe.base.chlorine,
-      trigger: `${wqMe.values.chlorine.toFixed(2)} mg/L, minimum 0.2 mg/L`, startedAt: ago(20), focus: 'asset:PH-ME',
-      summary: 'Residual has been decaying at the end of the zone. Booster dosing check scheduled.' }),
-    inc({ id: 'INC-2311', type: 'Abnormal reading', severity: 'warning', status: 'acknowledged', title: 'Erratic level signal — Reservoir 04',
-      zone: T('TANK-04').zone, location: 'Level sensor LV-04', metric: 'level', entityId: 'TANK-04', base: T('TANK-04').base,
+    inc({ id: 'INC-2313', type: 'Water quality breach', severity: 'warning', status: 'acknowledged', title: 'Chlorine residual below range — Kwa Njora',
+      zone: 'KWANJORA', location: wqKwn.name, metric: 'chlorine', entityId: 'WQ-KWANJORA', base: wqKwn.base.chlorine,
+      trigger: `${wqKwn.values.chlorine.toFixed(2)} mg/L, minimum 0.2 mg/L`, startedAt: ago(20), focus: 'asset:PH-KWANJORA',
+      summary: 'Residual has been decaying towards Ndogino at the end of the zone. Booster dosing check scheduled.' }),
+    inc({ id: 'INC-2311', type: 'Abnormal reading', severity: 'warning', status: 'acknowledged', title: `Erratic level signal — ${t4.name}`,
+      zone: t4.zone, location: 'Level sensor LV-04', metric: 'level', entityId: 'TANK-04', base: t4.base,
       trigger: 'Signal −104 dBm, 3 missed readings in the last hour', startedAt: ago(9), focus: 'asset:TANK-04',
       summary: 'Readings are plausible but intermittent. Antenna inspection requested.' }),
-    inc({ id: 'INC-2309', type: 'Pressure anomaly', severity: 'warning', status: 'resolved', title: 'Pressure anomaly — Downtown Central',
-      zone: 'CBD', location: 'Logger SN-01', metric: 'pressure', entityId: 'SN-01', base: P('SN-01').base,
-      trigger: '1.18 bar at lowest', startedAt: ago(30), resolvedAt: ago(26), focus: 'asset:SN-01', summary: 'Valve operation during planned works. Pressure restored.' }),
-    inc({ id: 'INC-2304', type: 'Water quality breach', severity: 'warning', status: 'resolved', title: 'pH above range — East Meadows',
-      zone: 'KREKAJ', location: Q('WQ-KREKAJ').name, metric: 'ph', entityId: 'WQ-KREKAJ', base: Q('WQ-KREKAJ').base.ph,
-      trigger: 'pH 8.6 at peak', startedAt: ago(4 * 24), resolvedAt: ago(4 * 24 - 6), focus: 'asset:PH-KREKAJ', summary: 'Dosing correction at the works.' }),
-    inc({ id: 'INC-2301', type: 'Pressure anomaly', severity: 'warning', status: 'resolved', title: 'Pressure anomaly — Riverside',
-      zone: 'MIL', location: 'Logger SN-10', metric: 'pressure', entityId: 'SN-10', base: P('SN-10').base,
-      trigger: '1.26 bar at lowest', startedAt: ago(6 * 24), resolvedAt: ago(6 * 24 - 4), focus: 'asset:SN-10', summary: 'Burst on a 110 mm distribution main, repaired.' }),
-    inc({ id: 'INC-2297', type: 'Water quality breach', severity: 'critical', status: 'resolved', title: 'Turbidity critical — Westhaven',
-      zone: 'OBA', location: Q('WQ-OBA').name, metric: 'turbidity', entityId: 'WQ-OBA', base: Q('WQ-OBA').base.turbidity,
-      trigger: '6.2 NTU at peak, limit 5.0 NTU', startedAt: ago(9 * 24), resolvedAt: ago(9 * 24 - 14), focus: 'asset:TB-OBA', summary: 'Mains repair disturbed sediment. Zone flushed.' }),
-    inc({ id: 'INC-2294', type: 'Pressure anomaly', severity: 'critical', status: 'resolved', title: 'Pressure anomaly — Northgate',
-      zone: 'MYT', location: 'Logger SN-12', metric: 'pressure', entityId: 'SN-12', base: sn12.base,
-      trigger: '1.62 bar drop', startedAt: ago(9 * 24), resolvedAt: ago(9 * 24 - 5), focus: 'asset:SN-12', summary: 'Joint failure, repaired by Crew A.' }),
-    inc({ id: 'INC-2290', type: 'Possible leak', severity: 'warning', status: 'resolved', title: 'Possible leak — Riverside',
-      zone: 'MIL', location: 'Logger SN-19', metric: 'pressure', entityId: 'SN-19', base: P('SN-19').base,
+    inc({ id: 'INC-2309', type: 'Pressure anomaly', severity: 'warning', status: 'resolved', title: 'Pressure anomaly — Ziwani 2',
+      zone: 'ZIWANI2', location: 'Logger SN-20', metric: 'pressure', entityId: 'SN-20', base: P('SN-20').base,
+      trigger: '1.18 bar at lowest', startedAt: ago(30), resolvedAt: ago(26), focus: 'asset:SN-20', summary: 'Valve operation during planned works. Pressure restored.' }),
+    inc({ id: 'INC-2304', type: 'Water quality breach', severity: 'warning', status: 'resolved', title: 'pH above range — Ziwani 1',
+      zone: 'ZIWANI1', location: Q('WQ-ZIWANI1').name, metric: 'ph', entityId: 'WQ-ZIWANI1', base: Q('WQ-ZIWANI1').base.ph,
+      trigger: 'pH 8.6 at peak', startedAt: ago(4 * 24), resolvedAt: ago(4 * 24 - 6), focus: 'asset:PH-ZIWANI1', summary: 'Dosing correction at the works.' }),
+    inc({ id: 'INC-2301', type: 'Pressure anomaly', severity: 'warning', status: 'resolved', title: 'Pressure anomaly — Shauri',
+      zone: 'SHAURI', location: 'Logger SN-17', metric: 'pressure', entityId: 'SN-17', base: P('SN-17').base,
+      trigger: '1.26 bar at lowest', startedAt: ago(6 * 24), resolvedAt: ago(6 * 24 - 4), focus: 'asset:SN-17', summary: 'Burst on a 110 mm distribution main, repaired.' }),
+    inc({ id: 'INC-2297', type: 'Water quality breach', severity: 'critical', status: 'resolved', title: 'Turbidity critical — Ziwani 2',
+      zone: 'ZIWANI2', location: Q('WQ-ZIWANI2').name, metric: 'turbidity', entityId: 'WQ-ZIWANI2', base: Q('WQ-ZIWANI2').base.turbidity,
+      trigger: '6.2 NTU at peak, limit 5.0 NTU', startedAt: ago(9 * 24), resolvedAt: ago(9 * 24 - 14), focus: 'asset:TB-ZIWANI2', summary: 'Mains repair disturbed sediment. Zone flushed.' }),
+    inc({ id: 'INC-2294', type: 'Pressure anomaly', severity: 'critical', status: 'resolved', title: 'Pressure anomaly — Ziwani 3',
+      zone: 'ZIWANI3', location: 'Logger SN-14', metric: 'pressure', entityId: 'SN-14', base: sn14.base,
+      trigger: '1.62 bar drop', startedAt: ago(9 * 24), resolvedAt: ago(9 * 24 - 5), focus: 'asset:SN-14', summary: 'Joint failure, repaired by Crew A.' }),
+    inc({ id: 'INC-2290', type: 'Possible leak', severity: 'warning', status: 'resolved', title: 'Possible leak — Shauri',
+      zone: 'SHAURI', location: 'Logger SN-19', metric: 'pressure', entityId: 'SN-19', base: P('SN-19').base,
       trigger: '1.4 bar drop with night-flow increase', startedAt: ago(13 * 24), resolvedAt: ago(13 * 24 - 3), focus: 'asset:SN-19', summary: 'Service-line leak found and fixed.' }),
-    inc({ id: 'INC-2286', type: 'Water quality breach', severity: 'warning', status: 'resolved', title: 'Chlorine residual below range — Downtown Central',
-      zone: 'CBD', location: Q('WQ-CBD').name, metric: 'chlorine', entityId: 'WQ-CBD', base: Q('WQ-CBD').base.chlorine,
-      trigger: '0.17 mg/L at lowest', startedAt: ago(15 * 24), resolvedAt: ago(15 * 24 - 20), focus: 'asset:PH-CBD', summary: 'Booster chlorinator restarted.' }),
-    inc({ id: 'INC-2280', type: 'Pressure anomaly', severity: 'warning', status: 'resolved', title: 'Pressure anomaly — Riverside',
-      zone: 'MIL', location: 'Logger SN-10', metric: 'pressure', entityId: 'SN-10', base: P('SN-10').base,
-      trigger: '1.21 bar at lowest', startedAt: ago(17 * 24), resolvedAt: ago(17 * 24 - 6), focus: 'asset:SN-10', summary: 'Recurring at the same logger — candidate for step-testing.' }),
-    inc({ id: 'INC-2275', type: 'Low tank level', severity: 'warning', status: 'resolved', title: 'Reservoir 06 low level',
-      zone: T('TANK-06').zone, location: 'Reservoir 06', metric: 'level', entityId: 'TANK-06', base: T('TANK-06').base,
-      trigger: '27 % at lowest', startedAt: ago(20 * 24), resolvedAt: ago(20 * 24 - 10), focus: 'asset:TANK-06', summary: 'Pump station trip, restarted.' }),
-    inc({ id: 'INC-2271', type: 'Water quality breach', severity: 'warning', status: 'resolved', title: 'Turbidity above threshold — Riverside',
-      zone: 'MIL', location: wqMil.name, metric: 'turbidity', entityId: 'WQ-MIL', base: wqMil.base.turbidity,
-      trigger: '2.4 NTU at peak', startedAt: ago(22 * 24), resolvedAt: ago(22 * 24 - 10), focus: 'asset:TB-MIL', summary: 'Heavy rain at intake. Cleared after filter backwash.' }),
-    inc({ id: 'INC-2266', type: 'Pressure anomaly', severity: 'warning', status: 'resolved', title: 'Pressure anomaly — Northgate',
-      zone: 'MYT', location: 'Logger SN-04', metric: 'pressure', entityId: 'SN-04', base: P('SN-04').base,
-      trigger: '1.6 bar at lowest', startedAt: ago(26 * 24), resolvedAt: ago(26 * 24 - 8), focus: 'asset:SN-04', summary: 'PRV fault, recalibrated.' })
+    inc({ id: 'INC-2286', type: 'Water quality breach', severity: 'warning', status: 'resolved', title: 'Chlorine residual below range — Ziwani 2',
+      zone: 'ZIWANI2', location: Q('WQ-ZIWANI2').name, metric: 'chlorine', entityId: 'WQ-ZIWANI2', base: Q('WQ-ZIWANI2').base.chlorine,
+      trigger: '0.17 mg/L at lowest', startedAt: ago(15 * 24), resolvedAt: ago(15 * 24 - 20), focus: 'asset:PH-ZIWANI2', summary: 'Booster chlorinator restarted.' }),
+    inc({ id: 'INC-2280', type: 'Pressure anomaly', severity: 'warning', status: 'resolved', title: 'Pressure anomaly — Shauri',
+      zone: 'SHAURI', location: 'Logger SN-17', metric: 'pressure', entityId: 'SN-17', base: P('SN-17').base,
+      trigger: '1.21 bar at lowest', startedAt: ago(17 * 24), resolvedAt: ago(17 * 24 - 6), focus: 'asset:SN-17', summary: 'Recurring at the same logger — candidate for step-testing.' }),
+    inc({ id: 'INC-2275', type: 'Low tank level', severity: 'warning', status: 'resolved', title: `${t3.name} low level`,
+      zone: t3.zone, location: t3.name, metric: 'level', entityId: 'TANK-03', base: t3.base,
+      trigger: '27 % at lowest', startedAt: ago(20 * 24), resolvedAt: ago(20 * 24 - 10), focus: 'asset:TANK-03', summary: 'Supply from Mairo Inya WTP interrupted, restored.' }),
+    inc({ id: 'INC-2271', type: 'Water quality breach', severity: 'warning', status: 'resolved', title: 'Turbidity above threshold — Shauri',
+      zone: 'SHAURI', location: wqShauri.name, metric: 'turbidity', entityId: 'WQ-SHAURI', base: wqShauri.base.turbidity,
+      trigger: '2.4 NTU at peak', startedAt: ago(22 * 24), resolvedAt: ago(22 * 24 - 10), focus: 'asset:TB-SHAURI', summary: 'Heavy rain at the Mairo Inya intake. Cleared after filter backwash.' }),
+    inc({ id: 'INC-2266', type: 'Pressure anomaly', severity: 'warning', status: 'resolved', title: 'Pressure anomaly — Ziwani 3',
+      zone: 'ZIWANI3', location: 'Logger SN-16', metric: 'pressure', entityId: 'SN-16', base: P('SN-16').base,
+      trigger: '1.6 bar at lowest', startedAt: ago(26 * 24), resolvedAt: ago(26 * 24 - 8), focus: 'asset:SN-16', summary: 'PRV fault, recalibrated.' })
   ];
 
   const nrwMonthly = buildNrwMonthly();
@@ -381,7 +382,7 @@ let opsPromise: Promise<Ops> | null = null;
 async function loadOps(): Promise<Ops> {
   const base = (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
   // Read the untouched snapshot so series bases match the dataset, not the live overwrite.
-  const raw = await fetch(`${base.replace(/\/$/, '')}/data/riverton-assets.geojson`).then(r => r.json());
+  const raw = await fetch(`${base.replace(/\/$/, '')}/data/erline-assets.geojson`).then(r => r.json());
   for (const f of raw.features as Array<{ properties: Record<string, unknown> }>) {
     const p = f.properties;
     if (p.asset === 'sensor') { BASES[`pressure:${p.id}`] = p.pressure_bar as number; BASES[`flow:${p.id}`] = p.flow_lps as number; }

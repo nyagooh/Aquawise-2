@@ -1,0 +1,154 @@
+{
+  "source": "Erline Water",
+  "feature_count": 147,
+  "skipped": 0,
+  "asset_count": 46,
+  "asset_counts": {
+    "facility": 5,
+    "tank": 5,
+    "sensor": 24,
+    "meter_valve": 7,
+    "pressure_valve": 5
+  },
+  "by_class": {
+    "main": 13,
+    "distribution": 133,
+    "boundary": 1
+  },
+  "length_km_by_class": {
+    "main": 30.04,
+    "distribution": 91.22
+  },
+  "length_km_by_zone": {
+    "ZIWANI3": 24.98,
+    "ZIWANI2": 15.1,
+    "ZIWANI1": 8.15,
+    "SHAURI": 32.52,
+    "ZIWANI": 0.5,
+    "KWANJORA": 9.97
+  },
+  "length_km_by_material": {
+    "Steel": 30.04,
+    "HDPE": 20.2,
+    "PVC": 20.27,
+    "uPVC": 14.68,
+    "DI": 2.71,
+    "AC": 5.71,
+    "GI": 6.67
+  },
+  "top_zones": [
+    [
+      "SHAURI",
+      41
+    ],
+    [
+      "ZIWANI3",
+      33
+    ],
+    [
+      "ZIWANI2",
+      32
+    ],
+    [
+      "ZIWANI1",
+      20
+    ],
+    [
+      "KWANJORA",
+      6
+    ],
+    [
+      "ZIWANI",
+      1
+    ]
+  ],
+  "zones_normalized": [
+    [
+      "SHAURI",
+      41
+    ],
+    [
+      "ZIWANI3",
+      33
+    ],
+    [
+      "ZIWANI2",
+      32
+    ],
+    [
+      "ZIWANI1",
+      20
+    ],
+    [
+      "KWANJORA",
+      6
+    ],
+    [
+      "ZIWANI",
+      1
+    ]
+  ],
+  "materials": [
+    [
+      "PVC",
+      38
+    ],
+    [
+      "HDPE",
+      22
+    ],
+    [
+      "uPVC",
+      21
+    ],
+    [
+      "Steel",
+      13
+    ],
+    [
+      "GI",
+      9
+    ],
+    [
+      "AC",
+      6
+    ],
+    [
+      "DI",
+      4
+    ]
+  ],
+  "common_diameters_mm": [],
+  "diameter_distribution": {
+    "unknown": 146
+  },
+  "age_distribution": {
+    "unknown": 46,
+    "2020+": 44,
+    "2010-2019": 37,
+    "2000-2009": 19
+  },
+  "status_counts": {
+    "open": 146,
+    "closed": 0,
+    "unknown": 0
+  },
+  "service_counts": {
+    "in-service": 146,
+    "out-of-service": 0,
+    "pending": 0,
+    "unknown": 0
+  },
+  "total_length_m": 121264.2,
+  "total_length_km": 121.26,
+  "bbox": [
+    36.3898859,
+    -0.0070888,
+    36.477297,
+    0.089623
+  ],
+  "center": [
+    36.43359145,
+    0.041267099999999994
+  ]
+}

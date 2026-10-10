@@ -1,5 +1,5 @@
 /**
- * Compact operational map: the real Riverton pipe network on a quiet basemap,
+ * Compact operational map: the real Erline Water pipe network on a quiet basemap,
  * with status-coloured monitoring points. Used on Overview, Monitoring and NRW.
  * The full GIS workspace lives on the Network page.
  */

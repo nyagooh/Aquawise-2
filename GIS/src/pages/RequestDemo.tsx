@@ -18,7 +18,7 @@ const COPY = {
   demo: {
     eyebrow: 'Live demo access',
     title: 'See the live demo.',
-    sub: 'Tell us who you are and we’ll open the live Riverton water network demo. No password needed.',
+    sub: 'Tell us who you are and we’ll open the live Erline Water network demo. No password needed.',
     cta: 'Open the live demo →',
     busy: 'Submitting…',
   },
@@ -77,7 +77,7 @@ export default function RequestDemo() {
           <span>Aqua<b>wise</b></span>
         </Link>
         <div className="demo-hub-nav-meta">
-          <span className="demo-hub-pill"><span className="live-dot" />Live · Riverton Water Network</span>
+          <span className="demo-hub-pill"><span className="live-dot" />Live · Erline Water Network</span>
           <button className="theme-toggle" onClick={toggle} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'}`}>
             {theme === 'dark' ? '☀' : '☾'} {theme === 'dark' ? 'Light' : 'Dark'}
           </button>
@@ -117,7 +117,7 @@ export default function RequestDemo() {
             </label>
             <label>
               <span>Company / utility <em>*</em></span>
-              <input required value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Riverton Water & Sanitation Co." />
+              <input required value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Erline Water" />
             </label>
             <label>
               <span>What would you like to see? <em>*</em></span>

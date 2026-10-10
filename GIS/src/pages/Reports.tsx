@@ -30,7 +30,7 @@ interface Generated {
 const RECENT_SEED = [
   { id: 'RPT-0412', title: 'Tank Level Report', period: 'Last month', zone: 'All zones', by: 'J. Mwangi', at: NOW - 3 * 24 * HOURS },
   { id: 'RPT-0411', title: 'Water Quality Report', period: 'Last 30 days', zone: 'All zones', by: 'Scheduled', at: NOW - 6 * 24 * HOURS },
-  { id: 'RPT-0409', title: 'Pressure Report', period: 'Last 7 days', zone: 'Northgate', by: 'A. Otieno', at: NOW - 9 * 24 * HOURS },
+  { id: 'RPT-0409', title: 'Pressure Report', period: 'Last 7 days', zone: 'Ziwani 3', by: 'A. Otieno', at: NOW - 9 * 24 * HOURS },
   { id: 'RPT-0405', title: 'Alerts & Incidents Report', period: 'Last 30 days', zone: 'All zones', by: 'Scheduled', at: NOW - 13 * 24 * HOURS }
 ];
 const SCHEDULED = [
@@ -125,7 +125,7 @@ function ReportsBody({ ops }: { ops: Ops }) {
           <header className="rp-doc-head">
             <div>
               <h2>{report.title}</h2>
-              <p>{report.period} · {report.zone} · Riverton Water &amp; Sanitation Co.</p>
+              <p>{report.period} · {report.zone} · Erline Water</p>
             </div>
             <span className="dx-muted">{def.desc}</span>
           </header>

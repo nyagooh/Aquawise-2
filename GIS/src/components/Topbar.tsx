@@ -153,7 +153,7 @@ export function Topbar({ title, sub, onToggleNav, filters }: Props) {
           <label className="aw-pill-select">
             <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden="true"><path d="M4 21V9l5-3v15M9 21V4l6 3v14M15 21v-9l5 2v7" /></svg>
             <select value={f.zone} onChange={e => f.setZone(e.target.value)} aria-label="Zone">
-              <option value="ALL">Riverton · all zones</option>
+              <option value="ALL">Erline · all zones</option>
               {ZONE_CODES.map(z => <option key={z} value={z}>{zoneName(z)}</option>)}
             </select>
           </label>

@@ -104,7 +104,7 @@ function OverviewBody({ ops }: { ops: Ops }) {
 
   /* ── bottom cards ── */
   const wq = [...quality].sort((a, b) => toneRank(b.tone) - toneRank(a.tone))[0];
-  const pz = z ?? ops.zones.find(x => x.code === 'MYT')!;
+  const pz = z ?? ops.zones.find(x => x.code === 'ZIWANI3')!;
   const pzLoggers = ops.pressure.filter(p => p.zone === pz.code && p.online);
   const pSeries = meanSeries(pzLoggers.map(p => series('pressure', p.id, p.base, day)));
   const pNow = pSeries[pSeries.length - 1]?.v ?? 0; const pThen = pSeries[0]?.v ?? 0;

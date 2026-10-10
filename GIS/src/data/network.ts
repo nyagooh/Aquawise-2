@@ -1,12 +1,13 @@
 /**
- * Network data loader — fetches the real Riverton shapefile (converted to
- * GeoJSON by scripts/shapefile_to_geojson.py) and exposes typed accessors.
+ * Network data loader — fetches the Erline Water asset shapefiles (converted
+ * to GeoJSON by scripts/erline_to_geojson.py) and exposes typed accessors.
  *
  * Files served as static assets from /public/data/:
- *   - riverton-pipes.geojson    (3,233 polylines, classified with ui_class)
- *   - riverton-assets.geojson   (synthesized point telemetry overlay)
- *   - riverton-meta.json        (rich aggregates: km by class/zone/material,
- *                              status counts, age/diameter distribution, bbox)
+ *   - erline-pipes.geojson      (raw water, transmission + distribution lines and
+ *                              the service-area outline, classified with ui_class)
+ *   - erline-assets.geojson     (surveyed intakes, treatment plants, reservoirs +
+ *                              synthesized telemetry overlay)
+ *   - erline-meta.json          (aggregates: km by class/zone/material, age, bbox)
  */
 import { current, currentQualityForZone, toneFor, QUALITY_POINTS, type Tone } from '../demo/series';
 
@@ -39,8 +40,26 @@ export interface PipeFeature {
   properties: PipeProps;
 }
 
-export type AssetKind = 'tank' | 'pressure_valve' | 'meter_valve' | 'sensor';
+export type AssetKind = 'facility' | 'tank' | 'pressure_valve' | 'meter_valve' | 'sensor';
 export type AssetStatus = 'ok' | 'warn' | 'alert';
+
+export type FacilityType = 'intake' | 'wtp' | 'wwtp';
+
+export interface FacilityProps {
+  asset: 'facility';
+  id: string;
+  name: string;
+  facility_type: FacilityType;
+  capacity_m3d: number;
+  throughput_m3d: number;
+  status: AssetStatus;
+}
+
+export const FACILITY_LABEL: Record<FacilityType, string> = {
+  intake: 'Dam & intake',
+  wtp: 'Water treatment plant',
+  wwtp: 'Wastewater treatment plant'
+};
 
 export interface TankProps {
   asset: 'tank';
@@ -93,7 +112,7 @@ export interface SensorProps {
   pipe_id: string;
 }
 
-export type AssetProps = TankProps | PressureValveProps | MeterValveProps | SensorProps;
+export type AssetProps = FacilityProps | TankProps | PressureValveProps | MeterValveProps | SensorProps;
 
 export interface AssetFeature {
   type: 'Feature';
@@ -145,7 +164,7 @@ export function clearNetworkCache(): void {
 
 /**
  * Auth headers for the optional Django backend (network upload / chooser pages).
- * The bundled Riverton demo is fully static and never calls this — it only runs
+ * The bundled Erline dataset is fully static and never calls this — it only runs
  * when a user drives the backend-backed upload flow against a live API.
  */
 let accessToken: string | null = null;
@@ -172,12 +191,12 @@ export function loadNetwork(): Promise<NetworkData> {
     const base = (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
     const url = (path: string) => `${base.replace(/\/$/, '')}/data/${path}`;
     const [pipesRes, assetsRes, metaRes] = await Promise.all([
-      fetch(url('riverton-pipes.geojson')),
-      fetch(url('riverton-assets.geojson')),
-      fetch(url('riverton-meta.json'))
+      fetch(url('erline-pipes.geojson')),
+      fetch(url('erline-assets.geojson')),
+      fetch(url('erline-meta.json'))
     ]);
     if (!pipesRes.ok || !assetsRes.ok || !metaRes.ok) {
-      throw new Error('Failed to load Riverton network dataset.');
+      throw new Error('Failed to load Erline network dataset.');
     }
     const pipesFc = await pipesRes.json();
     const assetsFc = await assetsRes.json();
@@ -257,7 +276,7 @@ export function loadUploadedNetwork(): NetworkData | null {
 }
 
 /**
- * Real Riverton telemetry covers flow + pressure only. Water utilities also
+ * The bundled telemetry overlay covers flow + pressure only. Water utilities also
  * monitor water-quality sensors (pH, turbidity) at reservoirs and key
  * distribution points — we synthesize a representative set here so the
  * Sensors page can demo them alongside the real flow/pressure nodes.
@@ -405,6 +424,13 @@ export const ASSET_STYLE: Record<AssetKind, {
   // Each asset kind is a distinct category — give it its own hue so icons
   // read apart from the blue (#00B4FF) pipe network and from each other.
   // Status semantics (green/amber/red) stay on the separate status dot.
+  facility: {
+    color: '#14B8A6',          // bold teal — intake / treatment works
+    ring: '#99F6E4',
+    label: 'Intake / treatment plant',
+    shortLabel: 'Facilities',
+    description: 'Dam intakes, water & wastewater treatment works'
+  },
   tank: {
     color: '#6D28D9',
     ring: '#DDD6FE',
@@ -435,7 +461,7 @@ export const ASSET_STYLE: Record<AssetKind, {
   }
 };
 
-export const ASSET_ORDER: AssetKind[] = ['tank', 'pressure_valve', 'meter_valve', 'sensor'];
+export const ASSET_ORDER: AssetKind[] = ['facility', 'tank', 'pressure_valve', 'meter_valve', 'sensor'];
 
 export const STATUS_COLOR: Record<AssetStatus, string> = {
   ok: '#10B981',     // healthy / normal
@@ -471,8 +497,9 @@ export function engSymbol(kind: SymbolKind, color: string, size = 14, outline = 
  * white line icon (reservoir, pressure sensor, water-quality probe, valve,
  * meter, leak). Status shows as a ring around the tile.
  */
-export type MarkerKind = 'tank' | 'pressure' | 'quality' | 'valve' | 'meter' | 'leak';
+export type MarkerKind = 'plant' | 'tank' | 'pressure' | 'quality' | 'valve' | 'meter' | 'leak';
 const MARKER_PATHS: Record<MarkerKind, string> = {
+  plant: '<path d="M3.5 20.5V9.5l5 3v-3l5 3V4.5h7v16z"/><path d="M16.5 12s-2 2.2-2 3.6a2 2 0 0 0 4 0c0-1.4-2-3.6-2-3.6z" fill="#fff"/>',
   tank: '<ellipse cx="12" cy="6" rx="7" ry="2.5"/><path d="M5 6v12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6"/><path d="M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/>',
   pressure: '<path d="M4.5 16.5a8 8 0 1 1 15 0"/><path d="m12 13 4-4.5"/><circle cx="12" cy="13" r="1.2" fill="#fff"/>',
   quality: '<path d="M12 3.5s5.5 6 5.5 10a5.5 5.5 0 0 1-11 0c0-4 5.5-10 5.5-10z"/><path d="M9.8 14.5a2.3 2.3 0 0 0 2.2 2.2"/>',
@@ -502,22 +529,19 @@ export const MATERIAL_TINT: Record<string, string> = {
   GI: '#94A3B8',
   Steel: '#64748B',
   PPR: '#A78BFA',
+  DI: '#475569',
   AC: '#F97316'
 };
 
-/** Zone display names (curated). Falls back to raw key for unknowns. */
+/** Zone display names — Erline distribution zones are named after the
+ *  reservoir that feeds them. Falls back to the raw key for unknowns. */
 export const ZONE_LABELS: Record<string, string> = {
-  MIL: 'Riverside',
-  MYT: 'Northgate',
-  KREKAJ: 'East Meadows',
-  CBD: 'Downtown Central',
-  ME: 'Millbrook East',
-  OBA: 'Westhaven',
-  KRE: 'Millwood',
-  'RIAT C': 'Hillcrest',
-  MTY: 'Northgate (legacy)',
-  HDPE: 'Unclassified',
-  CDD: 'Unclassified'
+  SHAURI: 'Shauri',
+  ZIWANI1: 'Ziwani 1',
+  ZIWANI2: 'Ziwani 2',
+  ZIWANI3: 'Ziwani 3',
+  KWANJORA: 'Kwa Njora',
+  ZIWANI: 'Ziwani (shared)'
 };
 
 export function zoneLabel(code: string): string {
@@ -525,10 +549,7 @@ export function zoneLabel(code: string): string {
 }
 
 export function isRealZone(code: string): boolean {
-  // Filter out polluted zone codes (material names accidentally entered as zone, etc.)
-  if (!code) return false;
-  if (code === 'HDPE' || code === 'CDD' || code === 'MTY') return false;
-  return code.length <= 8;
+  return !!code && code.trim().length > 0;
 }
 
 /** Network health derived from real status counts. */

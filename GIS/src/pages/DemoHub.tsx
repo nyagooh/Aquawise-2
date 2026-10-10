@@ -54,7 +54,7 @@ export default function DemoHub() {
 
       <main className="ed-wrap xd-grid">
         <section className="xd-form-col">
-          <p className="ed-eyebrow">Live demo · Riverton water network</p>
+          <p className="ed-eyebrow">Live demo · Erline Water network</p>
           <h1 className="xd-title">Explore the demo</h1>
           <p className="xd-sub">See a real utility network the way AquaWise sees it: live water quality, pressure and tank levels on one map. Tell us where to reach you and we’ll open it straight away.</p>
           <form className="xd-form" onSubmit={submit}>

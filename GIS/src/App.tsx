@@ -10,7 +10,7 @@ import Assets from './pages/Assets';
 import Reports from './pages/Reports';
 import Attribute from './pages/Attribute';
 
-/** Redirect that keeps the query string (e.g. ?focus=asset:SN-12). */
+/** Redirect that keeps the query string (e.g. ?focus=asset:SN-14). */
 function Moved({ to }: { to: string }) {
   const { search } = useLocation();
   return <Navigate to={`${to}${search}`} replace />;

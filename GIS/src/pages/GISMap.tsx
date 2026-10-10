@@ -1,10 +1,10 @@
 /**
- * GISMap — real Riverton water supply network.
+ * GISMap — Erline Water supply network.
  *
- * Renders 4,951 pipe segments from the converted shapefile across five
- * operational layers (mains, distribution, service, backfeed, zone boundary)
- * plus a synthesized telemetry overlay (tanks, pressure valves, meter
- * valves, flow+pressure sensors). Click any asset to see its full operational
+ * Renders the raw water, transmission and distribution lines plus the
+ * service-area outline from the converted Erline shapefiles, the surveyed
+ * intakes / treatment plants / reservoirs, and a synthesized telemetry
+ * overlay (pressure valves, meter valves, flow+pressure sensors). Click any asset to see its full operational
  * profile in the side panel.
  */
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
@@ -35,6 +35,7 @@ import {
   assetGlyph,
   engSymbol,
   markerIcon,
+  FACILITY_LABEL,
   zoneLabel
 } from '../data/network';
 import { leaks as leakData, type Leak, type LeakSeverity } from '../data';
@@ -54,14 +55,14 @@ const LEAK_STATUS_LABEL: Record<Leak['status'], string> = {
 const TILE_LIGHT = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
 const TILE_DARK = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
 const TILE_ATTR =
-  '&copy; <a href="https://www.openstreetmap.org/">OSM</a> · <a href="https://carto.com/">CARTO</a> · water demo data';
+  '&copy; <a href="https://www.openstreetmap.org/">OSM</a> · <a href="https://carto.com/">CARTO</a> · Erline Water';
 // Google tiles — real imagery without a proxy. `lyrs=s` is pure satellite with
 // NO labels/roads (clean backdrop for the network); `lyrs=m` is the street map.
 const GOOGLE_KEY = (import.meta as { env?: { VITE_GOOGLE_MAPS_API_KEY?: string } }).env?.VITE_GOOGLE_MAPS_API_KEY || '';
 // apistyle hides points of interest and transit so only the network carries icons
 const TILE_GOOGLE_STREETS = 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&apistyle=s.t%3A2%7Cp.v%3Aoff%2Cs.t%3A4%7Cp.v%3Aoff';
 const TILE_GOOGLE_SATELLITE = 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}';
-const TILE_GOOGLE_ATTR = 'Imagery &copy; <a href="https://www.google.com/maps">Google</a> · water demo data';
+const TILE_GOOGLE_ATTR = 'Imagery &copy; <a href="https://www.google.com/maps">Google</a> · Erline Water';
 
 /** Basemap mode — street map, label-free satellite, or bare engineering canvas. */
 type Basemap = 'dark' | 'streets' | 'satellite' | 'none';
@@ -135,7 +136,8 @@ const DEFAULT_LAYERS: LayerVis = {
   distribution: true,
   household: false,        // off by default — turn on at street zoom
   backfeed: true,
-  boundary: false,         // reference-only · off by default to declutter
+  boundary: true,          // Erline service-area outline
+  facility: true,
   tank: true,
   pressure_valve: true,
   meter_valve: true,
@@ -178,7 +180,7 @@ export default function GISMap() {
   simHasResultsRef.current = hasResults;
 
   /* ── 1. fetch network — a user-uploaded network takes priority over the
-        bundled Riverton demo dataset ── */
+        bundled Erline Water dataset ── */
   useEffect(() => {
     let alive = true;
     const uploaded = loadUploadedNetwork();
@@ -494,7 +496,7 @@ export default function GISMap() {
     setLayers((p) => ({ ...p, main: on, distribution: on, service: on, backfeed: on, boundary: on }));
   }, []);
   const setAllAssets = useCallback((on: boolean) => {
-    setLayers((p) => ({ ...p, tank: on, pressure_valve: on, meter_valve: on, sensor: on }));
+    setLayers((p) => ({ ...p, facility: on, tank: on, pressure_valve: on, meter_valve: on, sensor: on }));
   }, []);
 
   const visibleStats = useMemo(() => {
@@ -504,14 +506,14 @@ export default function GISMap() {
     };
     for (const f of network.pipes) pipeCounts[f.properties.ui_class]++;
     const assetCounts: Record<AssetKind, number> = {
-      tank: 0, pressure_valve: 0, meter_valve: 0, sensor: 0
+      facility: 0, tank: 0, pressure_valve: 0, meter_valve: 0, sensor: 0
     };
     for (const a of network.assets) assetCounts[a.properties.asset]++;
     return { pipeCounts, assetCounts };
   }, [network]);
 
   return (
-    <Shell active="network" title="Network" sub="GIS operational view · Riverton water supply network" pagePadding={false} hideRightRail>
+    <Shell active="network" title="Network" sub="GIS operational view · Erline Water supply network" pagePadding={false} hideRightRail>
       <div className="gis-workspace">
       <WorkspaceToolbar
         basemap={basemap}
@@ -527,7 +529,7 @@ export default function GISMap() {
           <div className="map-loading">
             <div className="map-loading-spinner" />
             <div className="map-loading-text">Loading water network …</div>
-            <div className="map-loading-sub">4,951 polylines · reprojecting UTM 36S → WGS84</div>
+            <div className="map-loading-sub">Erline Water · raw, transmission &amp; distribution lines</div>
           </div>
         )}
         {loadError && (
@@ -642,6 +644,14 @@ function assetIcon(feat: AssetFeature): L.DivIcon {
       iconAnchor: [12, 12]
     });
   }
+  if (kind === 'facility') {
+    return L.divIcon({
+      className: 'aw-marker',
+      html: `<span class="eg-sym${ring}">${markerIcon('plant', palette.color, 24)}</span>`,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12]
+    });
+  }
   const sub = (props as { subtype?: string }).subtype;
   const quality = sub === 'ph' || sub === 'turbidity';
   const mk = kind === 'pressure_valve' ? 'valve' : kind === 'meter_valve' ? 'meter' : quality ? 'quality' : 'pressure';
@@ -656,6 +666,7 @@ function assetIcon(feat: AssetFeature): L.DivIcon {
 
 function assetTooltip(feat: AssetFeature): string {
   const p = feat.properties;
+  if (p.asset === 'facility') return `${p.name} · ${FACILITY_LABEL[p.facility_type]}`;
   if (p.asset === 'tank') return `${p.name} · level sensor ${p.level_pct}%`;
   if (p.asset === 'pressure_valve') return `${p.name} · ${p.live_bar} bar`;
   if (p.asset === 'meter_valve') return `${p.name} · ⌀${p.size_mm} mm`;
@@ -752,6 +763,27 @@ function assetPopupHtml(feat: AssetFeature): string {
       : p.status === 'warn'
         ? `<span class="aw-pop-pill aw-pop-pill--warn">Watch</span>`
         : `<span class="aw-pop-pill aw-pop-pill--bad">Alarm</span>`;
+  if (p.asset === 'facility') {
+    const util = Math.round((p.throughput_m3d / p.capacity_m3d) * 100);
+    return `
+      <div class="aw-pop">
+        <div class="aw-pop-head">
+          <span class="aw-pop-swatch sq" style="background:${ASSET_STYLE.facility.color}"></span>
+          <div class="aw-pop-head-text">
+            <div class="aw-pop-title">${escapeHtml(p.name)}</div>
+            <div class="aw-pop-sub">${escapeHtml(p.id)} · ${escapeHtml(FACILITY_LABEL[p.facility_type].toLowerCase())}</div>
+          </div>
+          ${statusPill}
+        </div>
+        <div class="aw-pop-grid">
+          <div><span>Design capacity</span><strong>${p.capacity_m3d.toLocaleString()} m³/d</strong></div>
+          <div><span>Throughput</span><strong>${p.throughput_m3d.toLocaleString()} m³/d</strong></div>
+          <div><span>Utilisation</span><strong>${util}%</strong></div>
+          <div><span>Type</span><strong>${escapeHtml(p.facility_type.toUpperCase())}</strong></div>
+        </div>
+        <div class="aw-pop-foot">Click again for full facility record →</div>
+      </div>`;
+  }
   if (p.asset === 'tank') {
     const lvlColor = p.level_pct > 70 ? '#22C55E' : p.level_pct > 35 ? '#F59E0B' : '#EF4444';
     return `
@@ -843,7 +875,7 @@ function assetPopupHtml(feat: AssetFeature): string {
 /** Rich detail card for sensors and reservoirs: live reading, safe range, 24 h trend, recent alerts. */
 function detailPopupHtml(feat: AssetFeature, ops: Ops | null): string {
   const p = feat.properties;
-  if (!ops) return assetPopupHtml(feat);
+  if (!ops || p.asset === 'facility') return assetPopupHtml(feat);
   const day = rangeSpec('24H');
   let title = p.name; let kind = ''; let metric: Metric = 'pressure'; let entity = p.id; let base = 0;
   let rows: Array<[string, string]> = []; let href = '/monitoring'; let zone = '';
@@ -1078,7 +1110,7 @@ function AssetSwatch({ kind }: { kind: AssetKind }) {
   const c = ASSET_STYLE[kind].color;
   const html = kind === 'sensor'
     ? markerIcon('pressure', c, 16) + markerIcon('quality', QUALITY_SENSOR_COLOR, 16)
-    : markerIcon(kind === 'tank' ? 'tank' : kind === 'pressure_valve' ? 'valve' : 'meter', c, 16);
+    : markerIcon(kind === 'facility' ? 'plant' : kind === 'tank' ? 'tank' : kind === 'pressure_valve' ? 'valve' : 'meter', c, 16);
   return <span className="eg-swatch" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
@@ -1192,7 +1224,7 @@ function PipePanel({ feature, onClose }: { feature: PipeFeature; onClose: () => 
       <SpRow label="Installed" value={p.installed || '—'} mono />
       <SpRow label="DC ID" value={p.id} mono />
       {p.remarks && p.remarks.toUpperCase() !== 'OK' && p.remarks.toUpperCase() !== 'N/A' && (
-        <SpRow label="Field note" value={p.remarks} />
+        <SpRow label="Route / note" value={p.remarks} />
       )}
 
       <div style={{ height: 14 }} />
@@ -1212,6 +1244,27 @@ function PipePanel({ feature, onClose }: { feature: PipeFeature; onClose: () => 
 
 function AssetPanel({ feature, onClose }: { feature: AssetFeature; onClose: () => void }) {
   const p = feature.properties;
+  if (p.asset === 'facility') {
+    const util = Math.round((p.throughput_m3d / p.capacity_m3d) * 100);
+    return (
+      <SidePanel
+        open
+        onClose={onClose}
+        kind={FACILITY_LABEL[p.facility_type]}
+        title={p.name}
+        pill={{ tone: p.status === 'ok' ? 'safe' : 'warn', label: p.status === 'ok' ? 'Operating' : 'Watch' }}
+      >
+        <SectionLabel>Production</SectionLabel>
+        <SpRow label="Design capacity" value={`${p.capacity_m3d.toLocaleString()} m³/d`} mono />
+        <SpRow label="Throughput today" value={`${p.throughput_m3d.toLocaleString()} m³/d`} mono color="#0B5FFF" />
+        <SpRow label="Utilisation" value={`${util}%`} mono color={util > 90 ? '#f59e0b' : '#22c55e'} />
+        <div style={{ height: 14 }} />
+        <SectionLabel>Identifier</SectionLabel>
+        <SpRow label="Facility ID" value={p.id} mono />
+        <SpRow label="Coordinates" value={`${feature.geometry.coordinates[1].toFixed(5)}, ${feature.geometry.coordinates[0].toFixed(5)}`} mono />
+      </SidePanel>
+    );
+  }
   if (p.asset === 'tank') {
     const lvlColor = p.level_pct > 70 ? '#22c55e' : p.level_pct > 35 ? '#f59e0b' : '#ef4444';
     return (
@@ -1238,7 +1291,7 @@ function AssetPanel({ feature, onClose }: { feature: AssetFeature; onClose: () =
         <div style={{ height: 14 }} />
         <SectionLabel>Identifier</SectionLabel>
         <SpRow label="Tank ID" value={p.id} mono />
-        <SpRow label="Connecting pipes" value={p.junction_degree} mono />
+        <SpRow label="Connecting pipes" value={p.junction_degree || '—'} mono />
         <NetworkInsights assetId={p.id} />
       </SidePanel>
     );

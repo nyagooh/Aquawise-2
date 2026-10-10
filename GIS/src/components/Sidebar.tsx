@@ -74,7 +74,7 @@ export function Sidebar({ active, collapsed }: { active: Active; collapsed?: boo
           <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden="true"><path d="M4 21V9l5-3v15M9 21V4l6 3v14M15 21v-9l5 2v7M2 21h20" /></svg>
         </div>
         <div>
-          <b>Riverton Utility</b>
+          <b>Erline Water</b>
           <span><i className={offline ? 'warn' : ''} />{offline ? `Operational · ${offline} offline` : 'Operational'}</span>
         </div>
       </div>

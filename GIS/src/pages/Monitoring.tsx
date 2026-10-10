@@ -323,7 +323,7 @@ function Pressure({ ops }: { ops: Ops }) {
 
       {leak && (
         <Insight tone="crit">
-          <span><b>Potential leak, {zoneName(leak.zone)}.</b> Pressure at SN-12 dropped by more than 2 bar while flow at the same logger rose. Neighbouring logger SN-24 is also low, which points to a main break rather than a sensor fault.{' '}
+          <span><b>Potential leak, {zoneName(leak.zone)}.</b> Pressure at SN-14 dropped by more than 2 bar while flow at the same logger rose. Neighbouring logger SN-15 is also low, which points to a main break rather than a sensor fault.{' '}
             <button className="dx-link" onClick={() => navigate(`/alerts?id=${leak.id}`)}>Open incident</button> · <button className="dx-link" onClick={() => navigate(`/network?focus=${leak.focus}`)}>View on network</button></span>
         </Insight>
       )}
@@ -378,7 +378,7 @@ function TankLevels({ ops }: { ops: Ops }) {
   const s = useScoped(ops);
   const [selected, setSelected] = useState<string[] | null>(null);
   const [open, setOpen] = useState<TankOps | null>(null);
-  if (!s.tanks.length) return <Card><p className="dx-muted">No reservoirs in this zone. All six reservoirs are in Riverside.</p></Card>;
+  if (!s.tanks.length) return <Card><p className="dx-muted">No reservoirs in this zone.</p></Card>;
   const shown = s.tanks.filter(t => !selected || selected.includes(t.id));
   const chart: ChartSeries[] = shown.map((t, i) => ({ id: t.id, label: t.name, points: series('level', t.id, t.base, s.spec), color: SERIES_COLORS[i % SERIES_COLORS.length] }));
   const totalCap = s.tanks.reduce((a, t) => a + t.capacity, 0);

@@ -85,7 +85,7 @@ function useAssets(): Record<string, AssetProps> | null {
   const [a, setA] = useState<Record<string, AssetProps> | null>(null);
   useEffect(() => {
     let alive = true;
-    fetch('/data/riverton-assets.geojson').then(r => r.json()).then(fc => {
+    fetch('/data/erline-assets.geojson').then(r => r.json()).then(fc => {
       if (!alive) return;
       const m: Record<string, AssetProps> = {};
       for (const f of fc.features) m[f.properties.id] = f.properties;
@@ -96,7 +96,7 @@ function useAssets(): Record<string, AssetProps> | null {
   return a;
 }
 
-const WQ_MIL = QUALITY_POINTS.find(q => q.id === 'WQ-MIL')!;
+const WQ_SHAURI = QUALITY_POINTS.find(q => q.id === 'WQ-SHAURI')!;
 const fmtClock = (t: number) => new Date(t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
 /* ═════════════ page ═════════════ */
@@ -181,7 +181,7 @@ function Hero({ onDemo, onTalk }: { onDemo: () => void; onTalk: () => void }) {
 /* ═════════════ 2 · ONE NETWORK ═════════════ */
 function OneNetwork({ assets }: { assets: Record<string, AssetProps> | null }) {
   const [ref, seen] = useInView<HTMLDivElement>(0.2);
-  const tanks = ['TANK-01', 'TANK-02', 'TANK-03', 'TANK-04', 'TANK-05', 'TANK-06'];
+  const tanks = TANK_IDS;
   const capacity = assets ? tanks.reduce((s, id) => s + Number(assets[id]?.capacity_m3 ?? 0), 0) : null;
   const wtw = QUALITY_POINTS.find(q => q.id === 'WQ-WTW')!;
   const tapCl = QUALITY_POINTS.filter(q => q.zone !== 'WTW').map(q => current('chlorine', q.id, q.base.chlorine));
@@ -208,12 +208,12 @@ function OneNetwork({ assets }: { assets: Record<string, AssetProps> | null }) {
           <Stage n="01" name="Treatment" wide top={<img src="/img/treatment-plant.jpg" alt="Clarifiers at the treatment works" className="fl-img" />}
             data={`Water leaves the works at ${current('turbidity', wtw.id, wtw.base.turbidity).toFixed(2)} NTU, checked every 15 minutes.`} />
           <Stage n="02" name="Storage" top={<img src="/img/reservoir-pipes.jpg" alt="Storage reservoir and mains" className="fl-img tall" style={{ objectPosition: '32% 40%' }} />}
-            data={capacity ? `${capacity.toLocaleString()} m³ across six reservoirs. You see every level, and how fast it is falling.` : 'Every reservoir level, and how fast it is falling.'} />
-          <Stage n="03" name="Distribution" below top={<div className="fl-type"><b>716</b><span>km</span></div>}
-            data="of mapped pipe, watched by 26 pressure loggers across seven zones."
+            data={capacity ? `${capacity.toLocaleString()} m³ across five reservoirs. You see every level, and how fast it is falling.` : 'Every reservoir level, and how fast it is falling.'} />
+          <Stage n="03" name="Distribution" below top={<div className="fl-type"><b>121</b><span>km</span></div>}
+            data="of mapped pipe, watched by 24 pressure loggers across five zones."
             extra={<img src="/img/field-engineers.jpg" alt="Field engineers at a valve" className="fl-img small" />} />
           <Stage n="04" name="Customer" top={<div className="fl-type"><b>{avgCl.toFixed(2)}</b><span>mg/L</span></div>}
-            data="Average chlorine still in the water at seven zone sampling points — protection that reaches the tap." />
+            data="Average chlorine still in the water at five zone sampling points — protection that reaches the tap." />
         </div>
       </div>
     </section>
@@ -238,9 +238,9 @@ function Stage({ n, name, top, data, wide, below, extra }: { n: string; name: st
 /* ═════════════ 3 · PLATFORM ═════════════ */
 function Mosaic({ assets }: { assets: Record<string, AssetProps> | null; nrw?: unknown }) {
   const day = rangeSpec('24H');
-  const tb = series('turbidity', WQ_MIL.id, WQ_MIL.base.turbidity, day);
-  const sn12 = assets?.['SN-12'] ? series('pressure', 'SN-12', Number(assets['SN-12'].pressure_bar), day) : null;
-  const t1 = assets?.['TANK-01'] ? series('level', 'TANK-01', Number(assets['TANK-01'].level_pct), day) : null;
+  const tb = series('turbidity', WQ_SHAURI.id, WQ_SHAURI.base.turbidity, day);
+  const sn14 = assets?.['SN-14'] ? series('pressure', 'SN-14', Number(assets['SN-14'].pressure_bar), day) : null;
+  const t2 = assets?.['TANK-02'] ? series('level', 'TANK-02', Number(assets['TANK-02'].level_pct), day) : null;
   const last = (p: Point[] | null) => (p ? p[p.length - 1].v : null);
   return (
     <section className="ed-sec ed-tint">
@@ -253,14 +253,14 @@ function Mosaic({ assets }: { assets: Record<string, AssetProps> | null; nrw?: u
         <div className="ed-bento">
           <figure className="bx bx-map rv">
             <img src="/img/ui/crop-gis.webp" alt="AquaWise network map with pipes, valves, meters, reservoirs and sensors" />
-            <figcaption><span className="ed-mini">Network map</span><b>716 km of pipe, every asset in place</b></figcaption>
+            <figcaption><span className="ed-mini">Network map</span><b>121 km of pipe, every asset in place</b></figcaption>
           </figure>
-          <StatTile label="Water quality · Riverside booster" value={last(tb)} unit="NTU" decimals={2} tone="warn"
+          <StatTile label="Water quality · Shauri, Ndothua" value={last(tb)} unit="NTU" decimals={2} tone="warn"
             note="Above the safe limit since this morning." points={tb} color="amber" />
-          <StatTile label="Pressure · Northgate" value={last(sn12)} unit="bar" decimals={2} tone="crit"
-            note="Below the 1.5 bar minimum — a likely burst." points={sn12} color="red" />
-          <StatTile label="Storage · Reservoir 01" value={last(t1)} unit="%" decimals={0} tone="warn"
-            note="Emptying faster than yesterday." points={t1} color="amber" />
+          <StatTile label="Pressure · Ziwani 3" value={last(sn14)} unit="bar" decimals={2} tone="crit"
+            note="Below the 1.5 bar minimum — a likely burst." points={sn14} color="red" />
+          <StatTile label="Storage · Ziwani Reservoir 2" value={last(t2)} unit="%" decimals={0} tone="warn"
+            note="Emptying faster than yesterday." points={t2} color="amber" />
         </div>
       </div>
     </section>
@@ -287,16 +287,17 @@ function StatTile({ label, value, unit, decimals, tone, note, points, color }: {
 
 /* ═════════════ 4 · MONITORING (dark) ═════════════ */
 type MonKey = 'quality' | 'pressure' | 'tanks' | 'sensors';
-const TANK_IDS = ['TANK-01', 'TANK-02', 'TANK-03', 'TANK-04', 'TANK-05', 'TANK-06'];
+const TANK_IDS = ['TANK-01', 'TANK-02', 'TANK-03', 'TANK-04', 'TANK-05'];
+const TANK_NAMES: Record<string, string> = { 'TANK-01': 'Ziwani 1', 'TANK-02': 'Ziwani 2', 'TANK-03': 'Ziwani 3', 'TANK-04': 'Shauri', 'TANK-05': 'Kwa Njora' };
 function Monitor({ assets }: { assets: Record<string, AssetProps> | null }) {
   const [view, setView] = useState<MonKey>('quality');
   const [param, setParam] = useState<Metric>('turbidity');
   const spec = rangeSpec('CUSTOM', 2);
   const day = rangeSpec('24H');
   const data = useMemo(() => {
-    if (view === 'pressure' && assets?.['SN-12']) return { metric: 'pressure' as Metric, where: 'Northgate logger SN-12', pts: series('pressure', 'SN-12', Number(assets['SN-12'].pressure_bar), spec) };
-    if (view === 'tanks' && assets?.['TANK-01']) return { metric: 'level' as Metric, where: 'Reservoir 01', pts: series('level', 'TANK-01', Number(assets['TANK-01'].level_pct), spec) };
-    return { metric: param, where: 'Riverside booster', pts: series(param, WQ_MIL.id, WQ_MIL.base[param as keyof typeof WQ_MIL.base], spec) };
+    if (view === 'pressure' && assets?.['SN-14']) return { metric: 'pressure' as Metric, where: 'Ziwani 3 logger SN-14', pts: series('pressure', 'SN-14', Number(assets['SN-14'].pressure_bar), spec) };
+    if (view === 'tanks' && assets?.['TANK-02']) return { metric: 'level' as Metric, where: 'Ziwani Reservoir 2', pts: series('level', 'TANK-02', Number(assets['TANK-02'].level_pct), spec) };
+    return { metric: param, where: 'Shauri, Ndothua kiosk', pts: series(param, WQ_SHAURI.id, WQ_SHAURI.base[param as keyof typeof WQ_SHAURI.base], spec) };
   }, [view, param, assets, spec]);
   const def = METRICS[data.metric];
   const now = data.pts[data.pts.length - 1].v;
@@ -305,26 +306,26 @@ function Monitor({ assets }: { assets: Record<string, AssetProps> | null }) {
   const items: Array<{ k: MonKey; label: string; sub: string }> = [
     { k: 'quality', label: 'Water quality', sub: 'Five parameters, every 15 minutes' },
     { k: 'pressure', label: 'Pressure', sub: '26 loggers, drops flagged as they happen' },
-    { k: 'tanks', label: 'Tank levels', sub: 'Six reservoirs, filling and emptying live' },
+    { k: 'tanks', label: 'Tank levels', sub: 'Five reservoirs, filling and emptying live' },
     { k: 'sensors', label: 'Sensors', sub: 'Battery, signal and last contact' }
   ];
   const tiles = view === 'quality'
     ? QUALITY_METRICS.map(m => {
-        const pts = series(m, WQ_MIL.id, WQ_MIL.base[m as keyof typeof WQ_MIL.base], day);
+        const pts = series(m, WQ_SHAURI.id, WQ_SHAURI.base[m as keyof typeof WQ_SHAURI.base], day);
         const v = pts[pts.length - 1].v;
         return { key: m, label: METRICS[m].label.replace('Residual chlorine', 'Chlorine'), value: v.toFixed(METRICS[m].decimals), unit: METRICS[m].unit, tone: toneFor(m, v), pts, on: m === param, onClick: () => setParam(m) };
       })
     : view === 'tanks' && assets
-      ? TANK_IDS.map((id, i) => {
+      ? TANK_IDS.map(id => {
           const pts = series('level', id, Number(assets[id]?.level_pct ?? 50), day);
           const v = pts[pts.length - 1].v;
-          return { key: id, label: `Reservoir ${String(i + 1).padStart(2, '0')}`, value: v.toFixed(0), unit: '%', tone: toneFor('level', v), pts, on: id === 'TANK-01', onClick: undefined };
+          return { key: id, label: TANK_NAMES[id], value: v.toFixed(0), unit: '%', tone: toneFor('level', v), pts, on: id === 'TANK-02', onClick: undefined };
         })
       : view === 'pressure' && assets
-        ? ['SN-12', 'SN-24', 'SN-04', 'SN-03'].map(id => {
+        ? ['SN-14', 'SN-15', 'SN-16', 'SN-05'].map(id => {
             const pts = series('pressure', id, Number(assets[id]?.pressure_bar ?? 2.5), day);
             const v = pts[pts.length - 1].v;
-            return { key: id, label: `Logger ${id} · Northgate`, value: v.toFixed(2), unit: 'bar', tone: toneFor('pressure', v), pts, on: id === 'SN-12', onClick: undefined };
+            return { key: id, label: `Logger ${id} · Ziwani 3`, value: v.toFixed(2), unit: 'bar', tone: toneFor('pressure', v), pts, on: id === 'SN-14', onClick: undefined };
           })
         : [];
 
@@ -446,10 +447,10 @@ function Parameters() {
 
 /* ═════════════ 5 · WATER QUALITY STORY ═════════════ */
 function QualityStory() {
-  // A resolved Riverside turbidity event from the demo history (22 days ago).
+  // A resolved Shauri turbidity event from the demo history (22 days ago).
   const story = useMemo(() => {
     const evStart = NOW - 22 * 24 * HOURS; const evEnd = NOW - (22 * 24 - 10) * HOURS;
-    const pts = seriesWindow('turbidity', WQ_MIL.id, WQ_MIL.base.turbidity, evStart - 10 * HOURS, evEnd + 12 * HOURS, 240);
+    const pts = seriesWindow('turbidity', WQ_SHAURI.id, WQ_SHAURI.base.turbidity, evStart - 10 * HOURS, evEnd + 12 * HOURS, 240);
     const over = pts.find(p => p.v > 1.0)!;
     const peak = pts.reduce((a, b) => (b.v > a.v ? b : a), pts[0]);
     const back = pts.find(p => p.t > peak.t && p.v <= 1.0)!;
@@ -485,7 +486,7 @@ function QualityStory() {
         <div className="ed-story-card rv">
           <div className="ed-story-top">
             <div>
-              <span className="ed-mini">Turbidity · Riverside booster · {story.date}</span>
+              <span className="ed-mini">Turbidity · Shauri, Ndothua kiosk · {story.date}</span>
               <h3>An eleven-hour turbidity event, start to finish</h3>
             </div>
             <div className="ed-story-key">
@@ -611,19 +612,19 @@ function Outcomes() {
   return (
     <section className="ed-sec">
       <div className="ed-wrap ed-grid">
-        <p className="ed-label rv" style={{ gridColumn: '1 / span 4' }}><b>07</b> / In the Riverton network</p>
+        <p className="ed-label rv" style={{ gridColumn: '1 / span 4' }}><b>07</b> / In the Erline Water network</p>
         <h2 className="ed-h2 rv" style={{ gridColumn: '1 / span 8' }}>Live from <span className="muted">day one.</span></h2>
       </div>
       <div className="ed-wrap">
         <div className="ed-report">
-          <div className="rv"><b><Count to={716} /><small>km</small></b><span>of pipe network mapped</span></div>
-          <div className="rv"><b><Count to={3317} /></b><span>assets in one register</span></div>
-          <div className="rv"><b><Count to={40} /></b><span>sensors reporting from across the network</span></div>
+          <div className="rv"><b><Count to={121} /><small>km</small></b><span>of pipe network mapped</span></div>
+          <div className="rv"><b><Count to={192} /></b><span>assets in one register</span></div>
+          <div className="rv"><b><Count to={35} /></b><span>sensors reporting from across the network</span></div>
           <div className="rv"><b><Count to={15} /><small>min</small></b><span>between readings, around the clock</span></div>
           <div className="rv"><b>24/7</b><span>monitoring, with a safe limit on every reading</span></div>
           <div className="rv"><b>One</b><span>view of your whole network</span></div>
         </div>
-        <p className="ed-mini ed-source rv">Figures describe the Riverton demonstration network in the live demo.</p>
+        <p className="ed-mini ed-source rv">Figures describe the Erline Water network in the live demo.</p>
       </div>
     </section>
   );
