@@ -18,7 +18,7 @@ import {
   Area, CartesianGrid, ComposedChart, Line, ReferenceArea, ReferenceLine,
   ResponsiveContainer, Tooltip, XAxis, YAxis
 } from 'recharts';
-import { METRICS, NOW, sampleAt, toneFor, worstTone, type Metric, type Point, type Tone } from './series';
+import { METRICS, NOW, sampleAt, toneFor, worstTone, fmt, type Metric, type Point, type Tone, type RangeSpec } from './series';
 
 /* ── colours ── */
 export const TONE_COLOR: Record<Tone, string> = {
@@ -407,6 +407,83 @@ export function StatusDonut({ parts, label, sub, size = 132 }: {
       <DonutChart data={shown.map(p => ({ name: p.label, value: p.value }))} category="value" index="name"
         colors={shown.map(p => TRACK_COLOR[p.tone]) as never} showLabel={false} showAnimation={false} className="dx-donut-chart" />
       <div className="dx-donut-c" aria-hidden="true"><b>{label}</b>{sub && <span>{sub}</span>}</div>
+    </div>
+  );
+}
+
+/* ── heatmap: readings as a grid of squares ── */
+const HEAT_BLUE = ['#E8F1FE', '#C7DCFC', '#9DC1F8', '#6A9EF2', '#3D7BE8', '#1F5FD1', '#174BAA'];
+
+/** Columns for a range: hourly for a day, 6-hourly for a week, daily beyond. */
+function heatBuckets(spec: RangeSpec): { count: number; spanMs: number } {
+  const H = 3_600_000;
+  if (spec.hours <= 24) return { count: 24, spanMs: H };
+  if (spec.hours <= 168) return { count: Math.round(spec.hours / 6), spanMs: 6 * H };
+  const count = Math.min(31, Math.round(spec.hours / 24));
+  return { count, spanMs: (spec.hours * H) / count };
+}
+
+/**
+ * One row per monitoring point, one square per time block. Normal readings are
+ * shaded blue by where they sit in the normal range; warnings and critical
+ * readings are amber and red. Hover a square for its time and value.
+ */
+export function Heatmap({ rows, metric, spec, showValues, scale, onRowClick }: {
+  rows: Array<{ id: string; label: string; sub?: string; entity: string; base: number }>;
+  metric: Metric;
+  spec: RangeSpec;
+  showValues?: boolean;
+  /** Value range mapped onto the blue scale (defaults to the metric's normal range). */
+  scale?: [number, number];
+  onRowClick?: (id: string) => void;
+}) {
+  const def = METRICS[metric];
+  const [lo, hi] = scale ?? [Number.isFinite(def.normal[0]) ? def.normal[0] : 0, Number.isFinite(def.normal[1]) ? def.normal[1] : 100];
+  const { count, spanMs } = heatBuckets(spec);
+  const grid = useMemo(() => rows.map(r => Array.from({ length: count }, (_, i) => {
+    const end = NOW - (count - 1 - i) * spanMs;
+    const vals = [0, 0.25, 0.5, 0.75].map(f => sampleAt(metric, r.entity, r.base, end - f * spanMs));
+    const v = vals.reduce((a, b) => a + b, 0) / vals.length;
+    return { end, v, tone: worstTone(vals.map(x => toneFor(metric, x))) };
+  })), [rows, metric, count, spanMs]);
+  const when = (t: number) => new Date(t).toLocaleString('en-GB', spanMs < 86_400_000
+    ? { weekday: spanMs > 3_600_000 ? 'short' : undefined, hour: '2-digit', minute: '2-digit' }
+    : { day: 'numeric', month: 'short' });
+  const every = Math.ceil(count / 8);
+  const colour = (c: { v: number; tone: Tone }) => {
+    if (c.tone === 'crit') return { bg: '#E5484D', fg: '#fff' };
+    if (c.tone === 'warn') return { bg: '#F2A93B', fg: '#3B2600' };
+    const k = Math.max(0, Math.min(HEAT_BLUE.length - 1, Math.round(((c.v - lo) / (hi - lo || 1)) * (HEAT_BLUE.length - 1))));
+    return { bg: HEAT_BLUE[k], fg: k >= 4 ? '#fff' : '#1E3A6E' };
+  };
+  return (
+    <div className="hm" style={{ ['--hm-cols' as string]: count }}>
+      {rows.map((r, ri) => (
+        <div key={r.id} className={`hm-row${onRowClick ? ' click' : ''}`} onClick={onRowClick ? () => onRowClick(r.id) : undefined}>
+          <div className="hm-label"><b>{r.label}</b>{r.sub && <span>{r.sub}</span>}</div>
+          {grid[ri].map((c, ci) => {
+            const { bg, fg } = colour(c);
+            return (
+              <div key={ci} className="hm-cell" style={{ background: bg, color: fg }} title={`${r.label} · ${when(c.end)} · ${fmt(metric, c.v)}`}>
+                {showValues && fmt(metric, c.v, false)}
+              </div>
+            );
+          })}
+        </div>
+      ))}
+      <div className="hm-row hm-axis">
+        <div className="hm-label" />
+        {Array.from({ length: count }, (_, i) => (
+          <div key={i} className="hm-tick">{(count - 1 - i) % every === 0 ? when(NOW - (count - 1 - i) * spanMs) : ''}</div>
+        ))}
+      </div>
+      <div className="hm-legend">
+        <span>{fmt(metric, lo)}</span>
+        <i className="hm-ramp" style={{ background: `linear-gradient(90deg, ${HEAT_BLUE.join(',')})` }} />
+        <span>{fmt(metric, hi)}</span>
+        <span className="hm-key"><i style={{ background: '#F2A93B' }} />Warning</span>
+        <span className="hm-key"><i style={{ background: '#E5484D' }} />Critical</span>
+      </div>
     </div>
   );
 }

@@ -302,13 +302,16 @@ button.dx-item:hover { background: hsl(var(--row-hover)) !important; }
 .gis-lc-section .gis-layer-toggle:last-child { border-bottom: 0; }
 
 /* ── Map key: plain legend card, like a printed map ── */
-.gis-key { position: absolute; left: 16px; bottom: 16px; z-index: 500; min-width: 200px; background: #fff; color: #0F172A; border: 1px solid #D0D5DD; border-radius: 6px; box-shadow: 0 1px 4px rgb(0 0 0 / 0.25); font-size: 12px; }
+.gis-key { position: absolute; left: 16px; top: 16px; z-index: 500; min-width: 200px; background: #fff; color: #0F172A; border: 1px solid #D0D5DD; border-radius: 6px; box-shadow: 0 1px 4px rgb(0 0 0 / 0.25); font-size: 12px; }
 .gis-key-head { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 8px 12px; background: none; border: 0; color: #344054; font: 600 11px var(--font); letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; }
 .gis-key:not(.closed) .gis-key-head { border-bottom: 1px solid #EAECF0; }
 .gis-key-body { padding: 4px 12px 10px; }
 .gis-key-group { padding: 6px 0; }
 .gis-key-group + .gis-key-group { border-top: 1px solid #EAECF0; }
-.gis-key-row { display: flex; align-items: center; gap: 9px; padding: 3px 0; line-height: 1.2; }
+.gis-key-row { display: flex; align-items: center; gap: 9px; padding: 3px 0; line-height: 1.2; cursor: pointer; user-select: none; }
+.gis-key-row.static { cursor: default; padding-left: 23px; }
+.gis-key-row input { margin: 0; width: 14px; height: 14px; accent-color: #1769E8; cursor: pointer; }
+.gis-key-row.off > :not(input) { opacity: 0.4; }
 .gis-key-sq { width: 13px; height: 13px; border-radius: 2px; flex-shrink: 0; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12); }
 .gis-key-row .mk { box-shadow: 0 0 0 1px rgb(15 23 42 / 0.2); }
 .gis-key-ring { width: 13px; height: 13px; border-radius: 50%; border: 2px solid; flex-shrink: 0; }
@@ -347,3 +350,26 @@ button.dx-item:hover { background: hsl(var(--row-hover)) !important; }
 .sn-legend { display: grid; gap: 8px; font-size: 0.8125rem; }
 .sn-legend div { display: flex; align-items: center; gap: 8px; }
 .sn-legend b { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+/* numbered pagination */
+.dx-pages { display: flex; align-items: center; gap: 4px; }
+.dx-pages button { min-width: 28px; height: 28px; padding: 0 8px; border: 1px solid hsl(var(--hair-strong)); border-radius: 6px; background: hsl(var(--card)); color: hsl(var(--foreground)); font: 500 0.75rem var(--font); cursor: pointer; font-variant-numeric: tabular-nums; }
+.dx-pages button:hover:not(:disabled):not(.on) { background: hsl(var(--row-hover)); }
+.dx-pages button.on { background: hsl(var(--primary)); border-color: hsl(var(--primary)); color: #fff; }
+.dx-pages button:disabled { opacity: 0.4; cursor: default; }
+.dx-pages .gap { padding: 0 4px; color: hsl(var(--muted-foreground)); }
+
+/* heatmap */
+.hm { display: grid; gap: 3px; font-size: 0.75rem; }
+.hm-row { display: grid; grid-template-columns: 170px repeat(var(--hm-cols), minmax(0, 1fr)); gap: 3px; align-items: stretch; }
+.hm-row.click { cursor: pointer; }
+.hm-row.click:hover .hm-label b { color: hsl(var(--primary)); }
+.hm-label { display: flex; flex-direction: column; justify-content: center; min-width: 0; padding-right: 8px; line-height: 1.2; }
+.hm-label b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hm-label span { color: hsl(var(--muted-foreground)); font-size: 0.6875rem; }
+.hm-cell { height: 28px; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 0.625rem; font-weight: 600; font-variant-numeric: tabular-nums; overflow: hidden; }
+.hm-axis .hm-tick { font-size: 0.6875rem; color: hsl(var(--muted-foreground)); white-space: nowrap; overflow: visible; padding-top: 4px; }
+.hm-legend { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 0.75rem; color: hsl(var(--muted-foreground)); flex-wrap: wrap; }
+.hm-ramp { display: inline-block; width: 120px; height: 10px; border-radius: 2px; }
+.hm-key { display: inline-flex; align-items: center; gap: 6px; margin-left: 12px; }
+.hm-key i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }

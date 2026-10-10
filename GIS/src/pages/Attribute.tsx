@@ -4,6 +4,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { Shell } from '../components/Shell';
+import { pageList } from '../demo/ui';
 
 type Row = Record<string, string>;
 
@@ -43,7 +44,7 @@ function parseCsv(text: string): { headers: string[]; rows: Row[] } {
   return { headers, rows };
 }
 
-const PAGE_SIZE = 200;
+const PAGE_SIZE = 25;
 
 export default function Attribute() {
   const [headers, setHeaders] = useState<string[]>([]);
@@ -107,19 +108,13 @@ export default function Attribute() {
             {query && rows.length !== filtered.length ? ` of ${rows.length.toLocaleString()}` : ''}
           </span>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 'var(--s2)', alignItems: 'center' }}>
-            <button
-              onClick={() => setPage(p => Math.max(0, p - 1))}
-              disabled={page === 0}
-              style={btnStyle(page === 0)}
-            >← Prev</button>
-            <span style={{ fontSize: '0.8125rem', color: 'hsl(var(--muted-foreground))', fontVariantNumeric: 'tabular-nums' }}>
-              Page {page + 1} / {totalPages}
-            </span>
-            <button
-              onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-              disabled={page >= totalPages - 1}
-              style={btnStyle(page >= totalPages - 1)}
-            >Next →</button>
+            <nav className="dx-pages" aria-label="Pages">
+              <button type="button" disabled={page === 0} onClick={() => setPage(p => p - 1)} aria-label="Previous page">‹</button>
+              {pageList(page, totalPages).map((n, i) => n === null
+                ? <span key={`gap${i}`} className="gap">…</span>
+                : <button key={n} type="button" className={n === page ? 'on' : ''} aria-current={n === page ? 'page' : undefined} onClick={() => setPage(n)}>{n + 1}</button>)}
+              <button type="button" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)} aria-label="Next page">›</button>
+            </nav>
             <a
               href="/data/erline-pipes-attributes.csv"
               download="erline-pipes-attributes.csv"

@@ -106,23 +106,23 @@ type Focus =
   | { kind: 'asset'; feature: AssetFeature }
   | null;
 
-type LayerVis = Record<PipeClass | AssetKind, boolean>;
-
-const DEFAULT_LAYERS: LayerVis = {
-  main: true,
-  distribution: true,
-  household: false,        // off by default — turn on at street zoom
-  backfeed: true,
-  boundary: true,          // Erline service-area outline
-  facility: true,
-  tank: true,
-  pressure_valve: true,
-  meter_valve: true,
-  sensor: true
-};
+/** One map layer per map-key row: each drawn pipe class and each asset symbol. */
+type KeyId = PipeClass | MarkerKind;
+type LayerVis = Record<string, boolean>;
 
 const PIPE_KEYS: PipeClass[] = PIPE_CLASS_ORDER;
-const ASSET_KEYS: AssetKind[] = ASSET_ORDER;
+const ASSET_KEYS: MarkerKind[] = ['plant', 'tank', 'pressure', 'quality', 'valve', 'meter'];
+const KEY_IDS: KeyId[] = [...PIPE_KEYS, ...ASSET_KEYS];
+const DEFAULT_LAYERS: LayerVis = Object.fromEntries(KEY_IDS.map((k) => [k, true]));
+
+/** Map-key symbol an asset is drawn with (pressure and water-quality sensors are separate rows). */
+function markerKindOf(p: AssetFeature['properties']): MarkerKind {
+  if (p.asset === 'facility') return 'plant';
+  if (p.asset === 'tank') return 'tank';
+  if (p.asset === 'pressure_valve') return 'valve';
+  if (p.asset === 'meter_valve') return 'meter';
+  return p.subtype === 'ph' || p.subtype === 'turbidity' ? 'quality' : 'pressure';
+}
 
 export default function GISMap() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -145,7 +145,7 @@ export default function GISMap() {
   const detailRef = useRef<L.Popup | null>(null);
   const tileRef = useRef<L.TileLayer | null>(null);
   const rendererRef = useRef<L.Canvas | null>(null);
-  const layerGroupsRef = useRef<Partial<Record<PipeClass | AssetKind, L.LayerGroup>>>({});
+  const layerGroupsRef = useRef<Partial<Record<KeyId, L.LayerGroup>>>({});
   const focusOutlineRef = useRef<L.Layer | null>(null);
   // Read inside Leaflet event handlers (which close over init-time values).
   const linkByRef = useRef<LinkSymbology>(linkBy);
@@ -202,8 +202,8 @@ export default function GISMap() {
     if (tile) { tile.addTo(map); tileRef.current = tile; }
 
     /* layer groups */
-    const groups: Partial<Record<PipeClass | AssetKind, L.LayerGroup>> = {};
-    [...PIPE_KEYS, ...ASSET_KEYS].forEach((k) => {
+    const groups: Partial<Record<KeyId, L.LayerGroup>> = {};
+    KEY_IDS.forEach((k) => {
       const g = L.layerGroup();
       groups[k] = g;
       if (DEFAULT_LAYERS[k]) g.addTo(map);
@@ -277,7 +277,7 @@ export default function GISMap() {
         });
       }
       marker.bindTooltip(assetTooltip(feat), { direction: 'top', offset: [0, -10], opacity: 1 });
-      const grp = groups[props.asset];
+      const grp = groups[markerKindOf(props)];
       if (grp) marker.addTo(grp);
     });
 
@@ -308,7 +308,7 @@ export default function GISMap() {
     const map = leafletRef.current;
     const groups = layerGroupsRef.current;
     if (!map) return;
-    ([...PIPE_KEYS, ...ASSET_KEYS] as Array<PipeClass | AssetKind>).forEach((k) => {
+    KEY_IDS.forEach((k) => {
       const g = groups[k];
       if (!g) return;
       const on = layers[k];
@@ -396,7 +396,7 @@ export default function GISMap() {
     if (kind === 'asset') {
       const match = network.assets.find((a) => a.properties.id === id);
       if (match) {
-        setLayers((p) => ({ ...p, [match.properties.asset]: true }));
+        setLayers((p) => ({ ...p, [markerKindOf(match.properties)]: true }));
         setFocus({ kind: 'asset', feature: match });
       }
     } else if (kind === 'pipe') {
@@ -478,7 +478,7 @@ export default function GISMap() {
 
         {network && (
           <>
-            <MapKey />
+            <MapKey layers={layers} onToggle={(k) => setLayers((p) => ({ ...p, [k]: !p[k] }))} />
           </>
         )}
       </div>
@@ -829,46 +829,44 @@ function escapeHtml(s: string): string {
    Map key — a plain legend, like a printed map
    ───────────────────────────────────────── */
 
-const KEY_ASSETS: Array<{ kind: MarkerKind; label: string }> = [
-  { kind: 'plant', label: 'Intake / treatment plant' },
-  { kind: 'tank', label: 'Reservoir' },
-  { kind: 'pressure', label: 'Pressure sensor' },
-  { kind: 'quality', label: 'Water-quality sensor' },
-  { kind: 'valve', label: 'Pressure valve' },
-  { kind: 'meter', label: 'Bulk meter' }
-];
+const KEY_LABEL: Record<MarkerKind, string> = {
+  plant: 'Intake / treatment plant',
+  tank: 'Reservoir',
+  pressure: 'Pressure sensor',
+  quality: 'Water-quality sensor',
+  valve: 'Pressure valve',
+  meter: 'Bulk meter'
+};
 
-function MapKey() {
+/** Map key: what the map can show, each row with a checkbox to show or hide it. */
+function MapKey({ layers, onToggle }: { layers: LayerVis; onToggle: (k: KeyId) => void }) {
   const [open, setOpen] = useState(true);
+  const row = (k: KeyId, symbol: React.ReactNode, label: string) => (
+    <label key={k} className={`gis-key-row${layers[k] ? '' : ' off'}`}>
+      <input type="checkbox" checked={!!layers[k]} onChange={() => onToggle(k)} />
+      {symbol}
+      <span>{label}</span>
+    </label>
+  );
   return (
     <div className={`gis-key${open ? '' : ' closed'}`}>
       <button type="button" className="gis-key-head" onClick={() => setOpen((x) => !x)} aria-expanded={open}>
         <span>Key</span>
         <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}>
-          <polyline points={open ? '6 9 12 15 18 9' : '18 15 12 9 6 15'} />
+          <polyline points={open ? '18 15 12 9 6 15' : '6 9 12 15 18 9'} />
         </svg>
       </button>
       {open && (
         <div className="gis-key-body">
           <div className="gis-key-group">
-            {PIPE_KEYS.map((k) => (
-              <div key={k} className="gis-key-row">
-                <span className="gis-key-sq" style={{ background: PIPE_STYLE[k].color }} />
-                {PIPE_STYLE[k].label}
-              </div>
-            ))}
+            {PIPE_KEYS.map((k) => row(k, <span className="gis-key-sq" style={{ background: PIPE_STYLE[k].color }} />, PIPE_STYLE[k].label))}
           </div>
           <div className="gis-key-group">
-            {KEY_ASSETS.map((a) => (
-              <div key={a.kind} className="gis-key-row">
-                <span dangerouslySetInnerHTML={{ __html: markerIcon(a.kind, undefined, 16) }} />
-                {a.label}
-              </div>
-            ))}
+            {ASSET_KEYS.map((k) => row(k, <span dangerouslySetInnerHTML={{ __html: markerIcon(k, undefined, 16) }} />, KEY_LABEL[k]))}
           </div>
           <div className="gis-key-group">
-            <div className="gis-key-row"><span className="gis-key-ring" style={{ borderColor: STATUS_COLOR.warn }} />Needs attention</div>
-            <div className="gis-key-row"><span className="gis-key-ring" style={{ borderColor: STATUS_COLOR.alert }} />Critical</div>
+            <div className="gis-key-row static"><span className="gis-key-ring" style={{ borderColor: STATUS_COLOR.warn }} />Needs attention</div>
+            <div className="gis-key-row static"><span className="gis-key-ring" style={{ borderColor: STATUS_COLOR.alert }} />Critical</div>
           </div>
         </div>
       )}

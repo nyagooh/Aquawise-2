@@ -13,7 +13,7 @@ import {
 import { useFilters, inZone } from '../demo/filters';
 import { withState, useIncidentState } from '../demo/incidentState';
 import { Card, Kpi, Status, Dot, Tabs, Segmented, Select, SearchInput, DataTable, Drawer, KV, Section, Loading, Insight, SevIcon, type Column } from '../demo/ui';
-import { LineChart, ChartLegend, BarList, SegmentBar, StatusTracker, LevelGauge, MiniBar, StatusDonut, TONE_COLOR, SERIES_COLORS, type ChartSeries } from '../demo/charts';
+import { LineChart, ChartLegend, BarList, SegmentBar, StatusTracker, LevelGauge, MiniBar, StatusDonut, Heatmap, TONE_COLOR, SERIES_COLORS, type ChartSeries } from '../demo/charts';
 import { NetworkMap, type MapPoint } from '../demo/NetworkMap';
 import { markerIcon, MARKER_COLOR } from '../data/network';
 import {
@@ -290,7 +290,6 @@ function Pressure({ ops }: { ops: Ops }) {
   const navigate = useNavigate();
   const s = useScoped(ops);
   const online = s.pressure.filter(p => p.online);
-  const [selected, setSelected] = useState<string[]>([]);
   const stats = useMemo(() => online.map(p => {
     const pts = series('pressure', p.id, p.base, s.spec);
     const vals = pts.map(x => x.v);
@@ -304,13 +303,10 @@ function Pressure({ ops }: { ops: Ops }) {
   const anomalies = s.incidents.filter(i => i.metric === 'pressure');
   const activeAnoms = anomalies.filter(i => i.status !== 'resolved');
 
-  const chart: ChartSeries[] = selected.length
-    ? selected.map((id, i) => { const p = ops.pressure.find(x => x.id === id)!; return { id, label: `${p.id} · ${zoneName(p.zone)}`, points: series('pressure', p.id, p.base, s.spec), color: SERIES_COLORS[i % SERIES_COLORS.length] }; })
-    : [{ id: 'avg', label: s.zone === 'ALL' ? 'Network average' : `${zoneName(s.zone)} average`, points: meanSeries(online.map(p => series('pressure', p.id, p.base, s.spec))) }];
-  const toggle = (id: string) => setSelected(sel => sel.includes(id) ? sel.filter(x => x !== id) : [...sel, id].slice(-5));
+  const heatRows = [...online].sort((a, b) => zoneName(a.zone).localeCompare(zoneName(b.zone)) || a.id.localeCompare(b.id))
+    .map(p => ({ id: p.id, label: p.id, sub: zoneName(p.zone), entity: p.id, base: p.base }));
 
   const cols: Column<typeof stats[number]>[] = [
-    { key: 'cmp', label: 'Compare', render: r => <input type="checkbox" checked={selected.includes(r.p.id)} onChange={() => toggle(r.p.id)} onClick={e => e.stopPropagation()} aria-label={`Compare ${r.p.id}`} />, width: 64 },
     { key: 'id', label: 'Logger', render: r => <span className="strong">{r.p.id}</span>, sort: r => r.p.id },
     { key: 'zone', label: 'Zone', render: r => zoneName(r.p.zone), sort: r => zoneName(r.p.zone) },
     { key: 'cur', label: 'Current (bar)', align: 'right', render: r => <span className={r.p.tone !== 'ok' ? `t-${r.p.tone} strong` : ''}>{r.p.value.toFixed(2)}</span>, sort: r => r.p.value },
@@ -331,13 +327,8 @@ function Pressure({ ops }: { ops: Ops }) {
         <Kpi label="Pressure anomalies" value={activeAnoms.length} tone={activeAnoms.some(a => a.severity === 'critical') ? 'crit' : activeAnoms.length ? 'warn' : 'ok'} sub={`${anomalies.length - activeAnoms.length} cleared in the last 30 days`} onClick={() => navigate('/alerts')} />
       </div>
 
-      <Card title="Pressure over time" sub={`${selected.length ? `${selected.length} logger${selected.length > 1 ? 's' : ''} compared` : chart[0].label} · ${s.spec.label}. Shaded windows mark readings outside the normal range.`}
-        actions={selected.length ? <button className="dx-btn" onClick={() => setSelected([])}>Show average</button> : <span className="dx-muted">Tick loggers below to compare</span>}>
-        <LineChart series={chart} metric="pressure" height={300} windows={windowsFor('pressure', selected.length ? online.filter(p => selected.includes(p.id)) : online, s.spec.hours)} />
-        <div style={{ marginTop: 10, display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'space-between' }}>
-          <ChartLegend items={[{ label: 'Acceptable range', color: '', band: true }, { label: 'Warning threshold', color: 'hsl(var(--warning))', dashed: true }, { label: 'Critical threshold', color: 'hsl(var(--danger))', dashed: true }]} />
-          {selected.length > 0 && <ChartLegend items={chart.map(c => ({ label: c.label, color: c.color! }))} />}
-        </div>
+      <Card title="Pressure over time" sub={`Every logger · ${s.spec.label}. Each square is the average pressure for that period; darker blue is higher, amber and red are outside the normal range.`}>
+        <Heatmap rows={heatRows} metric="pressure" spec={s.spec} />
       </Card>
 
       <div className="dx-cols three">
@@ -364,7 +355,7 @@ function Pressure({ ops }: { ops: Ops }) {
       </div>
 
       <Card title="Monitoring-point comparison" sub={`${s.pressure.length} pressure loggers · min/max over ${s.spec.label.toLowerCase()}`} flush>
-        <DataTable columns={cols} rows={stats} rowKey={r => r.p.id} onRowClick={r => toggle(r.p.id)} defaultSort={{ key: 'st', dir: 1 }} />
+        <DataTable columns={cols} rows={stats} rowKey={r => r.p.id} defaultSort={{ key: 'st', dir: 1 }} pageSize={10} />
       </Card>
 
       <Card title="Related alerts" sub="Pressure readings outside the normal range" flush>
@@ -379,11 +370,8 @@ function TankLevels({ ops }: { ops: Ops }) {
   useIncidentState();
   const navigate = useNavigate();
   const s = useScoped(ops);
-  const [selected, setSelected] = useState<string[] | null>(null);
   const [open, setOpen] = useState<TankOps | null>(null);
   if (!s.tanks.length) return <Card><p className="dx-muted">No reservoirs in this zone.</p></Card>;
-  const shown = s.tanks.filter(t => !selected || selected.includes(t.id));
-  const chart: ChartSeries[] = shown.map((t, i) => ({ id: t.id, label: t.name, points: series('level', t.id, t.base, s.spec), color: SERIES_COLORS[i % SERIES_COLORS.length] }));
   const totalCap = s.tanks.reduce((a, t) => a + t.capacity, 0);
   const totalVol = s.tanks.reduce((a, t) => a + t.volume, 0);
 
@@ -419,16 +407,9 @@ function TankLevels({ ops }: { ops: Ops }) {
         ))}
       </div>
 
-      <Card title="Tank level over time" sub={`${shown.length === s.tanks.length ? 'All reservoirs' : `${shown.length} selected`} · ${s.spec.label}. Night-time filling and daytime drawdown are visible on 24H and 7D.`}
-        actions={<div className="dx-seg" role="group">
-          <button className={!selected ? 'on' : ''} onClick={() => setSelected(null)}>All</button>
-          {s.tanks.map(t => <button key={t.id} className={selected?.includes(t.id) ? 'on' : ''} onClick={() => setSelected(sel => { const cur = sel ?? []; const nx = cur.includes(t.id) ? cur.filter(x => x !== t.id) : [...cur, t.id]; return nx.length ? nx : null; })}>{t.name.replace(' Reservoir', '').replace('Reservoir ', '')}</button>)}
-        </div>}>
-        <LineChart series={chart} metric="level" height={300} band={null} yMin={0} />
-        <div style={{ marginTop: 10, display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'space-between' }}>
-          <ChartLegend items={chart.map(c => ({ label: c.label, color: c.color! }))} />
-          <ChartLegend items={[{ label: 'Warning level (35 %)', color: 'hsl(var(--warning))', dashed: true }, { label: 'Low level (20 %)', color: 'hsl(var(--danger))', dashed: true }]} />
-        </div>
+      <Card title="Tank level over time" sub={`Every reservoir · ${s.spec.label}. Each square shows the average level (%) for that period; amber is below 35 %, red below 20 %. Click a row for its history.`}>
+        <Heatmap rows={s.tanks.map(t => ({ id: t.id, label: t.name, sub: zoneName(t.zone), entity: t.id, base: t.base }))} metric="level" spec={s.spec} showValues scale={[35, 100]}
+          onRowClick={id => setOpen(s.tanks.find(t => t.id === id) ?? null)} />
       </Card>
 
       <Card title="Reservoirs" sub="Click a row for history and alerts" flush>
@@ -524,7 +505,7 @@ function Sensors({ ops }: { ops: Ops }) {
           <Select label="Status" value={health} onChange={setHealth} options={[{ value: 'ALL', label: 'All' }, { value: 'ok', label: 'Online' }, { value: 'warn', label: 'Warning' }, { value: 'off', label: 'Offline' }]} />
           <span className="dx-muted" style={{ marginLeft: 'auto' }}>{rows.length} of {s.sensors.length}</span>
         </div>
-        <DataTable columns={cols} rows={rows} rowKey={d => d.id} onRowClick={setOpen} selectedKey={open?.id} defaultSort={{ key: 'h', dir: 1 }} pageSize={15} />
+        <DataTable columns={cols} rows={rows} rowKey={d => d.id} onRowClick={setOpen} selectedKey={open?.id} defaultSort={{ key: 'h', dir: 1 }} pageSize={10} />
       </Card>
 
       <Drawer open={!!open} onClose={() => setOpen(null)} kicker={open?.kind ?? 'Sensor'} title={open ? `${open.id} · ${open.name}` : ''}

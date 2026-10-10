@@ -233,14 +233,26 @@ export function DataTable<T>({ columns, rows, rowKey, onRowClick, selectedKey, p
       {pageSize > 0 && sorted.length > pageSize && (
         <div className="dx-pager">
           <span>{page * pageSize + 1}–{Math.min(sorted.length, (page + 1) * pageSize)} of {sorted.length.toLocaleString()}</span>
-          <div>
-            <button type="button" disabled={page === 0} onClick={() => setPage(p => p - 1)}>Previous</button>
-            <button type="button" disabled={page >= pages - 1} onClick={() => setPage(p => p + 1)}>Next</button>
-          </div>
+          <nav className="dx-pages" aria-label="Pages">
+            <button type="button" disabled={page === 0} onClick={() => setPage(p => p - 1)} aria-label="Previous page">‹</button>
+            {pageList(page, pages).map((n, i) => n === null
+              ? <span key={`gap${i}`} className="gap">…</span>
+              : <button key={n} type="button" className={n === page ? 'on' : ''} aria-current={n === page ? 'page' : undefined} onClick={() => setPage(n)}>{n + 1}</button>)}
+            <button type="button" disabled={page >= pages - 1} onClick={() => setPage(p => p + 1)} aria-label="Next page">›</button>
+          </nav>
         </div>
       )}
     </div>
   );
+}
+
+/** Page numbers to show: first, last, and a window around the current page, with gaps. */
+export function pageList(page: number, pages: number): Array<number | null> {
+  if (pages <= 7) return Array.from({ length: pages }, (_, i) => i);
+  const keep = new Set([0, pages - 1, page - 1, page, page + 1].filter(n => n >= 0 && n < pages));
+  const out: Array<number | null> = [];
+  [...keep].sort((x, y) => x - y).forEach((n, i, arr) => { if (i && n - arr[i - 1] > 1) out.push(null); out.push(n); });
+  return out;
 }
 
 /* ── drawer ── */

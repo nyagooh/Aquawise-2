@@ -8,7 +8,7 @@ import { useOps, ago, zoneName, type Ops } from '../demo/model';
 import { useFilters, inZone } from '../demo/filters';
 import { withState, useIncidentState } from '../demo/incidentState';
 import { Card, Kpi, Status, Tabs, Select, SearchInput, DataTable, Drawer, KV, Section, Loading, SevIcon, type Column } from '../demo/ui';
-import { BarList, SegmentBar, LineChart, Columns, TONE_COLOR } from '../demo/charts';
+import { SegmentBar, LineChart, TONE_COLOR } from '../demo/charts';
 import { series, rangeSpec, stableRand, NOW, DAYS, type Metric, type Tone } from '../demo/series';
 
 type Kind = 'Pipe' | 'Reservoir' | 'Valve' | 'Sensor' | 'Meter';
@@ -131,10 +131,10 @@ function AssetsBody({ ops }: { ops: Ops }) {
 
       <div className="dx-cols three">
         <Card title="Pipe material" sub="By length (km)">
-          <BarList rows={byMaterial.sort((a, b) => b[1] - a[1]).map(([m, km]) => ({ key: m, label: m === 'AC' ? 'AC · asbestos cement' : m, value: km, display: `${km.toFixed(1)} km · ${Math.round((km / Math.max(lengthKm, 0.001)) * 100)} %`, tone: m === 'AC' ? 'warn' as Tone : undefined }))} onRowClick={k => { setTab('pipes'); setMaterial(k); }} />
+          <BoxTiles rows={byMaterial.sort((a, b) => b[1] - a[1]).map(([m, km]) => ({ key: m, label: m, value: km, display: `${km.toFixed(1)} km`, tone: m === 'AC' ? 'warn' as Tone : m === 'Unknown' ? 'off' as Tone : undefined, sub: m === 'AC' ? 'Asbestos cement — replacement priority' : undefined }))} onRowClick={k => { setTab('pipes'); setMaterial(k); }} />
         </Card>
         <Card title="Pipe age" sub="Segments by installation year">
-          <Columns height={230} data={ageBands.map(([label, f]) => ({ label: label.replace(' years', ' y'), value: pipes.filter(p => f(p.installed)).length }))} />
+          <BoxTiles rows={ageBands.map(([label, f]) => { const n = pipes.filter(p => f(p.installed)).length; return { key: label, label, value: n, display: `${n.toLocaleString()} segments`, tone: label === '30 + years' ? 'warn' as Tone : label === 'Unknown' ? 'off' as Tone : undefined }; })} />
         </Card>
         <Card title="Asset condition" sub="All asset types">
           <SegmentBar parts={conds.map(c => ({ label: c, value: scoped.filter(r => r.condition === c).length, color: TONE_COLOR[COND_TONE[c]] }))} />
@@ -165,7 +165,7 @@ function AssetsBody({ ops }: { ops: Ops }) {
           <span className="dx-muted" style={{ marginLeft: 'auto' }}>{rows.length.toLocaleString()} assets</span>
           <Link className="dx-btn" to="/assets/attributes">Pipe attribute table</Link>
         </div>
-        <DataTable columns={cols} rows={rows} rowKey={r => r.id} onRowClick={setOpen} selectedKey={open?.id} pageSize={25} />
+        <DataTable columns={cols} rows={rows} rowKey={r => r.id} onRowClick={setOpen} selectedKey={open?.id} pageSize={15} />
       </Card>
 
       <AssetDrawer asset={open} ops={ops} onClose={() => setOpen(null)} />
@@ -245,4 +245,28 @@ function groupSum<T>(rows: T[], key: (r: T) => string, val: (r: T) => number): A
   const m = new Map<string, number>();
   rows.forEach(r => m.set(key(r), (m.get(key(r)) ?? 0) + val(r)));
   return [...m.entries()];
+}
+
+/** Proportions as a grid of boxes: each box holds the value, its share and a filled block. */
+function BoxTiles({ rows, onRowClick }: {
+  rows: Array<{ key: string; label: string; value: number; display: string; tone?: Tone; sub?: string }>;
+  onRowClick?: (key: string) => void;
+}) {
+  const total = rows.reduce((a, r) => a + r.value, 0) || 1;
+  return (
+    <div className="bx-tiles">
+      {rows.map(r => {
+        const share = (r.value / total) * 100;
+        const Tag = onRowClick ? 'button' : 'div';
+        return (
+          <Tag key={r.key} type={onRowClick ? 'button' : undefined} className={`bx-tile${onRowClick ? ' click' : ''}`} onClick={onRowClick ? () => onRowClick(r.key) : undefined} title={r.sub}>
+            <span className="bx-tile-lbl">{r.label}{r.sub && <i className={`t-${r.tone ?? 'warn'}`}> ·  priority</i>}</span>
+            <b>{r.display}</b>
+            <span className="bx-tile-share">{share < 1 ? '< 1' : share.toFixed(0)} %</span>
+            <span className="bx-tile-fill" style={{ height: `${Math.max(3, share)}%`, background: r.tone === 'warn' ? 'hsl(var(--warning) / 0.14)' : r.tone === 'off' ? 'hsl(var(--offline) / 0.18)' : 'hsl(var(--primary) / 0.1)' }} />
+          </Tag>
+        );
+      })}
+    </div>
+  );
 }
