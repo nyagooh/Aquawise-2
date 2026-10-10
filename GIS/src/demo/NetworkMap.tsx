@@ -119,7 +119,8 @@ export function NetworkMap({ ops, points, height = 360, zone = 'ALL', zoneColor,
       const icon = L.divIcon({
         className: '',
         iconSize: [size, size],
-        html: `<span class="eg-sym${p.tone === 'crit' ? ' alert' : ''}${sel ? ' sel' : ''}" style="--halo:${TONE_HEX[p.tone]}">${markerIcon(p.shape === 'square' ? 'tank' : p.shape === 'diamond' ? 'quality' : 'pressure', TONE_HEX[p.tone], size + 8)}</span>`
+        // Colour shows the asset type; a ring shows a reading outside its normal range.
+        html: `<span class="eg-sym${p.tone !== 'ok' ? ' alert' : ''}${sel ? ' sel' : ''}" style="--halo:${TONE_HEX[p.tone]}">${markerIcon(p.shape === 'square' ? 'tank' : p.shape === 'diamond' ? 'quality' : 'pressure', undefined, size + 8)}</span>`
       });
       const mk = L.marker(p.pos, { icon, keyboard: false, zIndexOffset: order.indexOf(p.tone) * 100 + (sel ? 1000 : 0) });
       mk.bindTooltip(p.label, { direction: 'top', offset: [0, -size / 2], className: 'dx-maptip' });

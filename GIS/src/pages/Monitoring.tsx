@@ -15,7 +15,7 @@ import { withState, useIncidentState } from '../demo/incidentState';
 import { Card, Kpi, Status, Dot, Tabs, Segmented, Select, SearchInput, DataTable, Drawer, KV, Section, Loading, Insight, SevIcon, type Column } from '../demo/ui';
 import { LineChart, ChartLegend, BarList, Sparkline, TankGauge, TONE_COLOR, SERIES_COLORS, type ChartSeries } from '../demo/charts';
 import { NetworkMap, type MapPoint } from '../demo/NetworkMap';
-import { markerIcon } from '../data/network';
+import { markerIcon, MARKER_COLOR } from '../data/network';
 import {
   series, sampleAt, meanSeries, breachWindows, toneFor, worstTone, fmt, METRICS, QUALITY_METRICS, NOW, HOURS,
   rangeSpec, type Metric, type Tone, type RangeSpec
@@ -111,9 +111,9 @@ function MonitoringOverview({ ops }: { ops: Ops }) {
   const okCount = <T extends { tone: Tone }>(l: T[]) => l.filter(x => x.tone === 'ok').length;
   const metricPage: Partial<Record<Metric, string>> = { pressure: '/monitoring/pressure', flow: '/monitoring/pressure', level: '/monitoring/tank-levels' };
   const groups = [
-    { key: 'q', icon: 'quality' as const, color: '#0E7490', name: 'Water quality', what: 'Turbidity, pH, chlorine, conductivity, temperature', total: s.quality.length, ok: okCount(s.quality), href: '/monitoring/water-quality' },
-    { key: 'p', icon: 'pressure' as const, color: '#1D4ED8', name: 'Pressure', what: `Average ${avgP.toFixed(2)} bar across ${online.length} loggers`, total: s.pressure.length, ok: okCount(s.pressure), href: '/monitoring/pressure' },
-    { key: 't', icon: 'tank' as const, color: '#0284C7', name: 'Tank levels', what: s.tanks.length ? `Average ${Math.round(avgLevel)} % across ${s.tanks.length} reservoirs` : 'No reservoirs in this zone', total: s.tanks.length, ok: okCount(s.tanks), href: '/monitoring/tank-levels' },
+    { key: 'q', icon: 'quality' as const, color: MARKER_COLOR.quality, name: 'Water quality', what: 'Turbidity, pH, chlorine, conductivity, temperature', total: s.quality.length, ok: okCount(s.quality), href: '/monitoring/water-quality' },
+    { key: 'p', icon: 'pressure' as const, color: MARKER_COLOR.pressure, name: 'Pressure', what: `Average ${avgP.toFixed(2)} bar across ${online.length} loggers`, total: s.pressure.length, ok: okCount(s.pressure), href: '/monitoring/pressure' },
+    { key: 't', icon: 'tank' as const, color: MARKER_COLOR.tank, name: 'Tank levels', what: s.tanks.length ? `Average ${Math.round(avgLevel)} % across ${s.tanks.length} reservoirs` : 'No reservoirs in this zone', total: s.tanks.length, ok: okCount(s.tanks), href: '/monitoring/tank-levels' },
     { key: 's', icon: 'meter' as const, color: '#475467', name: 'Sensors', what: `${sensorsOff} offline · ${s.sensors.filter(x => x.health === 'warn').length} low battery or weak signal`, total: s.sensors.length, ok: s.sensors.filter(x => x.health === 'ok').length, href: '/monitoring/sensors' }
   ];
 
@@ -129,10 +129,10 @@ function MonitoringOverview({ ops }: { ops: Ops }) {
         <Card title="Where we measure" sub="Click a point to open its readings" flush>
           <NetworkMap ops={ops} points={mapPoints} zone={s.zone} height={440} onSelect={id => navigate(id)} />
           <div className="dx-map-legend">
-            <span className="mk-legend" dangerouslySetInnerHTML={{ __html: markerIcon('pressure', '#475467', 16) }} />Pressure
-            <span className="mk-legend" dangerouslySetInnerHTML={{ __html: markerIcon('tank', '#475467', 16) }} />Reservoir
-            <span className="mk-legend" dangerouslySetInnerHTML={{ __html: markerIcon('quality', '#475467', 16) }} />Water quality
-            <span style={{ marginLeft: 'auto' }}><Dot tone="ok" />Normal</span><span><Dot tone="warn" />Warning</span><span><Dot tone="crit" />Critical</span><span><Dot tone="off" />Offline</span>
+            <span className="mk-legend" dangerouslySetInnerHTML={{ __html: markerIcon('pressure', undefined, 16) }} />Pressure
+            <span className="mk-legend" dangerouslySetInnerHTML={{ __html: markerIcon('tank', undefined, 16) }} />Reservoir
+            <span className="mk-legend" dangerouslySetInnerHTML={{ __html: markerIcon('quality', undefined, 16) }} />Water quality
+            <span style={{ marginLeft: 'auto' }}>Ring:</span><span><Dot tone="warn" />Warning</span><span><Dot tone="crit" />Critical</span><span><Dot tone="off" />Offline</span>
           </div>
         </Card>
         <Card title="By measurement" sub="How many points are within range" flush>

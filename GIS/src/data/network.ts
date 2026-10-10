@@ -425,35 +425,35 @@ export const ASSET_STYLE: Record<AssetKind, {
   // read apart from the orange / cyan pipe network and from each other.
   // Status semantics (green/amber/red) stay on the separate status dot.
   facility: {
-    color: '#14B8A6',          // bold teal — intake / treatment works
+    color: '#334155',          // dark slate — intake / treatment works
     ring: '#99F6E4',
     label: 'Intake / treatment plant',
     shortLabel: 'Facilities',
     description: 'Dam intakes, water & wastewater treatment works'
   },
   tank: {
-    color: '#0284C7',          // sky blue — water storage, clear of the purple pipes
+    color: '#2563EB',          // royal blue — water storage
     ring: '#DDD6FE',
     label: 'Reservoir / tank',
     shortLabel: 'Reservoirs',
     description: 'Reservoir level-sensor telemetry'
   },
   pressure_valve: {
-    color: '#B45309',
+    color: '#D97706',          // amber — pressure-reducing valve
     ring: '#FDE68A',
     label: 'Valve (PRV)',
     shortLabel: 'Valves',
     description: 'Pressure-reducing valve · live drift'
   },
   meter_valve: {
-    color: '#BE185D',
+    color: '#BE123C',          // deep rose — bulk meter
     ring: '#FBCFE8',
     label: 'Meter / pump',
     shortLabel: 'Meters',
     description: 'Consumption-metered valve assembly'
   },
   sensor: {
-    color: '#1D4ED8',
+    color: '#7C3AED',          // violet — pressure / flow sensor
     ring: '#BFDBFE',
     label: 'Sensors',
     shortLabel: 'Sensors',
@@ -469,7 +469,7 @@ export const STATUS_COLOR: Record<AssetStatus, string> = {
   alert: '#EF4444'   // critical
 };
 export const OFFLINE_COLOR = '#94A3B8';
-export const QUALITY_SENSOR_COLOR = '#0E7490';
+export const QUALITY_SENSOR_COLOR = '#059669'; // emerald — water-quality sensor
 export const DMA_BOUNDARY_COLOR = '#8B5CF6';
 
 /**
@@ -505,13 +505,20 @@ const MARKER_PATHS: Record<MarkerKind, string> = {
   valve: '<path d="M3.5 10v8l8.5-4zM20.5 10v8L12 14z"/><path d="M12 14V7.5M8.5 5.5h7"/>',
   meter: '<rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="M7 10.5h2.5M10.8 10.5h2.4M14.5 10.5H17M7 14h10"/>'
 };
-export function markerIcon(kind: MarkerKind, color: string, size = 22): string {
-  // Line icon in the asset colour over a white halo: reads on any basemap,
-  // no tiles or badges.
-  const paths = MARKER_PATHS[kind].replace(/fill="#fff"/g, `fill="${color}"`);
-  return `<span class="mk mk-${kind}" style="width:${size}px;height:${size}px"><svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke-linecap="round" stroke-linejoin="round">`
-    + `<g stroke="#fff" stroke-width="5.5">${MARKER_PATHS[kind]}</g>`
-    + `<g stroke="${color}" stroke-width="2.2">${paths}</g></svg></span>`;
+/** Map marker colour per symbol — one colour per asset type, shared by maps and legends. */
+export const MARKER_COLOR: Record<MarkerKind, string> = {
+  plant: '#334155',
+  tank: '#2563EB',
+  pressure: '#7C3AED',
+  quality: '#059669',
+  valve: '#D97706',
+  meter: '#BE123C'
+};
+
+export function markerIcon(kind: MarkerKind, color: string = MARKER_COLOR[kind], size = 22): string {
+  // Solid badge in the asset-type colour with a white symbol and rim, so each
+  // asset type is recognisable at a glance on satellite imagery.
+  return `<span class="mk mk-${kind}" style="width:${size}px;height:${size}px;background:${color}"><svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${MARKER_PATHS[kind]}</svg></span>`;
 }
 
 /** @deprecated kept for older imports; maps to the engineering symbols. */

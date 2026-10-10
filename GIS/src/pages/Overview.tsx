@@ -12,6 +12,7 @@ import { withState, useIncidentState } from '../demo/incidentState';
 import { Card, Kpi, Dot, Loading, IconTile, ICON, BadgeDelta, Segmented, type IconTone } from '../demo/ui';
 import { LineChart, SparkArea, SparkBars, Donut, BarChart } from '../demo/charts';
 import { NetworkMap, type MapPoint } from '../demo/NetworkMap';
+import { markerIcon } from '../data/network';
 import { series, rangeSpec, meanSeries, sampleAt, toneFor, worstTone, fmt, METRICS, QUALITY_METRICS, NOW, HOURS, type Tone, type Point } from '../demo/series';
 
 const greeting = () => {
@@ -148,8 +149,10 @@ function OverviewBody({ ops }: { ops: Ops }) {
           </>} flush>
           <NetworkMap ops={ops} points={mapPoints} zone={zone} height={420} onSelect={id => navigate(`/network?focus=${id}`)} />
           <div className="dx-map-legend">
-            <span><i className="ov-lg pipe main" />Transmission</span><span><i className="ov-lg pipe" />Distribution</span><span><i className="ov-lg sq" />Reservoirs</span><span><i className="ov-lg dia" />Water quality</span>
-            <span style={{ marginLeft: 'auto' }}><Dot tone="ok" />Normal</span><span><Dot tone="warn" />Warning</span><span><Dot tone="crit" />Critical</span><span><Dot tone="off" />Offline</span>
+            <span><i className="ov-lg pipe main" />Transmission</span><span><i className="ov-lg pipe" />Distribution</span><span className="mk-legend" dangerouslySetInnerHTML={{ __html: markerIcon('pressure', undefined, 16) }} />Pressure
+            <span className="mk-legend" dangerouslySetInnerHTML={{ __html: markerIcon('tank', undefined, 16) }} />Reservoirs
+            <span className="mk-legend" dangerouslySetInnerHTML={{ __html: markerIcon('quality', undefined, 16) }} />Water quality
+            <span style={{ marginLeft: 'auto' }}>Ring:</span><span><Dot tone="warn" />Warning</span><span><Dot tone="crit" />Critical</span><span><Dot tone="off" />Offline</span>
           </div>
         </Card>
 
