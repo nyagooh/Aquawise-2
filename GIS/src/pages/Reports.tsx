@@ -7,15 +7,14 @@ import { Shell } from '../components/Shell';
 import { useOps, clock, zoneName, ZONE_CODES, type Ops } from '../demo/model';
 import { useFilters, inZone } from '../demo/filters';
 import { withState } from '../demo/incidentState';
-import { Card, Kpi, Select, DataTable, Loading, Status, type Column } from '../demo/ui';
+import { Card, Kpi, Select, DataTable, Loading, Status, Tabs, type Column } from '../demo/ui';
 import { LineChart } from '../demo/charts';
 import { series, rangeSpec, meanSeries, toneFor, METRICS, QUALITY_METRICS, NOW, HOURS, type Metric, type RangeSpec } from '../demo/series';
 
-type ReportType = 'quality' | 'nrw' | 'network' | 'pressure' | 'tanks' | 'incidents' | 'assets';
+type ReportType = 'quality' | 'network' | 'pressure' | 'tanks' | 'incidents' | 'assets';
 const REPORTS: Array<{ key: ReportType; title: string; desc: string; points?: 'quality' | 'pressure' | 'tanks' }> = [
   { key: 'quality',   title: 'Water Quality Report', desc: 'Compliance by monitoring point and parameter', points: 'quality' },
-  { key: 'nrw',       title: 'NRW Report', desc: 'Water balance and losses by zone' },
-  { key: 'network',   title: 'Network Performance Report', desc: 'Pressure, quality, incidents and NRW per zone' },
+  { key: 'network',   title: 'Network Performance Report', desc: 'Pressure, water quality and alerts per zone' },
   { key: 'pressure',  title: 'Pressure Report', desc: 'Min / average / max and time below range per logger', points: 'pressure' },
   { key: 'tanks',     title: 'Tank Level Report', desc: 'Reservoir levels and time below threshold', points: 'tanks' },
   { key: 'incidents', title: 'Alerts & Incidents Report', desc: 'Every incident raised in the period' },
@@ -29,21 +28,21 @@ interface Generated {
 }
 
 const RECENT_SEED = [
-  { id: 'RPT-0412', title: 'NRW Report', period: 'Last month', zone: 'All zones', by: 'J. Mwangi', at: NOW - 3 * 24 * HOURS },
+  { id: 'RPT-0412', title: 'Tank Level Report', period: 'Last month', zone: 'All zones', by: 'J. Mwangi', at: NOW - 3 * 24 * HOURS },
   { id: 'RPT-0411', title: 'Water Quality Report', period: 'Last 30 days', zone: 'All zones', by: 'Scheduled', at: NOW - 6 * 24 * HOURS },
   { id: 'RPT-0409', title: 'Pressure Report', period: 'Last 7 days', zone: 'Northgate', by: 'A. Otieno', at: NOW - 9 * 24 * HOURS },
   { id: 'RPT-0405', title: 'Alerts & Incidents Report', period: 'Last 30 days', zone: 'All zones', by: 'Scheduled', at: NOW - 13 * 24 * HOURS }
 ];
 const SCHEDULED = [
   { name: 'Water Quality Report', freq: 'Weekly · Monday 07:00', to: 'Quality team, Regulator liaison', next: 'Monday' },
-  { name: 'NRW Report', freq: 'Monthly · 1st, 08:00', to: 'Management', next: '1st of next month' },
+  { name: 'Network Performance Report', freq: 'Monthly · 1st, 08:00', to: 'Management', next: '1st of next month' },
   { name: 'Alerts & Incidents Report', freq: 'Daily · 06:00', to: 'Operations', next: 'Tomorrow 06:00' }
 ];
 
 export default function Reports() {
   const ops = useOps();
   return (
-    <Shell active="reports" title="Reports" sub="Generate, preview and export reports from monitored data">
+    <Shell active="reports" title="Reports" sub="Your monitored data as ready-to-send reports. Pick a report, set the period, export.">
       {ops ? <ReportsBody ops={ops} /> : <Loading />}
     </Shell>
   );
@@ -56,7 +55,6 @@ function ReportsBody({ ops }: { ops: Ops }) {
   const [zone, setZone] = useState(g.zone);
   const [params, setParams] = useState<Metric[]>(['turbidity', 'ph', 'chlorine']);
   const [points, setPoints] = useState<string[] | null>(null);
-  const [report, setReport] = useState<Generated | null>(null);
   const [recent, setRecent] = useState(RECENT_SEED);
   const def = REPORTS.find(r => r.key === type)!;
 
@@ -67,94 +65,88 @@ function ReportsBody({ ops }: { ops: Ops }) {
     return [];
   }, [def, zone, ops]);
   const chosen = points ?? pointOptions.map(p => p.id);
-  const step = report ? 4 : def.points ? 3 : 2;
 
-  const generate = () => {
-    const spec = rangeSpec('CUSTOM', Number(days));
-    const r = build(ops, type, spec, zone, chosen, params);
-    setReport(r);
-    setRecent(list => [{ id: r.id, title: r.title, period: spec.label, zone: r.zone, by: 'You', at: r.at }, ...list]);
+  const [custom, setCustom] = useState(false);
+  const report = useMemo(
+    () => (def.points && !chosen.length ? null : build(ops, type, rangeSpec('CUSTOM', Number(days)), zone, chosen, params)),
+    [ops, type, days, zone, chosen.join(','), params.join(','), def.points]
+  );
+  const exportCsv = () => {
+    if (!report) return;
+    downloadCsv(report);
+    setRecent(list => [{ id: report.id, title: report.title, period: rangeSpec('CUSTOM', Number(days)).label, zone: report.zone, by: 'You', at: Date.now() }, ...list]);
   };
 
   return (
     <div className="dx">
-      <ol className="dx-steps dx-no-print">
-        {['Choose report', 'Date range & zone', def.points ? 'Points & parameters' : 'Options', 'Generate', 'Preview & export'].map((s, i) => (
-          <li key={s} className={i < step ? 'done' : i === step ? 'on' : ''}><b>{i + 1}</b>{s}</li>
-        ))}
-      </ol>
-
-      <div className="dx-cols main-side dx-no-print" style={{ gridTemplateColumns: 'minmax(260px, 0.8fr) minmax(0, 1.6fr)' }}>
-        <Card title="1 · Choose report" flush>
-          <div className="dx-list">
-            {REPORTS.map(r => (
-              <button key={r.key} type="button" className="dx-item" style={r.key === type ? { background: 'hsl(var(--accent-bg))' } : undefined} onClick={() => { setType(r.key); setPoints(null); setReport(null); }}>
-                <div className="dx-item-main">
-                  <div className="dx-item-title" style={r.key === type ? { color: 'hsl(var(--primary))' } : undefined}>{r.title}</div>
-                  <div className="dx-item-sub">{r.desc}</div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </Card>
-
-        <Card title={`2 · Configure · ${def.title}`} sub="Defaults follow the zone selected elsewhere in the platform"
-          actions={<button className="dx-btn primary" onClick={generate} disabled={def.points ? !chosen.length : false}>Generate report</button>}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div className="dx-toolbar">
-              <Select label="Date range" value={days} onChange={setDays} options={[{ value: '1', label: 'Last 24 hours' }, { value: '7', label: 'Last 7 days' }, { value: '30', label: 'Last 30 days' }, { value: '90', label: 'Last 3 months' }]} />
-              <Select label="Zone / DMA" value={zone} onChange={z => { setZone(z); setPoints(null); }} options={[{ value: 'ALL', label: 'All zones' }, ...ZONE_CODES.map(z => ({ value: z, label: zoneName(z) }))]} />
-            </div>
-            {def.points && (
-              <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
-                <legend className="dx-kicker" style={{ marginBottom: 8 }}>Monitoring points ({chosen.length} of {pointOptions.length})</legend>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 6 }}>
-                  {pointOptions.map(p => (
-                    <label key={p.id} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <input type="checkbox" checked={chosen.includes(p.id)} onChange={() => setPoints(chosen.includes(p.id) ? chosen.filter(x => x !== p.id) : [...chosen, p.id])} />{p.label}
-                    </label>
-                  ))}
-                  {!pointOptions.length && <span className="dx-muted">No points in this zone.</span>}
-                </div>
-              </fieldset>
-            )}
-            {type === 'quality' && (
-              <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
-                <legend className="dx-kicker" style={{ marginBottom: 8 }}>Parameters</legend>
-                <div className="dx-toolbar">
-                  {QUALITY_METRICS.map(m => (
-                    <label key={m} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      <input type="checkbox" checked={params.includes(m)} onChange={() => setParams(params.includes(m) ? params.filter(x => x !== m) : [...params, m])} />{METRICS[m].label}
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-            )}
-          </div>
-        </Card>
+      <div className="dx-no-print">
+        <Tabs value={type} onChange={k => { setType(k); setPoints(null); }} items={REPORTS.map(r => ({ key: r.key, label: r.title.replace(' Report', '') }))} />
       </div>
-
-      {report && (
-        <Card title={`Preview · ${report.title}`} sub={`${report.period} · ${report.zone} · generated ${clock(report.at)}`} className="dx-print"
-          actions={<span className="dx-no-print dx-toolbar">
-            <button className="dx-btn" onClick={() => downloadCsv(report)}>Export CSV</button>
-            <button className="dx-btn primary" onClick={() => window.print()}>Export PDF</button>
-          </span>}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div className="dx-grid-kpi four">{report.kpis.map(([l, v]) => <Kpi key={l} label={l} value={v} />)}</div>
-            {report.chart && <LineChart series={[{ id: 'r', label: report.chart.label, points: report.chart.points }]} metric={report.chart.metric} band={report.chart.metric === 'level' ? null : undefined} height={220} />}
-            <div className="dx-table-wrap" style={{ border: '1px solid hsl(var(--border))', borderRadius: 6 }}>
-              <table className="dx-table">
-                <thead><tr>{report.columns.map(c => <th key={c}>{c}</th>)}</tr></thead>
-                <tbody>{report.rows.map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j} className={typeof c === 'number' ? 'num' : undefined}>{typeof c === 'number' ? c.toLocaleString() : c}</td>)}</tr>)}</tbody>
-              </table>
-            </div>
-            <p className="dx-muted" style={{ fontSize: '0.75rem' }}>{report.id} · Riverton Water &amp; Sanitation Co. · Generated by AquaWise from monitored data.</p>
-          </div>
-        </Card>
+      <div className="rp-bar dx-no-print">
+        <Select label="Period" value={days} onChange={setDays} options={[{ value: '1', label: 'Last 24 hours' }, { value: '7', label: 'Last 7 days' }, { value: '30', label: 'Last 30 days' }, { value: '90', label: 'Last 3 months' }]} />
+        <Select label="Zone" value={zone} onChange={z => { setZone(z); setPoints(null); }} options={[{ value: 'ALL', label: 'All zones' }, ...ZONE_CODES.map(z => ({ value: z, label: zoneName(z) }))]} />
+        {(def.points || type === 'quality') && (
+          <button type="button" className={`dx-btn${custom ? ' on' : ''}`} onClick={() => setCustom(c => !c)} aria-expanded={custom}>
+            {def.points ? `${chosen.length} of ${pointOptions.length} points` : 'Parameters'}{type === 'quality' ? ` · ${params.length} parameters` : ''}
+          </button>
+        )}
+        <span className="rp-spacer" />
+        <button type="button" className="dx-btn" onClick={exportCsv} disabled={!report}>Export CSV</button>
+        <button type="button" className="dx-btn primary" onClick={() => window.print()} disabled={!report}>Export PDF</button>
+      </div>
+      {custom && (
+        <div className="rp-custom dx-no-print">
+          {def.points && (
+            <fieldset>
+              <legend>Monitoring points</legend>
+              <div className="rp-checks">
+                {pointOptions.map(p => (
+                  <label key={p.id}><input type="checkbox" checked={chosen.includes(p.id)} onChange={() => setPoints(chosen.includes(p.id) ? chosen.filter(x => x !== p.id) : [...chosen, p.id])} />{p.label}</label>
+                ))}
+                {!pointOptions.length && <span className="dx-muted">No points in this zone.</span>}
+              </div>
+            </fieldset>
+          )}
+          {type === 'quality' && (
+            <fieldset>
+              <legend>Parameters</legend>
+              <div className="rp-checks">
+                {QUALITY_METRICS.map(m => (
+                  <label key={m}><input type="checkbox" checked={params.includes(m)} onChange={() => setParams(params.includes(m) ? params.filter(x => x !== m) : [...params, m])} />{METRICS[m].label}</label>
+                ))}
+              </div>
+            </fieldset>
+          )}
+        </div>
       )}
 
-      <div className="dx-cols dx-no-print">
+      {report ? (
+        <section className="rp-doc dx-print">
+          <header className="rp-doc-head">
+            <div>
+              <h2>{report.title}</h2>
+              <p>{report.period} · {report.zone} · Riverton Water &amp; Sanitation Co.</p>
+            </div>
+            <span className="dx-muted">{def.desc}</span>
+          </header>
+          <div className="dx-grid-kpi four">{report.kpis.map(([l, v]) => <Kpi key={l} label={l} value={v} />)}</div>
+          {report.chart && (
+            <div className="rp-chart">
+              <div className="rp-chart-title">{report.chart.label}</div>
+              <LineChart series={[{ id: 'r', label: report.chart.label, points: report.chart.points }]} metric={report.chart.metric} band={report.chart.metric === 'level' ? null : undefined} height={240} />
+            </div>
+          )}
+          <div className="dx-table-wrap rp-table">
+            <table className="dx-table">
+              <thead><tr>{report.columns.map(c => <th key={c}>{c}</th>)}</tr></thead>
+              <tbody>{report.rows.map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j} className={typeof c === 'number' ? 'num' : undefined}>{typeof c === 'number' ? c.toLocaleString() : c}</td>)}</tr>)}</tbody>
+            </table>
+          </div>
+          <p className="dx-muted" style={{ fontSize: '0.75rem' }}>Generated by AquaWise from monitored data · {clock(Date.now())}</p>
+        </section>
+      ) : <p className="dx-muted">Choose at least one monitoring point to build this report.</p>}
+
+      <div className="dx dx-no-print" style={{ gap: 20 }}>
         <Card title="Recent reports" flush>
           <DataTable rows={recent} rowKey={r => r.id} columns={[
             { key: 'id', label: 'ID', render: r => <span className="dx-mono">{r.id}</span> },
@@ -221,18 +213,11 @@ function build(ops: Ops, type: ReportType, spec: RangeSpec, zone: string, chosen
         columns: ['Reservoir', 'Capacity (m³)', 'Min level %', 'Average level %', 'Max level %', 'Time below 35 %'], rows,
         chart: ts[0] ? { metric: 'level', label: ts[0].name, points: series('level', ts[0].id, ts[0].base, spec) } : undefined };
     }
-    case 'nrw': {
-      const zs = ops.zones.filter(z => inZone(z.code, zone));
-      const sup = zs.reduce((a, z) => a + z.suppliedM3d, 0); const loss = zs.reduce((a, z) => a + z.lossM3d, 0);
-      return { ...base, kpis: [['System input', `${sup.toLocaleString()} m³/day`], ['Billed', `${(sup - loss).toLocaleString()} m³/day`], ['Estimated loss', `${loss.toLocaleString()} m³/day`], ['NRW', `${((loss / sup) * 100).toFixed(1)} %`]],
-        columns: ['Zone', 'Supplied (m³/d)', 'Billed (m³/d)', 'Loss (m³/d)', 'NRW %', 'Change (pts)'],
-        rows: zs.map(z => [z.name, z.suppliedM3d, z.billedM3d, z.lossM3d, z.nrw, r2(z.nrw - z.nrwPrev, 1)]) };
-    }
     case 'network': {
       const zs = ops.zones.filter(z => inZone(z.code, zone));
-      return { ...base, kpis: [['Zones', String(zs.length)], ['Network health', `${ops.health.score} %`], ['Incidents', String(incidents.length)], ['NRW', `${ops.nrw.current.toFixed(1)} %`]],
-        columns: ['Zone', 'Length (km)', 'Avg pressure (bar)', 'Water quality', 'Incidents', 'NRW %'],
-        rows: zs.map(z => [z.name, r2(z.lengthKm, 1), r2(z.pressureAvg), ops.quality.find(q => q.zone === z.code)?.tone === 'ok' ? 'Normal' : 'Attention', incidents.filter(i => i.zone === z.code).length, z.nrw]) };
+      return { ...base, kpis: [['Zones', String(zs.length)], ['Network health', `${ops.health.score} %`], ['Incidents', String(incidents.length)], ['Monitoring points', String(ops.health.total)]],
+        columns: ['Zone', 'Length (km)', 'Avg pressure (bar)', 'Water quality', 'Alerts'],
+        rows: zs.map(z => [z.name, r2(z.lengthKm, 1), r2(z.pressureAvg), ops.quality.find(q => q.zone === z.code)?.tone === 'ok' ? 'Normal' : 'Attention', incidents.filter(i => i.zone === z.code).length]) };
     }
     case 'incidents':
       return { ...base, kpis: [['Incidents', String(incidents.length)], ['Critical', String(incidents.filter(i => i.severity === 'critical').length)], ['Open', String(incidents.filter(i => i.status !== 'resolved').length)], ['Resolved', String(incidents.filter(i => i.status === 'resolved').length)]],

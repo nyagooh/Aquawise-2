@@ -12,9 +12,10 @@ import {
 } from '../demo/model';
 import { useFilters, inZone } from '../demo/filters';
 import { withState, useIncidentState } from '../demo/incidentState';
-import { Card, Kpi, Status, Dot, Tabs, Segmented, Select, SearchInput, DataTable, Drawer, KV, Section, Loading, Insight, type Column } from '../demo/ui';
+import { Card, Kpi, Status, Dot, Tabs, Segmented, Select, SearchInput, DataTable, Drawer, KV, Section, Loading, Insight, SevIcon, type Column } from '../demo/ui';
 import { LineChart, ChartLegend, BarList, Sparkline, TankGauge, TONE_COLOR, SERIES_COLORS, type ChartSeries } from '../demo/charts';
 import { NetworkMap, type MapPoint } from '../demo/NetworkMap';
+import { markerIcon } from '../data/network';
 import {
   series, sampleAt, meanSeries, eventWindows, toneFor, worstTone, fmt, METRICS, QUALITY_METRICS, NOW, HOURS,
   rangeSpec, type Metric, type Tone, type RangeSpec
@@ -76,9 +77,9 @@ function RelatedAlerts({ list }: { list: Incident[] }) {
     <div className="dx-list" style={{ border: '1px solid hsl(var(--border))', borderRadius: 6 }}>
       {list.map(i => (
         <button key={i.id} type="button" className="dx-item" onClick={() => navigate(`/alerts?id=${i.id}`)}>
-          <span className={`bar ${i.severity}`} />
+          <SevIcon severity={i.severity} />
           <div className="dx-item-main"><div className="dx-item-title">{i.title}</div><div className="dx-item-sub">{i.trigger}</div></div>
-          <div className="dx-item-meta">{ago(i.startedAt)}<div>{i.status === 'resolved' ? 'Resolved' : i.status === 'acknowledged' ? 'Acknowledged' : 'Active'}</div></div>
+          <div className="dx-item-meta">{ago(i.startedAt)}<div>{i.status === 'resolved' ? 'Cleared' : 'Open'}</div></div>
         </button>
       ))}
     </div>
@@ -107,36 +108,60 @@ function MonitoringOverview({ ops }: { ops: Ops }) {
     ...s.quality.filter(q => q.zone !== 'WTW').map(q => ({ id: `/monitoring/water-quality`, pos: q.pos, tone: q.tone, label: `${q.name}`, shape: 'diamond' as const, size: 13 }))
   ];
 
+  const okCount = <T extends { tone: Tone }>(l: T[]) => l.filter(x => x.tone === 'ok').length;
+  const metricPage: Partial<Record<Metric, string>> = { pressure: '/monitoring/pressure', flow: '/monitoring/pressure', level: '/monitoring/tank-levels' };
+  const groups = [
+    { key: 'q', icon: 'quality' as const, color: '#0E7490', name: 'Water quality', what: 'Turbidity, pH, chlorine, conductivity, temperature', total: s.quality.length, ok: okCount(s.quality), href: '/monitoring/water-quality' },
+    { key: 'p', icon: 'pressure' as const, color: '#1D4ED8', name: 'Pressure', what: `Average ${avgP.toFixed(2)} bar across ${online.length} loggers`, total: s.pressure.length, ok: okCount(s.pressure), href: '/monitoring/pressure' },
+    { key: 't', icon: 'tank' as const, color: '#6D28D9', name: 'Tank levels', what: s.tanks.length ? `Average ${Math.round(avgLevel)} % across ${s.tanks.length} reservoirs` : 'No reservoirs in this zone', total: s.tanks.length, ok: okCount(s.tanks), href: '/monitoring/tank-levels' },
+    { key: 's', icon: 'meter' as const, color: '#475467', name: 'Sensors', what: `${sensorsOff} offline · ${s.sensors.filter(x => x.health === 'warn').length} low battery or weak signal`, total: s.sensors.length, ok: s.sensors.filter(x => x.health === 'ok').length, href: '/monitoring/sensors' }
+  ];
+
   return (
     <>
-      <div className="dx-grid-kpi six">
-        <Kpi label="Monitoring points online" value={ptsOnline} unit={`/ ${pts}`} tone={ptsOnline === pts ? 'ok' : 'warn'} sub="pressure, level and quality" />
-        <Kpi label="Water quality" tone={worstTone(s.quality.map(q => q.tone))} value={qBad.length ? `${qBad.length} breach${qBad.length > 1 ? 'es' : ''}` : 'Normal'} sub={`${s.quality.length} points`} onClick={() => navigate('/monitoring/water-quality')} />
-        <Kpi label="Average pressure" value={avgP.toFixed(2)} unit="bar" sub="acceptable 1.5 – 4.2 bar" onClick={() => navigate('/monitoring/pressure')} />
-        <Kpi label="Pressure anomalies" tone={anomalies.some(a => a.tone === 'crit') ? 'crit' : anomalies.length ? 'warn' : 'ok'} value={anomalies.length} sub={anomalies.length ? [...new Set(anomalies.map(a => zoneName(a.zone)))].join(', ') : 'none'} onClick={() => navigate('/monitoring/pressure')} />
-        <Kpi label="Average tank level" value={s.tanks.length ? Math.round(avgLevel) : '—'} unit={s.tanks.length ? '%' : undefined} tone={worstTone(s.tanks.map(t => t.tone))} sub={`${s.tanks.length} reservoirs`} onClick={() => navigate('/monitoring/tank-levels')} />
+      <div className="dx-grid-kpi four">
+        <Kpi label="Monitoring points reporting" value={ptsOnline} unit={`/ ${pts}`} tone={ptsOnline === pts ? 'ok' : 'warn'} sub="pressure, tank level and water quality" />
+        <Kpi label="Water quality" tone={worstTone(s.quality.map(q => q.tone))} value={qBad.length ? `${qBad.length} of ${s.quality.length}` : 'All clear'} sub={qBad.length ? 'points outside their safe range' : `${s.quality.length} sampling points`} onClick={() => navigate('/monitoring/water-quality')} />
+        <Kpi label="Pressure anomalies" tone={anomalies.some(a => a.tone === 'crit') ? 'crit' : anomalies.length ? 'warn' : 'ok'} value={anomalies.length} sub={anomalies.length ? [...new Set(anomalies.map(a => zoneName(a.zone)))].join(', ') : 'none right now'} onClick={() => navigate('/monitoring/pressure')} />
         <Kpi label="Sensors online" value={s.sensors.length - sensorsOff} unit={`/ ${s.sensors.length}`} tone={sensorsOff ? 'warn' : 'ok'} sub={`${sensorsOff} offline`} onClick={() => navigate('/monitoring/sensors')} />
       </div>
       <div className="dx-cols main-side">
-        <Card title="Monitoring locations" sub="Click a point to open its monitoring view" flush>
-          <NetworkMap ops={ops} points={mapPoints} zone={s.zone} height={420} onSelect={id => navigate(id)} />
+        <Card title="Where we measure" sub="Click a point to open its readings" flush>
+          <NetworkMap ops={ops} points={mapPoints} zone={s.zone} height={440} onSelect={id => navigate(id)} />
           <div className="dx-map-legend">
-            <span><Dot tone="ok" />Normal</span><span><Dot tone="warn" />Warning</span><span><Dot tone="crit" />Critical</span><span><Dot tone="off" />Offline</span>
-            <span style={{ marginLeft: 'auto' }}>● Pressure · ■ Reservoir level · ◆ Water quality</span>
+            <span className="mk-legend" dangerouslySetInnerHTML={{ __html: markerIcon('pressure', '#475467', 16) }} />Pressure
+            <span className="mk-legend" dangerouslySetInnerHTML={{ __html: markerIcon('tank', '#475467', 16) }} />Reservoir
+            <span className="mk-legend" dangerouslySetInnerHTML={{ __html: markerIcon('quality', '#475467', 16) }} />Water quality
+            <span style={{ marginLeft: 'auto' }}><Dot tone="ok" />Normal</span><span><Dot tone="warn" />Warning</span><span><Dot tone="crit" />Critical</span><span><Dot tone="off" />Offline</span>
           </div>
         </Card>
-        <Card title="Recent abnormal readings" sub="Last 7 days" flush actions={<Link className="dx-link" to="/alerts">Alerts →</Link>}>
+        <Card title="By measurement" sub="How many points are within range" flush>
           <div className="dx-list">
-            {abnormal.map(i => (
-              <button key={i.id} type="button" className="dx-item" onClick={() => navigate(`/alerts?id=${i.id}`)}>
-                <span className={`bar ${i.severity}`} />
-                <div className="dx-item-main"><div className="dx-item-title">{i.title}</div><div className="dx-item-sub">{METRICS[i.metric].label} · {i.trigger}</div></div>
-                <div className="dx-item-meta">{ago(i.startedAt)}<div>{i.status === 'resolved' ? 'Resolved' : 'Open'}</div></div>
+            {groups.map(g => (
+              <button key={g.key} type="button" className="dx-item mo-group" onClick={() => navigate(g.href)}>
+                <span dangerouslySetInnerHTML={{ __html: markerIcon(g.icon, g.color, 28) }} />
+                <div className="dx-item-main">
+                  <div className="dx-item-title">{g.name}</div>
+                  <div className="dx-item-sub">{g.what}</div>
+                  <div className="mo-meter"><span style={{ width: `${(g.ok / Math.max(1, g.total)) * 100}%` }} /></div>
+                </div>
+                <div className="dx-item-val"><b>{g.ok}/{g.total}</b><span>normal</span></div>
               </button>
             ))}
           </div>
         </Card>
       </div>
+      <Card title="Recent abnormal readings" sub="Last 7 days, newest first" flush>
+        <div className="dx-list">
+          {abnormal.map(i => (
+            <button key={i.id} type="button" className="dx-item" onClick={() => navigate(i.status === 'resolved' ? (metricPage[i.metric] ?? '/monitoring/water-quality') : `/alerts?id=${i.id}`)}>
+              <SevIcon severity={i.severity} />
+              <div className="dx-item-main"><div className="dx-item-title">{i.title}</div><div className="dx-item-sub">{METRICS[i.metric].label} · {i.trigger}</div></div>
+              <div className="dx-item-meta">{ago(i.startedAt)}<div>{i.status === 'resolved' ? 'Cleared' : 'Open'}</div></div>
+            </button>
+          ))}
+        </div>
+      </Card>
     </>
   );
 }
@@ -213,7 +238,7 @@ function WaterQuality({ ops }: { ops: Ops }) {
         <DataTable columns={cols} rows={s.quality} rowKey={q => q.id} onRowClick={setOpen} selectedKey={open?.id} defaultSort={{ key: 'st', dir: 1 }} />
       </Card>
 
-      <Card title="Quality events over time" sub="Threshold breaches and how they were resolved" flush>
+      <Card title="Quality events over time" sub="Threshold breaches over the last 30 days" flush>
         <DataTable columns={incidentCols()} rows={events} rowKey={i => i.id} onRowClick={i => navigate(`/alerts?id=${i.id}`)} empty="No quality events in this zone." />
       </Card>
 
@@ -293,7 +318,7 @@ function Pressure({ ops }: { ops: Ops }) {
         <Kpi label="Normal range" value="1.5 – 4.2" unit="bar" sub="critical below 1.0 or above 5.0" />
         <Kpi label="Low-pressure zones" value={lowZones.length} tone={lowZones.length ? 'crit' : 'ok'} sub={lowZones.map(z => z.name).join(', ') || 'none right now'} />
         <Kpi label="High-pressure zones" value={highZones.length} tone={highZones.length ? 'warn' : 'ok'} sub={highZones.length ? `${highZones.map(z => z.name).join(', ')} · ${s.spec.label.toLowerCase()}` : 'none in range'} />
-        <Kpi label="Pressure anomalies" value={activeAnoms.length} tone={activeAnoms.some(a => a.severity === 'critical') ? 'crit' : activeAnoms.length ? 'warn' : 'ok'} sub={`${anomalies.length - activeAnoms.length} resolved in the last 30 days`} onClick={() => navigate('/alerts')} />
+        <Kpi label="Pressure anomalies" value={activeAnoms.length} tone={activeAnoms.some(a => a.severity === 'critical') ? 'crit' : activeAnoms.length ? 'warn' : 'ok'} sub={`${anomalies.length - activeAnoms.length} cleared in the last 30 days`} onClick={() => navigate('/alerts')} />
       </div>
 
       {leak && (
@@ -526,7 +551,7 @@ function incidentCols(): Column<Incident>[] {
     { key: 'tr', label: 'Measurement', render: i => <span className="dx-muted">{i.trigger}</span> },
     { key: 'st', label: 'Started', render: i => clock(i.startedAt), sort: i => -i.startedAt },
     { key: 'du', label: 'Duration', render: i => duration((i.resolvedAt ?? NOW) - i.startedAt), sort: i => (i.resolvedAt ?? NOW) - i.startedAt },
-    { key: 's', label: 'Status', render: i => <Status tone={i.status === 'resolved' ? 'ok' : i.severity === 'critical' ? 'crit' : 'warn'} label={i.status === 'resolved' ? 'Resolved' : i.status === 'acknowledged' ? 'Acknowledged' : 'Active'} /> }
+    { key: 's', label: 'Status', render: i => <Status tone={i.status === 'resolved' ? 'ok' : i.severity === 'critical' ? 'crit' : 'warn'} label={i.status === 'resolved' ? 'Cleared' : 'Open'} /> }
   ];
 }
 export function duration(ms: number): ReactNode {
