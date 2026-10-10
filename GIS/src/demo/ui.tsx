@@ -51,10 +51,10 @@ export function BadgeDelta({ text, good, up }: { text: string; good: boolean; up
   );
 }
 
-export function Kpi({ label, value, unit, tone, sub, delta, onClick, children, icon, iconTone, chart }: {
+export function Kpi({ label, value, unit, tone, sub, delta, onClick, children, icon, iconTone, chart, selected }: {
   label: string; value: ReactNode; unit?: string; tone?: Tone; sub?: ReactNode;
   delta?: { text: string; good: boolean; up?: boolean } | null; onClick?: () => void; children?: ReactNode;
-  icon?: ReactNode; iconTone?: IconTone; chart?: ReactNode;
+  icon?: ReactNode; iconTone?: IconTone; chart?: ReactNode; selected?: boolean;
 }) {
   const body = (
     <>
@@ -71,7 +71,7 @@ export function Kpi({ label, value, unit, tone, sub, delta, onClick, children, i
       {chart && <div className="dx-kpi-chart">{chart}</div>}
     </>
   );
-  const cls = `dx-kpi p-4${onClick ? ' click' : ''}${icon ? ' has-icon' : ''}`;
+  const cls = `dx-kpi p-4${onClick ? ' click' : ''}${icon ? ' has-icon' : ''}${selected ? ' selected' : ''}`;
   return onClick
     ? <TCard className={cls} onClick={onClick} role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}>{body}</TCard>
     : <TCard className={cls}>{body}</TCard>;

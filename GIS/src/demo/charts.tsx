@@ -11,14 +11,14 @@
  */
 import { useMemo, type ReactNode } from 'react';
 import {
-  BarChart as TBarChart, CategoryBar, DonutChart,
-  SparkAreaChart, SparkBarChart, SparkLineChart
+  BarChart as TBarChart, CategoryBar, DonutChart, ProgressBar,
+  SparkAreaChart, SparkBarChart, SparkLineChart, Tracker
 } from '@tremor/react';
 import {
   Area, CartesianGrid, ComposedChart, Line, ReferenceArea, ReferenceLine,
   ResponsiveContainer, Tooltip, XAxis, YAxis
 } from 'recharts';
-import { METRICS, toneFor, type Metric, type Point, type Tone } from './series';
+import { METRICS, NOW, sampleAt, toneFor, worstTone, type Metric, type Point, type Tone } from './series';
 
 /* ── colours ── */
 export const TONE_COLOR: Record<Tone, string> = {
@@ -154,7 +154,11 @@ export function LineChart({
     if (yMin !== undefined) lo = Math.min(lo, yMin);
     const pad = hi - lo || Math.abs(hi) * 0.1 || 1;
     const floor = yMin !== undefined ? yMin : lo - pad * 0.08;
-    const ticks = niceTicks(Math.min(floor, lo), hi + pad * 0.05, 4);
+    let ticks = niceTicks(Math.min(floor, lo), hi + pad * 0.05, 4);
+    if (metric === 'level') { // percent full never goes past 100
+      ticks = ticks.filter(v => v <= 100);
+      if (ticks[ticks.length - 1] < 100 && hi > 90) ticks.push(100);
+    }
     return { rows, yDomain: [ticks[0], ticks[ticks.length - 1]] as [number, number], yTicks: ticks };
   }, [series, metric, single, bandR, showThresholds, yMin, base]);
 
@@ -163,7 +167,7 @@ export function LineChart({
         .filter(x => Number.isFinite(x.v) && x.v > yDomain[0] && x.v < yDomain[1])
     : [];
   const gid = `g${series[0]?.id ?? 'x'}${series.length}`.replace(/[^a-zA-Z0-9]/g, '');
-  const tick = { fontSize: 12, fill: 'hsl(var(--muted-foreground))' };
+  const tick = { fontSize: 11, fill: 'hsl(var(--muted-foreground))' };
   const bandLo = bandR && Number.isFinite(bandR[0]) ? Math.max(bandR[0], yDomain[0]) : yDomain[0];
   const bandHi = bandR && Number.isFinite(bandR[1]) ? Math.min(bandR[1], yDomain[1]) : yDomain[1];
 
@@ -173,22 +177,22 @@ export function LineChart({
         <ComposedChart data={rows} margin={{ top: 10, right: 8, bottom: 0, left: 0 }}>
           <defs>
             <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor={series[0]?.color ?? BLUE} stopOpacity={0.2} />
+              <stop offset="5%" stopColor={series[0]?.color ?? BLUE} stopOpacity={0.14} />
               <stop offset="95%" stopColor={series[0]?.color ?? BLUE} stopOpacity={0} />
             </linearGradient>
           </defs>
-          <CartesianGrid vertical={false} stroke="hsl(var(--border))" />
+          <CartesianGrid vertical={false} stroke="hsl(var(--hair))" strokeDasharray="3 3" />
           <XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']} tickFormatter={tf} ticks={timeTicks(t0, t1)}
             tick={tick} axisLine={false} tickLine={false} minTickGap={24} tickMargin={10} />
           <YAxis domain={yDomain} tick={tick} axisLine={false} tickLine={false} width={44} tickFormatter={fmtTick} ticks={yTicks} allowDataOverflow />
           {bandR && showThresholds && bandHi > bandLo && (
-            <ReferenceArea y1={bandLo} y2={bandHi} fill={TONE_HEX.ok} fillOpacity={0.07} stroke="none" ifOverflow="hidden" />
+            <ReferenceArea y1={bandLo} y2={bandHi} fill={TONE_HEX.ok} fillOpacity={0.045} stroke="none" ifOverflow="hidden" />
           )}
           {windows.filter(w => w.end >= t0 && w.start <= t1).map((w, i) => (
-            <ReferenceArea key={i} x1={Math.max(w.start, t0)} x2={Math.min(w.end, t1)} fill={TONE_HEX[w.tone]} fillOpacity={0.07} stroke="none" ifOverflow="hidden" />
+            <ReferenceArea key={i} x1={Math.max(w.start, t0)} x2={Math.min(w.end, t1)} fill={TONE_HEX[w.tone]} fillOpacity={0.06} stroke="none" ifOverflow="hidden" />
           ))}
           {thresholds.map(({ v, k }) => (
-            <ReferenceLine key={`${k}${v}`} y={v} stroke={k === 'crit' ? TONE_HEX.crit : TONE_HEX.warn} strokeDasharray="4 4" strokeOpacity={0.85} ifOverflow="hidden" />
+            <ReferenceLine key={`${k}${v}`} y={v} stroke={k === 'crit' ? TONE_HEX.crit : TONE_HEX.warn} strokeDasharray="3 4" strokeOpacity={0.6} ifOverflow="hidden" />
           ))}
           {marker && marker.t >= t0 && marker.t <= t1 && (
             <ReferenceLine x={marker.t} stroke={TONE_HEX.crit} strokeWidth={1.5}
@@ -205,10 +209,10 @@ export function LineChart({
             ) : null}
           />
           {series.map((s, si) => single && area ? (
-            <Area key={s.id} dataKey={`s${si}`} type="monotone" stroke={s.color ?? BLUE} strokeWidth={2} fill={`url(#${gid})`}
+            <Area key={s.id} dataKey={`s${si}`} type="monotone" stroke={s.color ?? BLUE} strokeWidth={1.75} fill={`url(#${gid})`}
               dot={false} activeDot={{ r: 4.5, strokeWidth: 2, stroke: '#fff', fill: s.color ?? BLUE }} isAnimationActive={false} connectNulls />
           ) : (
-            <Line key={s.id} dataKey={`s${si}`} type="monotone" stroke={s.color ?? SERIES_COLORS[si % SERIES_COLORS.length]} strokeWidth={2}
+            <Line key={s.id} dataKey={`s${si}`} type="monotone" stroke={s.color ?? SERIES_COLORS[si % SERIES_COLORS.length]} strokeWidth={1.75}
               dot={false} activeDot={{ r: 4.5, strokeWidth: 2, stroke: '#fff' }} isAnimationActive={false} connectNulls />
           ))}
           {single && metric && <Line dataKey="warn" type="monotone" stroke={TONE_HEX.warn} strokeWidth={2.5} dot={false} activeDot={false} isAnimationActive={false} connectNulls={false} legendType="none" />}
@@ -339,5 +343,70 @@ export function SegmentBar({ parts }: { parts: Array<{ value: number; color: str
   return (
     <CategoryBar values={shown.map(p => (p.value / total) * 100)}
       colors={shown.map(p => (tones[p.color] ?? TB) as never)} showLabels={false} />
+  );
+}
+
+/* ── monitoring visuals (Tremor) ── */
+const TRACK_COLOR: Record<Tone, string> = { ok: 'emerald', warn: 'amber', crit: 'red', off: 'gray' };
+const TRACK_WORD: Record<Tone, string> = { ok: 'Normal', warn: 'Warning', crit: 'Critical', off: 'No data' };
+
+/**
+ * Status history as a row of squares (Tremor Tracker): one square per hour,
+ * coloured by the worst reading in that hour. Pass several readings to merge
+ * them (e.g. all parameters at a sampling point, or all loggers in a group).
+ */
+export function StatusTracker({ items, hours = 24, buckets = hours, offlineMin, className }: {
+  items: Array<{ metric: Metric; id: string; base: number }>;
+  hours?: number;
+  /** Squares to draw; fewer than `hours` groups several hours per square. */
+  buckets?: number;
+  /** Device silent for this many minutes: the latest squares show "No data". */
+  offlineMin?: number;
+  className?: string;
+}) {
+  const data = useMemo(() => Array.from({ length: buckets }, (_, i) => {
+    const span = (hours / buckets) * 3_600_000;
+    const end = NOW - (buckets - 1 - i) * span;
+    const silent = offlineMin !== undefined && NOW - end < offlineMin * 60_000;
+    const offsets = Array.from({ length: Math.max(4, Math.round(span / 900_000)) }, (_, k) => k * 900_000);
+    const tones: Tone[] = silent ? ['off'] : items.flatMap(x => offsets.map(o => toneFor(x.metric, sampleAt(x.metric, x.id, x.base, end - o))));
+    const tone = worstTone(tones);
+    const at = new Date(end).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    return { color: TRACK_COLOR[tone], tooltip: `${at} · ${TRACK_WORD[tone]}` };
+  }), [items, hours, buckets, offlineMin]);
+  return <Tracker data={data} className={`aw-tracker ${className ?? ''}`} />;
+}
+
+/** Category columns (Tremor BarChart), e.g. pipe segments by age band. */
+export function Columns({ data, height = 200, format = (v: number) => v.toLocaleString(), color = TB }: {
+  data: Array<{ label: string; value: number }>; height?: number; format?: (v: number) => string; color?: string;
+}) {
+  return (
+    <TBarChart data={data.map(d => ({ label: d.label, Value: d.value }))} index="label" categories={['Value']} colors={[color]}
+      valueFormatter={format} showLegend={false} yAxisWidth={36} style={{ height }} showAnimation={false} showGridLines />
+  );
+}
+
+/** Reservoir level as a gauge bar: low / warning / normal bands with a marker at the level. */
+export function LevelGauge({ level }: { level: number }) {
+  return <CategoryBar values={[20, 15, 65]} colors={['red', 'amber', 'emerald']} markerValue={Math.max(1, Math.min(99, level))} showLabels={false} className="aw-level-gauge" />;
+}
+
+/** Compact progress bar coloured by status (battery, utilisation, compliance). */
+export function MiniBar({ value, tone = 'ok', width = 72 }: { value: number; tone?: Tone | 'blue'; width?: number }) {
+  return <ProgressBar value={Math.max(0, Math.min(100, value))} color={(tone === 'blue' ? TB : TRACK_COLOR[tone]) as never} className="aw-minibar" style={{ width }} />;
+}
+
+/** Donut of counts per status (Tremor DonutChart). */
+export function StatusDonut({ parts, label, sub, size = 132 }: {
+  parts: Array<{ label: string; value: number; tone: Tone }>; label: ReactNode; sub?: ReactNode; size?: number;
+}) {
+  const shown = parts.filter(p => p.value > 0);
+  return (
+    <div className="dx-donut" style={{ width: size, height: size }}>
+      <DonutChart data={shown.map(p => ({ name: p.label, value: p.value }))} category="value" index="name"
+        colors={shown.map(p => TRACK_COLOR[p.tone]) as never} showLabel={false} showAnimation={false} className="dx-donut-chart" />
+      <div className="dx-donut-c" aria-hidden="true"><b>{label}</b>{sub && <span>{sub}</span>}</div>
+    </div>
   );
 }

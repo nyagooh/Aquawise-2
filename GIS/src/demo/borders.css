@@ -315,3 +315,35 @@ button.dx-item:hover { background: hsl(var(--row-hover)) !important; }
 
 /* Full view: the map workspace fills the screen */
 .gis-workspace:fullscreen { height: 100vh; background: hsl(var(--background)); }
+
+/* ── Tremor monitoring visuals ── */
+.aw-tracker { height: auto !important; align-items: center; }
+/* each block is a true square, capped so long rows don't turn into tiles */
+.aw-tracker .tremor-Tracker-trackingBlock { flex: 1 1 0; aspect-ratio: 1 / 1; height: auto !important; max-width: 16px; border-radius: 2px !important; }
+/* softer "normal" squares so warnings stand out */
+.aw-tracker .bg-emerald-500 { background-color: #4ADE80 !important; }
+[data-theme="dark"] .aw-tracker .bg-emerald-500 { background-color: #22C55E !important; }
+.mo-track-row .aw-tracker .tremor-Tracker-trackingBlock { max-width: none; }
+.dx-table .aw-tracker { width: 156px; }
+.aw-level-gauge { margin-top: 10px; }
+.aw-minibar { display: inline-block; vertical-align: middle; }
+.dx-kpi.selected { box-shadow: inset 0 -2px 0 hsl(var(--primary)); }
+.mo-track-row { --trk: min(576px, 100%); display: grid; grid-template-columns: 150px var(--trk) 1fr; align-items: center; gap: 16px; padding: 10px 16px; border-bottom: 1px solid hsl(var(--hair)); font-size: 0.8125rem; }
+.mo-track-row:last-of-type { border-bottom: 0; }
+.mo-track-row b { font-weight: 600; }
+.mo-track-row .dx-muted { text-align: right; font-variant-numeric: tabular-nums; }
+.mo-track-axis { --trk: min(576px, 100%); display: grid; grid-template-columns: 150px var(--trk) 1fr; gap: 16px; padding: 6px 16px 12px; font-size: 0.6875rem; color: hsl(var(--muted-foreground)); }
+.mo-track-axis span:nth-child(2) { display: flex; justify-content: space-between; }
+.tank-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.tank-card { all: unset; box-sizing: border-box; cursor: pointer; display: block; padding: 14px 16px; border: 1px solid hsl(var(--hair)); border-radius: 8px; background: hsl(var(--card)); }
+.tank-card:hover { background: hsl(var(--row-hover)); }
+.tank-card-name { display: flex; align-items: center; gap: 6px; font-size: 0.8125rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tank-card-val { display: flex; align-items: baseline; justify-content: space-between; margin-top: 6px; }
+.tank-card-val b { font-size: 1.5rem; font-weight: 650; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.tank-card-val span { font-size: 0.75rem; color: hsl(var(--muted-foreground)); font-variant-numeric: tabular-nums; }
+.tank-card-note { margin-top: 8px; font-size: 0.75rem; color: hsl(var(--muted-foreground)); }
+.dx-table td .nowrap, .dx-table td.nowrap { white-space: nowrap; }
+.sn-split { display: grid; grid-template-columns: auto 1fr; gap: 24px; align-items: center; }
+.sn-legend { display: grid; gap: 8px; font-size: 0.8125rem; }
+.sn-legend div { display: flex; align-items: center; gap: 8px; }
+.sn-legend b { margin-left: auto; font-variant-numeric: tabular-nums; }
