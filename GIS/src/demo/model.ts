@@ -171,7 +171,8 @@ function build(network: NetworkData): Ops {
       const rate = vsYesterday / 6; // % per hour beyond the normal pattern
       const hoursToLow = abnormal && level > 20 ? (level - 20) / -rate : null;
       return {
-        id: p.id, name: p.name, zone: nearestZone(pos), pos,
+        // Each reservoir feeds the zone named after it (Ziwani Reservoir 1 → Ziwani 1).
+        id: p.id, name: p.name, zone: ZONE_CODES.find(c => zoneName(c) === p.name.replace(' Reservoir', '')) ?? nearestZone(pos), pos,
         capacity: p.capacity_m3, base, level, volume: (level / 100) * p.capacity_m3,
         tone: toneFor('level', level), inflow: p.inflow_lps, outflow: p.outflow_lps,
         change6h: ago, vsYesterday, abnormal, hoursToLow
@@ -293,9 +294,11 @@ function build(network: NetworkData): Ops {
     return {
       type: TYPE[w.metric] ?? 'Water quality breach',
       severity: (tone === 'crit' ? 'critical' : 'warning') as Severity,
-      title: `${def.label} ${low ? 'below' : 'above'} range — ${zoneName(w.zone)}`,
+      title: w.metric === 'level'
+        ? `${w.location} ${tone === 'crit' ? 'nearly empty' : 'running low'}`
+        : `${def.label} ${low ? 'below' : 'above'} range — ${zoneName(w.zone)}`,
       zone: w.zone, location: w.location, metric: w.metric, entityId: w.id, base: w.base,
-      trigger: `${fmt(w.metric, worst.v)}, ${low ? 'below' : 'above'} the ${fmt(w.metric, limit)} limit`,
+      trigger: `${fmt(w.metric, win.ongoing ? sampleAt(w.metric, w.id, w.base, NOW) : worst.v)}, ${low ? 'below' : 'above'} the ${fmt(w.metric, limit)} limit`,
       startedAt: win.start, resolvedAt: win.ongoing ? undefined : win.end,
       status: (win.ongoing ? 'active' : 'resolved') as IncidentStatus,
       focus: w.focus,

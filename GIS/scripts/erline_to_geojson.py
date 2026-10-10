@@ -242,7 +242,7 @@ def main() -> None:
     for i, f in enumerate(reservoirs):
         g = f["geometry"]
         coord = g["coordinates"][0] if g["type"] == "MultiPoint" else g["coordinates"]
-        level = [78, 64, 47, 86, 58][i % 5]
+        level = [78, 64, 58, 86, 58][i % 5]
         capacity = [1500, 1500, 1000, 2000, 1200][i % 5]
         add_asset(coord, {
             "asset": "tank", "id": f"TANK-{i+1:02d}", "name": tidy_name(f["properties"]["Name"]),

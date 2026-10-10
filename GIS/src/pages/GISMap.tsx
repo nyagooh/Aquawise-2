@@ -34,6 +34,7 @@ import {
   assetGlyph,
   engSymbol,
   markerIcon,
+  type MarkerKind,
   FACILITY_LABEL,
   zoneLabel
 } from '../data/network';
@@ -411,6 +412,23 @@ export default function GISMap() {
     setSearchParams(next, { replace: true });
   }, [network, searchParams, setSearchParams]);
 
+  /* Full view: put the whole map workspace into browser fullscreen. */
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const [fullscreen, setFullscreen] = useState(false);
+  const toggleFullscreen = useCallback(() => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void workspaceRef.current?.requestFullscreen();
+  }, []);
+  useEffect(() => {
+    const onChange = () => {
+      setFullscreen(document.fullscreenElement === workspaceRef.current);
+      // Leaflet must re-measure once the container has resized.
+      setTimeout(() => leafletRef.current?.invalidateSize(), 120);
+    };
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+
   const fitView = useCallback(() => {
     const map = leafletRef.current;
     if (!map || !network) return;
@@ -432,37 +450,14 @@ export default function GISMap() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [network]);
 
-  const toggleLayer = useCallback(
-    (k: PipeClass | AssetKind) => setLayers((p) => ({ ...p, [k]: !p[k] })),
-    []
-  );
-  const setAllPipes = useCallback((on: boolean) => {
-    setLayers((p) => ({ ...p, main: on, distribution: on, service: on, backfeed: on, boundary: on }));
-  }, []);
-  const setAllAssets = useCallback((on: boolean) => {
-    setLayers((p) => ({ ...p, facility: on, tank: on, pressure_valve: on, meter_valve: on, sensor: on }));
-  }, []);
-
-  const visibleStats = useMemo(() => {
-    if (!network) return null;
-    const pipeCounts: Record<PipeClass, number> = {
-      main: 0, distribution: 0, household: 0, backfeed: 0, boundary: 0
-    };
-    for (const f of network.pipes) pipeCounts[f.properties.ui_class]++;
-    const assetCounts: Record<AssetKind, number> = {
-      facility: 0, tank: 0, pressure_valve: 0, meter_valve: 0, sensor: 0
-    };
-    for (const a of network.assets) assetCounts[a.properties.asset]++;
-    return { pipeCounts, assetCounts };
-  }, [network]);
 
   return (
     <Shell active="network" title="Network" sub="GIS operational view · Erline Water supply network" pagePadding={false} hideRightRail>
-      <div className="gis-workspace">
+      <div className="gis-workspace" ref={workspaceRef}>
       <WorkspaceToolbar
         onFit={fitView}
-        sim={sim}
-        onSimulate={runSimulate}
+        fullscreen={fullscreen}
+        onFullscreen={toggleFullscreen}
       />
       <div className={`gis-canvas gis-canvas--real${basemap === 'none' ? ' gis-canvas--nomap' : ' gis-canvas--sat'}`}>
         <div ref={mapRef} className="gis-leaflet" />
@@ -481,21 +476,9 @@ export default function GISMap() {
           </div>
         )}
 
-        {network && visibleStats && (
+        {network && (
           <>
-            <LayerControl
-              layers={layers}
-              counts={visibleStats}
-              onToggle={toggleLayer}
-              onAllPipes={setAllPipes}
-              onAllAssets={setAllAssets}
-              meta={network.meta}
-              linkBy={linkBy}
-              nodeBy={nodeBy}
-              onLinkBy={setLinkBy}
-              onNodeBy={setNodeBy}
-              hasResults={hasResults}
-            />
+            <MapKey />
           </>
         )}
       </div>
@@ -843,101 +826,49 @@ function escapeHtml(s: string): string {
 }
 
 /* ─────────────────────────────────────────
-   Floating layer control (top-left)
+   Map key — a plain legend, like a printed map
    ───────────────────────────────────────── */
 
-function LayerControl({
-  layers,
-  counts,
-  onToggle,
-  onAllPipes,
-  onAllAssets,
-  meta,
-  linkBy,
-  nodeBy,
-  onLinkBy,
-  onNodeBy,
-  hasResults
-}: {
-  layers: LayerVis;
-  counts: { pipeCounts: Record<PipeClass, number>; assetCounts: Record<AssetKind, number> };
-  onToggle: (k: PipeClass | AssetKind) => void;
-  onAllPipes: (on: boolean) => void;
-  onAllAssets: (on: boolean) => void;
-  meta: NetworkData['meta'];
-  linkBy: LinkSymbology;
-  nodeBy: NodeSymbology;
-  onLinkBy: (k: LinkSymbology) => void;
-  onNodeBy: (k: NodeSymbology) => void;
-  hasResults: boolean;
-}) {
-  const [expanded, setExpanded] = useState(true);
-  const visiblePipeCount = PIPE_KEYS.reduce((sum, k) => sum + (layers[k] ? counts.pipeCounts[k] : 0), 0);
-  const visibleAssetCount = ASSET_KEYS.reduce((sum, k) => sum + (layers[k] ? counts.assetCounts[k] : 0), 0);
+const KEY_ASSETS: Array<{ kind: MarkerKind; label: string }> = [
+  { kind: 'plant', label: 'Intake / treatment plant' },
+  { kind: 'tank', label: 'Reservoir' },
+  { kind: 'pressure', label: 'Pressure sensor' },
+  { kind: 'quality', label: 'Water-quality sensor' },
+  { kind: 'valve', label: 'Pressure valve' },
+  { kind: 'meter', label: 'Bulk meter' }
+];
 
+function MapKey() {
+  const [open, setOpen] = useState(true);
   return (
-    <div className={`gis-layer-control${expanded ? '' : ' collapsed'}`}>
-      <div className="gis-layer-control-head" onClick={() => setExpanded((x) => !x)}>
-        <div>
-          <div className="gis-lc-title">Layers</div>
-          <div className="gis-lc-meta">{visiblePipeCount.toLocaleString()} pipes · {visibleAssetCount} assets</div>
-        </div>
-        <button className="gis-lc-collapse" aria-label="Collapse layers">
-          <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-            <polyline points={expanded ? '18 15 12 9 6 15' : '6 9 12 15 18 9'} />
-          </svg>
-        </button>
-      </div>
-      {expanded && (
-        <div className="gis-layer-control-body">
-          <div className="gis-lc-section">
-            <div className="gis-lc-section-head">
-              <span>Network</span>
-              <div className="gis-lc-bulk">
-                <button onClick={(e) => { e.stopPropagation(); onAllPipes(true); }}>All</button>
-                <button onClick={(e) => { e.stopPropagation(); onAllPipes(false); }}>None</button>
-              </div>
-            </div>
+    <div className={`gis-key${open ? '' : ' closed'}`}>
+      <button type="button" className="gis-key-head" onClick={() => setOpen((x) => !x)} aria-expanded={open}>
+        <span>Key</span>
+        <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2}>
+          <polyline points={open ? '6 9 12 15 18 9' : '18 15 12 9 6 15'} />
+        </svg>
+      </button>
+      {open && (
+        <div className="gis-key-body">
+          <div className="gis-key-group">
             {PIPE_KEYS.map((k) => (
-              <LayerToggle
-                key={k}
-                label={PIPE_STYLE[k].label}
-                count={counts.pipeCounts[k]}
-                on={layers[k]}
-                swatch={<PipeSwatch cls={k} />}
-                onClick={() => onToggle(k)}
-              />
-            ))}
-          </div>
-          <div className="gis-lc-section">
-            <div className="gis-lc-section-head">
-              <span>Telemetry</span>
-              <div className="gis-lc-bulk">
-                <button onClick={(e) => { e.stopPropagation(); onAllAssets(true); }}>All</button>
-                <button onClick={(e) => { e.stopPropagation(); onAllAssets(false); }}>None</button>
+              <div key={k} className="gis-key-row">
+                <span className="gis-key-sq" style={{ background: PIPE_STYLE[k].color }} />
+                {PIPE_STYLE[k].label}
               </div>
-            </div>
-            {ASSET_KEYS.map((k) => (
-              <LayerToggle
-                key={k}
-                label={ASSET_STYLE[k].label}
-                count={counts.assetCounts[k]}
-                on={layers[k]}
-                swatch={<AssetSwatch kind={k} />}
-                onClick={() => onToggle(k)}
-              />
             ))}
           </div>
-          <div className="gis-lc-section gis-lc-status">
-            <div className="gis-lc-section-head"><span>Status</span></div>
-            <div className="gis-lc-status-row">
-              <span><span className="gis-status-dot ring" style={{ borderColor: STATUS_COLOR.warn }} />Warning halo</span>
-              <span><span className="gis-status-dot ring" style={{ borderColor: STATUS_COLOR.alert }} />Critical halo</span>
-            </div>
+          <div className="gis-key-group">
+            {KEY_ASSETS.map((a) => (
+              <div key={a.kind} className="gis-key-row">
+                <span dangerouslySetInnerHTML={{ __html: markerIcon(a.kind, undefined, 16) }} />
+                {a.label}
+              </div>
+            ))}
           </div>
-          <div className="gis-lc-foot">
-            <div><span>Total length</span><strong>{(meta.total_length_m / 1000).toFixed(1)} km</strong></div>
-            <div><span>Zones</span><strong>{meta.top_zones.length}</strong></div>
+          <div className="gis-key-group">
+            <div className="gis-key-row"><span className="gis-key-ring" style={{ borderColor: STATUS_COLOR.warn }} />Needs attention</div>
+            <div className="gis-key-row"><span className="gis-key-ring" style={{ borderColor: STATUS_COLOR.alert }} />Critical</div>
           </div>
         </div>
       )}
@@ -945,85 +876,31 @@ function LayerControl({
   );
 }
 
-const RAMP_RANGES: Partial<Record<LinkSymbology, { lo: string; hi: string }>> = {
-  diameter: { lo: '25 mm', hi: '≥400 mm' },
-  flow: { lo: '0 L/s', hi: '60 L/s' },
-  velocity: { lo: '0 m/s', hi: '2.5 m/s' },
-  headloss: { lo: '0 m/km', hi: '12 m/km' }
-};
 
-/** EPANET-style gradient legend for the active scaled link symbology. */
-function RampLegend({ linkBy, hasResults }: { linkBy: LinkSymbology; hasResults: boolean }) {
-  const range = RAMP_RANGES[linkBy];
-  if (!range) return null;
-  const needsSim = linkBy !== 'diameter';
-  if (needsSim && !hasResults) return null;
-  return (
-    <div className="gis-ramp-legend">
-      <div className="gis-ramp-bar" style={{ background: `linear-gradient(90deg, ${RAMP.join(',')})` }} />
-      <div className="gis-ramp-labels"><span>{range.lo}</span><span>{range.hi}</span></div>
-    </div>
-  );
-}
 
-function LayerToggle({ label, count, on, swatch, onClick }: {
-  label: string; count: number; on: boolean; swatch: React.ReactNode; onClick: () => void;
-}) {
-  // Labelled legend row (GIS/EPANET style): checkbox · symbol · name · count.
-  return (
-    <button
-      className={`gis-layer-toggle${on ? ' on' : ''}`}
-      onClick={onClick}
-      type="button"
-      aria-pressed={on}
-    >
-      <span className="gis-lt-check" aria-hidden="true">{on ? '✓' : ''}</span>
-      <span className="gis-lt-swatch">{swatch}</span>
-      <span className="gis-lt-label">{label}</span>
-      <span className="gis-lt-count">{count.toLocaleString()}</span>
-    </button>
-  );
-}
 
-function PipeSwatch({ cls }: { cls: PipeClass }) {
-  const s = PIPE_STYLE[cls];
-  return (
-    <span
-      className="gis-pipe-swatch"
-      style={{
-        background: s.color,
-        backgroundImage: s.dashArray ? `repeating-linear-gradient(90deg, ${s.color} 0 6px, transparent 6px 10px)` : undefined,
-        height: Math.min(5, Math.max(2, s.weight))
-      }}
-    />
-  );
-}
 
-function AssetSwatch({ kind }: { kind: AssetKind }) {
-  const c = ASSET_STYLE[kind].color;
-  const html = kind === 'sensor'
-    ? markerIcon('pressure', c, 16) + markerIcon('quality', QUALITY_SENSOR_COLOR, 16)
-    : markerIcon(kind === 'facility' ? 'plant' : kind === 'tank' ? 'tank' : kind === 'pressure_valve' ? 'valve' : 'meter', c, 16);
-  return <span className="eg-swatch" dangerouslySetInnerHTML={{ __html: html }} />;
-}
-
-/* Legend was merged into LayerControl — see status block + per-row swatches. */
 
 /* ─────────────────────────────────────────
    Workspace toolbar (top) + simulation strip (bottom)
    ───────────────────────────────────────── */
 
-function WorkspaceToolbar({ onFit, sim, onSimulate }: {
+function WorkspaceToolbar({ onFit, fullscreen, onFullscreen }: {
   onFit: () => void;
-  sim: SimState;
-  onSimulate: () => void;
+  fullscreen: boolean;
+  onFullscreen: () => void;
 }) {
   return (
     <div className="gis-toolbar">
       <span className="gis-basemap-label">Satellite</span>
-      <button type="button" className="gis-tool" onClick={onFit} title="Fit view" aria-label="Fit view">
+      <button type="button" className="gis-tool" onClick={onFit} title="Fit to network" aria-label="Fit to network">
         <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-          <path d="M4 9V4h5 M20 9V4h-5 M4 15v5h5 M20 15v5h-5" />
+          <circle cx={12} cy={12} r={7} /><circle cx={12} cy={12} r={2} /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+        </svg>
+      </button>
+      <button type="button" className="gis-tool" onClick={onFullscreen} title={fullscreen ? 'Exit full view' : 'Full view'} aria-label={fullscreen ? 'Exit full view' : 'Full view'}>
+        <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+          <path d={fullscreen ? 'M9 4v5H4 M15 4v5h5 M9 20v-5H4 M15 20v-5h5' : 'M4 9V4h5 M20 9V4h-5 M4 15v5h5 M20 15v5h-5'} />
         </svg>
       </button>
     </div>

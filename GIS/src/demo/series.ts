@@ -4,8 +4,9 @@
  * Every reading shown anywhere in the app — map popups, KPIs, tables, charts —
  * comes from `sampleAt()` / `series()`, so the "current" value on a card is
  * always the last point of the chart behind it. Values are smooth value-noise
- * plus diurnal demand patterns — there are no scripted events; alerts come
- * only from readings that cross their thresholds.
+ * plus diurnal demand patterns, plus a few demo conditions (a reservoir
+ * running low, water quality drifting out of range). Alerts are never
+ * hard-coded: they come from readings that cross their thresholds.
  *
  * No imports from the network loader: network.ts imports this file.
  */
@@ -118,25 +119,51 @@ export function fmt(metric: Metric, v: number, withUnit = true): string {
   return withUnit && d.unit ? `${n} ${d.unit}` : n;
 }
 
+/* ── demo conditions ── */
+/** Readings that drift out of range a few hours before NOW, so the demo has
+ *  something that needs attention. Keyed by `${metric}:${entityId}`. */
+const DEMO_CONDITIONS: Record<string, { startH: number; delta: number; rampH: number }> = {
+  'level:TANK-05': { startH: 14, delta: -42, rampH: 10 },         // Kwa Njora Reservoir draining
+  'turbidity:WQ-SHAURI': { startH: 5, delta: 0.8, rampH: 3 },     // Shauri turbidity rising
+  'chlorine:WQ-KWANJORA': { startH: 9, delta: -0.16, rampH: 4 }   // Kwa Njora chlorine residual falling
+};
+function conditionOffset(key: string, t: number): number {
+  const c = DEMO_CONDITIONS[key];
+  if (!c) return 0;
+  const start = NOW - c.startH * HOUR;
+  if (t < start) return 0;
+  const k = Math.min(1, (t - start) / (c.rampH * HOUR));
+  return c.delta * k * k * (3 - 2 * k);
+}
+
 /* ── threshold breaches ── */
-/** Periods in the last `hours` where a reading sat outside its normal range. */
-export function breachWindows(metric: Metric, id: string, base: number, hours = 30 * 24, stepMin = 30): Array<{ start: number; end: number; ongoing: boolean }> {
-  const out: Array<{ start: number; end: number; ongoing: boolean }> = [];
+/** Periods in the last `hours` where a reading sat outside its normal range.
+ *  Breaches separated by less than `mergeH` hours count as one event, and
+ *  blips shorter than one step are ignored, so a flapping reading raises one alert. */
+export function breachWindows(metric: Metric, id: string, base: number, hours = 30 * 24, stepMin = 30, mergeH = 6): Array<{ start: number; end: number; ongoing: boolean }> {
+  const raw: Array<{ start: number; end: number }> = [];
   const step = stepMin * MIN;
   let open: number | null = null;
   for (let t = NOW - hours * HOUR; t <= NOW; t += step) {
     const bad = toneFor(metric, sampleAt(metric, id, base, t)) !== 'ok';
     if (bad && open === null) open = t;
-    if (!bad && open !== null) { out.push({ start: open, end: t, ongoing: false }); open = null; }
+    if (!bad && open !== null) { if (t - open > step) raw.push({ start: open, end: t }); open = null; }
   }
-  if (open !== null) out.push({ start: open, end: NOW, ongoing: true });
-  return out;
+  if (open !== null) raw.push({ start: open, end: NOW });
+  const merged: Array<{ start: number; end: number }> = [];
+  for (const w of raw) {
+    const last = merged[merged.length - 1];
+    if (last && w.start - last.end < mergeH * HOUR) last.end = w.end;
+    else merged.push({ ...w });
+  }
+  // Still out of range, or only briefly back in range, counts as ongoing.
+  return merged.map(w => ({ ...w, ongoing: NOW - w.end < mergeH * HOUR }));
 }
 
 /* ── the generator ── */
 /** Value of `metric` for entity `id` (whose typical value is `base`) at time `t`. */
 export function sampleAt(metric: Metric, id: string, base: number, t: number): number {
-  let v = rawSample(metric, id, base, t);
+  let v = rawSample(metric, id, base, t) + conditionOffset(`${metric}:${id}`, t);
   if (metric === 'level') v = Math.max(3, Math.min(99, v));
   if (metric === 'turbidity') v = Math.max(0.05, v);
   if (metric === 'flow' || metric === 'pressure' || metric === 'chlorine') v = Math.max(0, v);

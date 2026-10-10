@@ -412,7 +412,9 @@ export const PIPE_STYLE: Record<PipeClass, {
   }
 };
 
-export const PIPE_CLASS_ORDER: PipeClass[] = ['main', 'distribution', 'backfeed', 'household', 'boundary'];
+// Only real network classes are drawn; the service-area outline and the
+// unused backfeed / service classes are not shown.
+export const PIPE_CLASS_ORDER: PipeClass[] = ['main', 'distribution'];
 
 export const ASSET_STYLE: Record<AssetKind, {
   color: string;

@@ -300,3 +300,18 @@ button.dx-item:hover { background: hsl(var(--row-hover)) !important; }
 .gis-layer-toggle + .gis-layer-toggle { margin-top: 0; }
 .gis-lc-section .gis-layer-toggle { border-bottom: 1px solid hsl(var(--hair)); border-radius: 0; }
 .gis-lc-section .gis-layer-toggle:last-child { border-bottom: 0; }
+
+/* ── Map key: plain legend card, like a printed map ── */
+.gis-key { position: absolute; left: 16px; bottom: 16px; z-index: 500; min-width: 200px; background: #fff; color: #0F172A; border: 1px solid #D0D5DD; border-radius: 6px; box-shadow: 0 1px 4px rgb(0 0 0 / 0.25); font-size: 12px; }
+.gis-key-head { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 8px 12px; background: none; border: 0; color: #344054; font: 600 11px var(--font); letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; }
+.gis-key:not(.closed) .gis-key-head { border-bottom: 1px solid #EAECF0; }
+.gis-key-body { padding: 4px 12px 10px; }
+.gis-key-group { padding: 6px 0; }
+.gis-key-group + .gis-key-group { border-top: 1px solid #EAECF0; }
+.gis-key-row { display: flex; align-items: center; gap: 9px; padding: 3px 0; line-height: 1.2; }
+.gis-key-sq { width: 13px; height: 13px; border-radius: 2px; flex-shrink: 0; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12); }
+.gis-key-row .mk { box-shadow: 0 0 0 1px rgb(15 23 42 / 0.2); }
+.gis-key-ring { width: 13px; height: 13px; border-radius: 50%; border: 2px solid; flex-shrink: 0; }
+
+/* Full view: the map workspace fills the screen */
+.gis-workspace:fullscreen { height: 100vh; background: hsl(var(--background)); }
