@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { ThemeProvider } from './theme';
 import { FiltersProvider } from './demo/filters';
+import './tremor.css';
 import './styles.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
