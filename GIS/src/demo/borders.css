@@ -373,3 +373,14 @@ button.dx-item:hover { background: hsl(var(--row-hover)) !important; }
 .hm-ramp { display: inline-block; width: 120px; height: 10px; border-radius: 2px; }
 .hm-key { display: inline-flex; align-items: center; gap: 6px; margin-left: 12px; }
 .hm-key i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+/* Five KPI tiles in three columns: let the last tile fill the second row (no empty cell). */
+@media (max-width: 1280px) and (min-width: 701px) {
+  .dx-grid-kpi:not(.four):not(.six) > :nth-child(5):last-child { grid-column: span 2; }
+}
+@media (max-width: 700px) {
+  .dx-grid-kpi > :nth-child(odd):last-child { grid-column: span 2; }
+}
+
+/* Hide hairline seams between map tiles on high-DPI / fractional-zoom screens. */
+.leaflet-container img.leaflet-tile { mix-blend-mode: plus-lighter; }

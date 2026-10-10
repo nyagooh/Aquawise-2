@@ -167,13 +167,36 @@ function Hero({ onDemo, onTalk }: { onDemo: () => void; onTalk: () => void }) {
       </div>
       <div className="ed-wrap">
         <div className="ed-hero-frame rv">
-          <img className="ed-hero-bg" src="/img/treatment-plant.jpg" alt="" />
+          <HeroWaves />
+          <div className="ed-hero-chip c1"><i className="ok" />Turbidity 0.31 NTU · works outlet</div>
+          <div className="ed-hero-chip c2"><i className="warn" />Kwa Njora Reservoir · running low</div>
           <div className="ed-hero-shot">
             <img src="/img/ui/view-overview.webp" alt="AquaWise Overview: network health, active alerts, water quality, pressure, network map and issues needing attention" />
           </div>
         </div>
       </div>
     </section>
+  );
+}
+
+/** Water behind the hero screenshot: three wave layers drifting at different speeds. */
+function HeroWaves() {
+  // One period of a smooth wave, drawn twice across a 2400-wide tile so it loops seamlessly.
+  const wave = (amp: number, y: number) =>
+    `M0 ${y} C 300 ${y - amp}, 300 ${y + amp}, 600 ${y} S 900 ${y - amp}, 1200 ${y} S 1500 ${y + amp}, 1800 ${y} S 2100 ${y - amp}, 2400 ${y} V 200 H 0 Z`;
+  return (
+    <div className="ed-water" aria-hidden="true">
+      <div className="ed-water-shine" />
+      {[
+        { cls: 'w1', amp: 26, y: 70 },
+        { cls: 'w2', amp: 20, y: 95 },
+        { cls: 'w3', amp: 14, y: 120 }
+      ].map(w => (
+        <svg key={w.cls} className={`ed-wave ${w.cls}`} viewBox="0 0 2400 200" preserveAspectRatio="none">
+          <path d={wave(w.amp, w.y)} />
+        </svg>
+      ))}
+    </div>
   );
 }
 
@@ -533,6 +556,10 @@ function Outcomes() {
         <h2 className="ed-h2 rv" style={{ gridColumn: '1 / span 8' }}>Live from <span className="muted">day one.</span></h2>
       </div>
       <div className="ed-wrap">
+        <figure className="ed-banner rv">
+          <img src="/img/field-engineers.jpg" alt="Field engineers checking a valve and logger" loading="lazy" />
+          <figcaption><span className="ed-mini">Erline Water · Nyahururu, Kenya</span><b>Two treatment works, five reservoirs, one live view.</b></figcaption>
+        </figure>
         <div className="ed-report">
           <div className="rv"><b><Count to={121} /><small>km</small></b><span>of pipe network mapped</span></div>
           <div className="rv"><b><Count to={192} /></b><span>assets in one register</span></div>
@@ -560,6 +587,9 @@ function Final({ onDemo, onTalk }: { onDemo: () => void; onTalk: () => void }) {
             <button type="button" className="ed-btn ed-btn-white" onClick={onDemo}>Explore demo <Arrow /></button>
             <button type="button" className="ed-btn ed-btn-ghost" onClick={onTalk}>Talk to us</button>
           </div>
+        </div>
+        <div className="ed-final-shot" aria-hidden="true">
+          <img src="/img/ui/view-network.webp" alt="" loading="lazy" />
         </div>
       </section>
       <footer className="ed-footer">
