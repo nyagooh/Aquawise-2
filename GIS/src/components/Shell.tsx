@@ -2,6 +2,7 @@ import { ReactNode, useEffect, useState } from 'react';
 import { Sidebar, type Active } from './Sidebar';
 import { Topbar } from './Topbar';
 import '../demo/demo.css';
+import '../demo/borders.css';
 
 type Props = {
   active: Active;
@@ -54,12 +55,16 @@ export function Shell({ active, title, sub, children, pagePadding = true, filter
           )}
           {children}
         </div>
-        <footer className="app-footer">
-          <div className="app-footer-contact">
-            Riverton Water &amp; Sanitation Co. · <a href="mailto:info.aquawise@gmail.com">info.aquawise@gmail.com</a> · <a href="tel:+254710433161">+254 710 433 161</a> · Nairobi, Kenya
-          </div>
-          <div className="app-footer-copy">© 2026 Riverton Water &amp; Sanitation Co.</div>
-        </footer>
+        {pagePadding && (
+          <footer className="app-footer">
+            <span className="app-footer-brand">AquaWise <span>· Riverton Water &amp; Sanitation Co. · demonstration data</span></span>
+            <span className="app-footer-links">
+              <a href="mailto:info.aquawise@gmail.com">info.aquawise@gmail.com</a>
+              <a href="tel:+254710433161">+254 710 433 161</a>
+              <span>© {new Date().getFullYear()}</span>
+            </span>
+          </footer>
+        )}
       </main>
     </div>
   );

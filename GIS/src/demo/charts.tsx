@@ -11,7 +11,7 @@
  */
 import { useMemo, type ReactNode } from 'react';
 import {
-  BarChart as TBarChart, BarList as TBarList, CategoryBar, DonutChart,
+  BarChart as TBarChart, CategoryBar, DonutChart,
   SparkAreaChart, SparkBarChart, SparkLineChart
 } from '@tremor/react';
 import {
@@ -233,20 +233,26 @@ export function ChartLegend({ items }: { items: Array<{ label: string; color: st
   );
 }
 
-/** Ranked horizontal bars (Tremor BarList). */
-export function BarList({ rows, onRowClick }: {
+/** Ranked horizontal bars: label and value on one line, a thin bar beneath. */
+export function BarList({ rows, max, onRowClick }: {
   rows: Array<{ key: string; label: ReactNode; value: number; display: string; tone?: Tone; sub?: string }>;
   max?: number;
   onRowClick?: (key: string) => void;
 }) {
-  const byValue = new Map(rows.map(r => [r.value, r.display]));
+  const m = max ?? Math.max(...rows.map(r => r.value), 1);
   return (
-    <TBarList
-      data={rows.map(r => ({ key: r.key, name: r.label, value: r.value, color: (r.tone && r.tone !== 'ok' ? TONE_TREMOR[r.tone] : TB) as never }))}
-      valueFormatter={(v: number) => byValue.get(v) ?? fmtTick(v)}
-      sortOrder="none"
-      onValueChange={onRowClick ? (p => onRowClick(String((p as { key?: string }).key))) : undefined}
-    />
+    <div className="eg-bars">
+      {rows.map(r => {
+        const Tag = onRowClick ? 'button' : 'div';
+        return (
+          <Tag key={r.key} type={onRowClick ? 'button' : undefined} className={`eg-bar${onRowClick ? ' click' : ''}`} onClick={onRowClick ? () => onRowClick(r.key) : undefined}>
+            <span className="eg-bar-top"><span className="lbl">{r.label}</span><span className="val">{r.display}</span></span>
+            <span className="eg-bar-track"><span style={{ width: `${Math.max(0.6, (r.value / m) * 100)}%`, background: r.tone && r.tone !== 'ok' ? TONE_HEX[r.tone] : BLUE }} /></span>
+            {r.sub && <span className="eg-bar-sub">{r.sub}</span>}
+          </Tag>
+        );
+      })}
+    </div>
   );
 }
 

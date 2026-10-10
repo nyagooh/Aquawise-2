@@ -77,6 +77,20 @@ export function Kpi({ label, value, unit, tone, sub, delta, onClick, children, i
     : <TCard className={cls}>{body}</TCard>;
 }
 
+/** Severity glyph used in alert lists (octicon-like, 16px). */
+export function SevIcon({ severity }: { severity: 'critical' | 'warning' | 'info' }) {
+  const c = severity === 'critical' ? 'hsl(var(--danger))' : severity === 'warning' ? 'hsl(var(--warning))' : 'hsl(var(--muted-foreground))';
+  return (
+    <svg className="aw-sev" width={16} height={16} viewBox="0 0 16 16" fill="none" stroke={c} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" aria-label={severity}>
+      {severity === 'critical'
+        ? <><path d="M5.3 1.5h5.4l3.8 3.8v5.4l-3.8 3.8H5.3l-3.8-3.8V5.3z" /><path d="M8 4.8v3.6M8 11h.01" /></>
+        : severity === 'warning'
+          ? <><path d="M7.1 2.2 1.4 12.3a1 1 0 0 0 .9 1.5h11.4a1 1 0 0 0 .9-1.5L8.9 2.2a1 1 0 0 0-1.8 0z" /><path d="M8 6v3M8 11.5h.01" /></>
+          : <><circle cx={8} cy={8} r={6.5} /><path d="M8 7.2V11M8 5h.01" /></>}
+    </svg>
+  );
+}
+
 /** Small inline icons for KPI tiles and lists. */
 const SI = (d: ReactNode) => <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{d}</svg>;
 export const ICON = {

@@ -4,7 +4,7 @@
 
 /* Minimal reset for Tremor inside the app (Tailwind preflight is disabled
    so the hand-written CSS is untouched). Borders need a style to render. */
-.dx *, .dx ::before, .dx ::after { box-sizing: border-box; border-width: 0; border-style: solid; border-color: #E5E7EB; }
-[data-theme="dark"] .dx *, [data-theme="dark"] .dx ::before, [data-theme="dark"] .dx ::after { border-color: #27272A; }
+:where(.dx) *, :where(.dx) ::before, :where(.dx) ::after { box-sizing: border-box; border-width: 0; border-style: solid; border-color: #E5E7EB; }
+:where([data-theme="dark"] .dx) *, :where([data-theme="dark"] .dx) ::before, :where([data-theme="dark"] .dx) ::after { border-color: #27272A; }
 .recharts-wrapper, .recharts-surface { outline: none; }
 .recharts-wrapper *:focus { outline: none; }
