@@ -490,3 +490,21 @@ button.ed-mon-tile:hover { border-color: rgb(255 255 255 / 0.22); }
 }
 .ed-footer-bottom { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; padding-top: 22px; padding-bottom: 26px; border-top: 1px solid rgb(255 255 255 / 0.1); font-size: 0.8125rem; color: rgb(255 255 255 / 0.5); position: relative; }
 @media (max-width: 640px) { .ed-footer-cols { grid-template-columns: 1fr 1fr; } }
+.ed-final-sub { margin-top: -12px !important; max-width: 46ch; font-size: clamp(1.0625rem, 1.4vw, 1.25rem); line-height: 1.55; color: rgb(255 255 255 / 0.85); }
+.ed .ed-hero-h { max-width: 20ch; }
+
+/* ═════ Explore demo page ═════ */
+.xd { min-height: 100vh; }
+.xd-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(32px, 5vw, 80px); align-items: center; padding-top: clamp(48px, 7vw, 96px); padding-bottom: 64px; }
+.xd-title { font-family: var(--display); font-size: clamp(2.25rem, 4vw, 3.5rem); font-weight: 500; letter-spacing: -0.03em; line-height: 1.05; }
+.xd-sub { margin-top: 16px !important; font-size: 1.0625rem; line-height: 1.6; color: var(--ink-2); max-width: 44ch; }
+.xd-form { margin-top: 32px; display: flex; flex-direction: column; gap: 14px; max-width: 420px; }
+.xd-form label { display: flex; flex-direction: column; gap: 6px; font-size: 0.875rem; font-weight: 500; color: var(--ink); }
+.xd-form input { height: 46px; padding: 0 14px; border: 1px solid #D0D5DD; border-radius: 8px; font: 400 0.9375rem 'Inter', sans-serif; color: var(--ink); background: #fff; }
+.xd-form input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgb(23 105 232 / 0.15); }
+.xd-form .ed-btn { margin-top: 6px; width: 100%; }
+.xd-form .ed-btn:disabled { opacity: 0.7; cursor: default; }
+.xd-note { margin-top: 14px !important; font-size: 0.8125rem; color: var(--grey); max-width: 420px; }
+.xd-shot { margin: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; box-shadow: 0 30px 60px -30px rgb(16 24 40 / 0.3); }
+.xd-shot img { width: 100%; }
+@media (max-width: 900px) { .xd-grid { grid-template-columns: 1fr; } }

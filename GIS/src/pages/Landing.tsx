@@ -102,7 +102,7 @@ const fmtClock = (t: number) => new Date(t).toLocaleTimeString('en-GB', { hour: 
 /* ═════════════ page ═════════════ */
 export default function Landing() {
   const navigate = useNavigate();
-  const openDemo = useCallback(() => navigate(hasDemoAccess() ? '/demo' : '/request-demo'), [navigate]);
+  const openDemo = useCallback(() => navigate(hasDemoAccess() ? '/overview' : '/demo'), [navigate]);
   const talkToUs = useCallback(() => navigate('/request-demo?mode=book'), [navigate]);
   const assets = useAssets();
   const nrw = useMemo(() => buildNrwMonthly(), []);
@@ -124,12 +124,11 @@ export default function Landing() {
             <a href="#network">Network</a>
             <a href="#monitor">Monitoring</a>
             <a href="#quality">Water quality</a>
-            <a href="#nrw">NRW</a>
             <a href="#product">Product</a>
           </nav>
           <div className="ed-nav-cta">
             <button type="button" className="ed-link-btn" onClick={talkToUs}>Talk to us</button>
-            <button type="button" className="ed-btn ed-btn-blue sm" onClick={openDemo}>Explore AquaWise</button>
+            <button type="button" className="ed-btn ed-btn-blue sm" onClick={openDemo}>Explore demo</button>
           </div>
         </div>
       </header>
@@ -142,7 +141,6 @@ export default function Landing() {
         <Parameters />
         <QualityStory />
         <Infrastructure />
-        <Losses nrw={nrw} />
         <Explorer onDemo={openDemo} />
         <Outcomes />
       </main>
@@ -157,14 +155,14 @@ function Hero({ onDemo, onTalk }: { onDemo: () => void; onTalk: () => void }) {
   return (
     <section className="ed-hero">
       <div className="ed-wrap ed-hero-copy">
-        <p className="ed-eyebrow rv">Water quality · Pressure · Tank levels · NRW</p>
+        <p className="ed-eyebrow rv">Water quality · Pressure · Tank levels · GIS</p>
         <h1 className="ed-hero-h rv">The smart water grid<br />for water utilities</h1>
         <p className="ed-hero-sub rv">
-          See every pipe, sensor and reservoir on one live map. Know the moment water quality
-          slips, pressure drops or a tank runs low — and exactly where to send your team.
+          Your whole network, live on one map. Spot a burst, a dirty reading or a draining tank
+          the moment it happens — and fix it before your customers ever notice.
         </p>
         <div className="ed-row ed-hero-ctas rv">
-          <button type="button" className="ed-btn ed-btn-blue" onClick={onDemo}>Explore the live demo</button>
+          <button type="button" className="ed-btn ed-btn-blue" onClick={onDemo}>Explore demo</button>
           <button type="button" className="ed-btn ed-btn-line" onClick={onTalk}>Talk to us <span aria-hidden="true">→</span></button>
         </div>
       </div>
@@ -194,12 +192,11 @@ function OneNetwork({ assets }: { assets: Record<string, AssetProps> | null }) {
       <div className="ed-wrap ed-grid">
         <p className="ed-label rv" style={{ gridColumn: '1 / span 4' }}><b>01</b> / The network</p>
         <h2 className="ed-h2 rv" style={{ gridColumn: '1 / span 9' }}>
-          From treatment to tap, <span className="muted">one connected view.</span>
+          Every pipe. Every sensor. <span className="muted">One live map.</span>
         </h2>
         <p className="ed-aside rv" style={{ gridColumn: '9 / span 4' }}>
-          Most utilities keep the map, the sensors and the lab results in different places. AquaWise puts
-          them together. When pressure falls in one zone, you see the reservoir that feeds it and the quality
-          of the water reaching customers — in seconds, not after a round of phone calls.
+          Your map, your sensors and your lab results in one place. When something changes anywhere in
+          the network, you see it — and you see where.
         </p>
       </div>
 
@@ -249,8 +246,8 @@ function Mosaic({ assets }: { assets: Record<string, AssetProps> | null; nrw?: u
     <section className="ed-sec ed-tint">
       <div className="ed-wrap ed-grid">
         <p className="ed-label rv" style={{ gridColumn: '1 / span 3' }}><b>02</b> / The platform</p>
-        <h2 className="ed-h2 rv" style={{ gridColumn: '1 / span 7' }}>Everything that matters. <span className="muted">At a glance.</span></h2>
-        <p className="ed-aside rv" style={{ gridColumn: '9 / span 4' }}>Every reading is tied to the place it comes from, so a number on screen always leads to a pipe, a reservoir or a sampling point on the map.</p>
+        <h2 className="ed-h2 rv" style={{ gridColumn: '1 / span 7' }}>See it. Find it. <span className="muted">Fix it.</span></h2>
+        <p className="ed-aside rv" style={{ gridColumn: '9 / span 4' }}>Every reading points to a real place on the map, so your crew knows exactly where to go.</p>
       </div>
       <div className="ed-wrap">
         <div className="ed-bento">
@@ -259,11 +256,11 @@ function Mosaic({ assets }: { assets: Record<string, AssetProps> | null; nrw?: u
             <figcaption><span className="ed-mini">Network map</span><b>716 km of pipe, every asset in place</b></figcaption>
           </figure>
           <StatTile label="Water quality · Riverside booster" value={last(tb)} unit="NTU" decimals={2} tone="warn"
-            note="Above the 1.0 NTU safe limit since this morning." points={tb} color="amber" />
+            note="Above the safe limit since this morning." points={tb} color="amber" />
           <StatTile label="Pressure · Northgate" value={last(sn12)} unit="bar" decimals={2} tone="crit"
             note="Below the 1.5 bar minimum — a likely burst." points={sn12} color="red" />
           <StatTile label="Storage · Reservoir 01" value={last(t1)} unit="%" decimals={0} tone="warn"
-            note="Emptying faster than at this time yesterday." points={t1} color="amber" />
+            note="Emptying faster than yesterday." points={t1} color="amber" />
         </div>
       </div>
     </section>
@@ -335,8 +332,8 @@ function Monitor({ assets }: { assets: Record<string, AssetProps> | null }) {
     <section className="ed-sec ed-dark" id="monitor">
       <div className="ed-wrap ed-grid">
         <p className="ed-label rv" style={{ gridColumn: '1 / span 4' }}><b>03</b> / Monitor</p>
-        <h2 className="ed-h1 rv" style={{ gridColumn: '1 / span 8' }}>Water changes. <span className="muted">AquaWise watches.</span></h2>
-        <p className="ed-aside rv" style={{ gridColumn: '9 / span 4' }}>Every reading is checked against its safe range the moment it arrives. When something drifts, you see it on the chart and in your alerts at the same time.</p>
+        <h2 className="ed-h1 rv" style={{ gridColumn: '1 / span 8' }}>Live monitoring, <span className="muted">around the clock.</span></h2>
+        <p className="ed-aside rv" style={{ gridColumn: '9 / span 4' }}>Every reading is checked against its safe limit the moment it arrives. If something drifts, you know straight away.</p>
       </div>
       <div className="ed-wrap ed-grid ed-mon">
         <ul className="ed-mon-nav rv" style={{ gridColumn: '1 / span 3' }}>
@@ -421,9 +418,9 @@ function Parameters() {
     <section className="ed-sec ed-tint" id="quality">
       <div className="ed-wrap ed-grid">
         <p className="ed-label rv" style={{ gridColumn: '1 / span 4' }}><b>04</b> / Water quality</p>
-        <h2 className="ed-h2 rv" style={{ gridColumn: '1 / span 8' }}>Five readings that tell you <span className="muted">your water is safe.</span></h2>
+        <h2 className="ed-h2 rv" style={{ gridColumn: '1 / span 8' }}>Five checks. <span className="muted">Safe water, proven.</span></h2>
         <p className="ed-aside rv" style={{ gridColumn: '9 / span 4' }}>
-          AquaWise reads all five continuously at the treatment works and across your zones, and tells you the moment any of them leaves its safe range.
+          Measured continuously at the works and in every zone, with an alert the moment any of them leaves its safe range.
         </p>
       </div>
       <div className="ed-wrap">
@@ -474,15 +471,15 @@ function QualityStory() {
     </g>
   );
   const steps = [
-    { n: 1, color: '#E59A17', when: fmtClock(story.over.t), title: 'Breach detected', text: 'Turbidity crosses the 1.0 NTU limit and the quality team is alerted straight away.' },
-    { n: 2, color: '#E59A17', when: `${story.peak.v.toFixed(2)} NTU`, title: 'Peak recorded', text: 'You see how far it went, not just that it happened — the full curve is kept.' },
-    { n: 3, color: '#16A66A', when: fmtClock(story.back.t), title: 'Back in range', text: `Clear again after ${story.hours} hours, with the whole event logged for your quality report.` }
+    { n: 1, color: '#E59A17', when: fmtClock(story.over.t), title: 'Breach detected', text: 'Turbidity crosses the limit and your quality team is alerted straight away.' },
+    { n: 2, color: '#E59A17', when: `${story.peak.v.toFixed(2)} NTU`, title: 'Peak recorded', text: 'You see how far it went. Every reading is kept.' },
+    { n: 3, color: '#16A66A', when: fmtClock(story.back.t), title: 'Back in range', text: `Clear after ${story.hours} hours, logged and ready for your report.` }
   ];
   return (
     <section className="ed-sec">
       <div className="ed-wrap ed-grid">
         <p className="ed-label rv" style={{ gridColumn: '1 / span 4' }}><b>05</b> / Over time</p>
-        <h2 className="ed-h1 rv" style={{ gridColumn: '1 / span 9' }}>Not just how the water is now. <span className="muted">How it got there.</span></h2>
+        <h2 className="ed-h1 rv" style={{ gridColumn: '1 / span 9' }}>Every reading recorded. <span className="muted">Every event explained.</span></h2>
       </div>
       <div className="ed-wrap">
         <div className="ed-story-card rv">
@@ -568,55 +565,7 @@ function Infrastructure() {
       </div>
       <div className="ed-infra-shade" />
       <div className="ed-wrap ed-infra-text">
-        <h2 className="ed-h1 rv">Physical infrastructure. <span className="muted">Digital intelligence.</span></h2>
-      </div>
-    </section>
-  );
-}
-
-/* ═════════════ 7 · LOSSES ═════════════ */
-function Losses({ nrw }: { nrw: ReturnType<typeof buildNrwMonthly> }) {
-  const [ref, seen] = useInView<HTMLDivElement>(0.3);
-  const last = nrw[nrw.length - 1]; const prev = nrw[nrw.length - 2];
-  const zones = [...ZONE_SEED].sort((a, b) => b.nrw - a.nrw);
-  const supplied = ZONE_SEED.reduce((a, z) => a + z.supplied, 0);
-  const lost = ZONE_SEED.reduce((a, z) => a + Math.round(z.supplied * z.nrw / 100), 0);
-  return (
-    <section className="ed-sec" id="nrw">
-      <div className="ed-wrap ed-grid">
-        <p className="ed-label rv" style={{ gridColumn: '1 / span 4' }}><b>06</b> / Non-revenue water</p>
-        <div style={{ gridColumn: '1 / span 7' }}>
-          <h2 className="ed-h1 rv">Find the water <span className="muted">you’re losing.</span></h2>
-          <p className="ed-lead rv">Non-revenue water is water you treat and pump but never bill. AquaWise compares what goes into each zone with what you bill, so you can see where it disappears.</p>
-        </div>
-        <div className="ed-nrw-stat rv" style={{ gridColumn: '9 / span 4' }}>
-          <span className="ed-mini">Current NRW · seven zones</span>
-          <b><Count to={last.nrw} decimals={1} /><small>%</small></b>
-          <span className="ed-chip ok">▼ {(prev.nrw - last.nrw).toFixed(1)} pts on last month</span>
-          <dl>
-            <div><dt>Supplied</dt><dd>{supplied.toLocaleString()} m³/day</dd></div>
-            <div><dt>Lost</dt><dd>{lost.toLocaleString()} m³/day</dd></div>
-          </dl>
-        </div>
-      </div>
-      <div className="ed-wrap ed-grid ed-nrw-body">
-        <div className={`ed-rank${seen ? ' drawn' : ''}`} ref={ref} style={{ gridColumn: '1 / span 6' }}>
-          {zones.map((z, i) => {
-            const tone = z.nrw >= 35 ? 'crit' : z.nrw >= 25 ? 'warn' : 'ok';
-            return (
-              <div key={z.code} className="ed-rank-row" style={{ transitionDelay: `${i * 0.07}s` }}>
-                <span className="nm">{zoneLabel(z.code)}</span>
-                <span className="tr"><span className="fill" style={{ width: `${(z.nrw / 45) * 100}%`, background: tone === 'crit' ? '#E5484D' : tone === 'warn' ? '#E59A17' : '#16A66A', transitionDelay: `${0.15 + i * 0.07}s` }} /></span>
-                <span className="v">{z.nrw.toFixed(1)}%</span>
-                <span className={`d ${z.nrw > z.nrwPrev ? 'up' : 'down'}`}>{z.nrw > z.nrwPrev ? '▲' : '▼'} {Math.abs(z.nrw - z.nrwPrev).toFixed(1)}</span>
-              </div>
-            );
-          })}
-          <p className="ed-note">AquaWise compares the water you put into each zone with the water you bill, then ranks every zone by loss. This month Riverside loses the most — and it's getting worse, alongside three pressure anomalies. That's where your team should start.</p>
-        </div>
-        <figure className="ed-nrw-map rv" style={{ gridColumn: '7 / -1' }}>
-          <img src="/img/ui/crop-nrw-map.webp" alt="AquaWise map with pipes coloured by zone NRW and open leak reports" />
-        </figure>
+        <h2 className="ed-h1 rv">Smart sensors <span className="muted">for the pipes you can’t see.</span></h2>
       </div>
     </section>
   );
@@ -624,12 +573,11 @@ function Losses({ nrw }: { nrw: ReturnType<typeof buildNrwMonthly> }) {
 
 /* ═════════════ 8 · PRODUCT EXPLORER ═════════════ */
 const VIEWS = [
-  { k: 'overview', label: 'Overview', cap: 'Your whole utility on one screen: what’s healthy, what needs attention, and where.' },
-  { k: 'network', label: 'Network', cap: 'Every pipe, valve, reservoir and sensor on the map — one click from its live readings.' },
-  { k: 'monitoring', label: 'Monitoring', cap: 'Water quality, pressure and tank levels over time, with safe limits drawn on every chart.' },
-  { k: 'alerts', label: 'Alerts', cap: 'Each alert arrives with the readings around it, so your team can act instead of investigate.' },
-  { k: 'nrw', label: 'NRW', cap: 'Water losses ranked zone by zone, so you know where to look first.' },
-  { k: 'reports', label: 'Reports', cap: 'Regulator-ready water quality, pressure and NRW reports in a few clicks, as PDF or CSV.' }
+  { k: 'overview', label: 'Overview', cap: 'What’s healthy, what needs attention, and where.' },
+  { k: 'network', label: 'Network', cap: 'Every pipe, valve, reservoir and sensor on the map.' },
+  { k: 'monitoring', label: 'Monitoring', cap: 'Water quality, pressure and tank levels over time.' },
+  { k: 'alerts', label: 'Alerts', cap: 'Every alert with the readings behind it.' },
+  { k: 'reports', label: 'Reports', cap: 'Regulator-ready reports in a few clicks.' }
 ] as const;
 
 function Explorer({ onDemo }: { onDemo: () => void }) {
@@ -637,8 +585,8 @@ function Explorer({ onDemo }: { onDemo: () => void }) {
   return (
     <section className="ed-sec ed-tint ed-explorer" id="product">
       <div className="ed-wrap ed-center">
-        <p className="ed-label rv"><b>07</b> / The product</p>
-        <h2 className="ed-h1 rv">One platform. <span className="muted">Your entire network.</span></h2>
+        <p className="ed-label rv"><b>06</b> / The product</p>
+        <h2 className="ed-h1 rv">One platform. <span className="muted">Your whole network.</span></h2>
         <div className="ed-tabs rv" role="tablist" aria-label="Product views">
           {VIEWS.map((v, j) => (
             <button key={v.k} role="tab" type="button" aria-selected={i === j} className={i === j ? 'on' : ''} onClick={() => setI(j)}>{v.label}</button>
@@ -652,7 +600,7 @@ function Explorer({ onDemo }: { onDemo: () => void }) {
             <img key={v.k} src={`/img/ui/view-${v.k}.webp`} alt={`AquaWise ${v.label} screen`} className={i === j ? 'on' : ''} loading={j ? 'lazy' : undefined} />
           ))}
         </div>
-        <button type="button" className="ed-btn ed-btn-blue ed-shot-cta" onClick={onDemo}>Open the live demo <Arrow /></button>
+        <button type="button" className="ed-btn ed-btn-blue ed-shot-cta" onClick={onDemo}>Explore demo <Arrow /></button>
       </div>
     </section>
   );
@@ -663,8 +611,8 @@ function Outcomes() {
   return (
     <section className="ed-sec">
       <div className="ed-wrap ed-grid">
-        <p className="ed-label rv" style={{ gridColumn: '1 / span 4' }}><b>08</b> / In the Riverton network</p>
-        <h2 className="ed-h2 rv" style={{ gridColumn: '1 / span 8' }}>What you see <span className="muted">from day one.</span></h2>
+        <p className="ed-label rv" style={{ gridColumn: '1 / span 4' }}><b>07</b> / In the Riverton network</p>
+        <h2 className="ed-h2 rv" style={{ gridColumn: '1 / span 8' }}>Live from <span className="muted">day one.</span></h2>
       </div>
       <div className="ed-wrap">
         <div className="ed-report">
@@ -687,10 +635,11 @@ function Final({ onDemo, onTalk }: { onDemo: () => void; onTalk: () => void }) {
     <>
       <section className="ed-final">
         <div className="ed-wrap ed-final-in">
-          <p className="ed-label light rv">Ready to see your network clearly?</p>
-          <h2 className="ed-giant rv">Your water network <span className="muted">shouldn’t be invisible.</span></h2>
+          <p className="ed-label light rv">Ready when you are</p>
+          <h2 className="ed-giant rv">Run a smarter <span className="muted">water network.</span></h2>
+          <p className="ed-final-sub rv">See your network the way AquaWise does — live, on one map.</p>
           <div className="ed-row rv">
-            <button type="button" className="ed-btn ed-btn-white" onClick={onDemo}>Explore AquaWise <Arrow /></button>
+            <button type="button" className="ed-btn ed-btn-white" onClick={onDemo}>Explore demo <Arrow /></button>
             <button type="button" className="ed-btn ed-btn-ghost" onClick={onTalk}>Talk to us</button>
           </div>
         </div>
@@ -699,11 +648,11 @@ function Final({ onDemo, onTalk }: { onDemo: () => void; onTalk: () => void }) {
         <div className="ed-wrap ed-footer-top">
           <div className="ed-footer-about">
             <Link to="/" className="ed-brand light"><Mark /><span>Aqua<b>Wise</b></span></Link>
-            <p>Live water quality, pressure, tank levels and losses for water utilities — on one map.</p>
+            <p>Helping water utilities see problems first and fix them faster.</p>
           </div>
           <div className="ed-footer-cols">
             <div><h4>Platform</h4><Link to="/overview">Overview</Link><Link to="/network">Network map</Link><Link to="/monitoring">Monitoring</Link><Link to="/alerts">Alerts</Link></div>
-            <div><h4>Insight</h4><Link to="/nrw">Non-revenue water</Link><Link to="/assets">Assets</Link><Link to="/reports">Reports</Link></div>
+            <div><h4>Insight</h4><Link to="/assets">Assets</Link><Link to="/reports">Reports</Link></div>
             <div><h4>Contact</h4><a href="mailto:info.aquawise@gmail.com">info.aquawise@gmail.com</a><a href="tel:+254710433161">+254 710 433 161</a><button type="button" onClick={onTalk}>Book a walkthrough</button></div>
           </div>
         </div>
