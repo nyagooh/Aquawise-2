@@ -167,7 +167,11 @@ function eventOffset(key: string, t: number, rawNow: () => number): number {
     if (t < start) continue;
     const up = Math.min(1, (t - start) / (e.rampH * HOUR));
     const down = t > end ? Math.max(0, 1 - (t - end) / (e.rampH * HOUR)) : 1;
-    off += delta * Math.min(up, down);
+    const k = Math.min(up, down);
+    const ease = k * k * (3 - 2 * k); // smoothstep: real events build and fade, they don't switch
+    // Resolved events wander a little while active; ongoing ones stay pinned to their target.
+    const wobble = e.endH > 0 ? 1 + 0.14 * valueNoise(`${key}:ev`, t, HOUR * 1.5) : 1;
+    off += delta * ease * wobble;
   }
   return off;
 }
