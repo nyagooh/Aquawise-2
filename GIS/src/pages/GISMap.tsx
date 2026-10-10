@@ -151,7 +151,7 @@ export default function GISMap() {
   const [network, setNetwork] = useState<NetworkData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [layers, setLayers] = useState<LayerVis>(DEFAULT_LAYERS);
-  const [showLeaks, setShowLeaks] = useState(true);
+  const [showLeaks, setShowLeaks] = useState(false); // leaks are not shown on the map
   const [focus, setFocus] = useState<Focus>(null);
   const [basemap, setBasemap] = useState<Basemap>('streets');
   const [sim, setSim] = useState<SimState>('idle');
@@ -293,7 +293,7 @@ export default function GISMap() {
       });
       // Only sensors and reservoirs open the detail panel; pipes, valves,
       // meters and leaks show their hover label only.
-      if (props.asset === 'sensor' || props.asset === 'tank' || props.asset === 'meter_valve') {
+      if (props.asset === 'sensor' || props.asset === 'tank' || props.asset === 'meter_valve' || props.asset === 'pressure_valve') {
         marker.on('click', (e) => {
           L.DomEvent.stopPropagation(e);
           marker.closeTooltip();
@@ -843,11 +843,18 @@ function assetPopupHtml(feat: AssetFeature): string {
 /** Rich detail card for sensors and reservoirs: live reading, safe range, 24 h trend, recent alerts. */
 function detailPopupHtml(feat: AssetFeature, ops: Ops | null): string {
   const p = feat.properties;
-  if (!ops || (p.asset !== 'sensor' && p.asset !== 'tank' && p.asset !== 'meter_valve')) return assetPopupHtml(feat);
+  if (!ops) return assetPopupHtml(feat);
   const day = rangeSpec('24H');
   let title = p.name; let kind = ''; let metric: Metric = 'pressure'; let entity = p.id; let base = 0;
   let rows: Array<[string, string]> = []; let href = '/monitoring'; let zone = '';
-  if (p.asset === 'meter_valve') {
+  if (p.asset === 'pressure_valve') {
+    const v = ops.prvs.find(x => x.id === p.id);
+    if (!v) return assetPopupHtml(feat);
+    // Pressure downstream of the valve, trended around its live reading.
+    metric = 'pressure'; base = v.live_bar; zone = v.zone; kind = 'Pressure-reducing valve'; title = `PRV ${v.id.replace('PV-', '')}`; href = '/assets';
+    const drift = v.live_bar - v.set_bar;
+    rows = [['Outlet pressure', `${v.live_bar.toFixed(2)} bar`], ['Set point', `${v.set_bar.toFixed(1)} bar`], ['Drift', `${drift >= 0 ? '+' : '−'}${Math.abs(drift).toFixed(2)} bar`], ['Allowed band', `${v.min_bar}–${v.max_bar} bar`]];
+  } else if (p.asset === 'meter_valve') {
     const m = ops.meters.find(x => x.id === p.id);
     if (!m) return assetPopupHtml(feat);
     // Bulk meter: consumption expressed as an average flow so it can be trended.
@@ -874,7 +881,7 @@ function detailPopupHtml(feat: AssetFeature, ops: Ops | null): string {
   }
   const pts = series(metric, entity, base, day);
   const now = pts[pts.length - 1].v;
-  const tone: Tone = p.asset === 'meter_valve' ? (p.status === 'ok' ? 'ok' : p.status === 'warn' ? 'warn' : 'crit') : toneFor(metric, now);
+  const tone: Tone = p.asset === 'meter_valve' || p.asset === 'pressure_valve' ? (p.status === 'ok' ? 'ok' : p.status === 'warn' ? 'warn' : 'crit') : toneFor(metric, now);
   const toneLabel = { ok: 'Normal', warn: 'Warning', crit: 'Critical', off: 'Offline' }[tone];
   const W = 296, H = 54;
   const lo = Math.min(...pts.map(x => x.v)), hi = Math.max(...pts.map(x => x.v));
@@ -888,11 +895,11 @@ function detailPopupHtml(feat: AssetFeature, ops: Ops | null): string {
         <span class="dt-pill ${tone}">${toneLabel}</span>
       </div>
       <div class="dt-grid">${rows.map(([k, v]) => `<div><span>${escapeHtml(k)}</span><b>${escapeHtml(v)}</b></div>`).join('')}</div>
-      <div class="dt-trend"><span>${p.asset === 'meter_valve' ? 'Consumption (flow)' : escapeHtml(METRICS[metric].label)} · last 24 h</span>
+      <div class="dt-trend"><span>${p.asset === 'meter_valve' ? 'Consumption (flow)' : p.asset === 'pressure_valve' ? 'Outlet pressure' : escapeHtml(METRICS[metric].label)} · last 24 h</span>
         <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="none"><path d="${path}L${W},${H}L0,${H}Z" fill="${col}" opacity="0.08"/><path d="${path}" fill="none" stroke="${col}" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>
       </div>
       ${alerts.length ? `<div class="dt-alerts">${alerts.slice(0, 2).map(a => `<a href="#" data-nav="/alerts?id=${a.id}"><i class="${a.severity}"></i>${escapeHtml(a.title.split(' — ')[0])}<em>${escapeHtml(ago(a.startedAt))}</em></a>`).join('')}</div>` : ''}
-      <a href="#" class="dt-link" data-nav="${href}">${p.asset === 'meter_valve' ? 'Open in Assets →' : 'Open in Monitoring →'}</a>
+      <a href="#" class="dt-link" data-nav="${href}">${p.asset === 'meter_valve' || p.asset === 'pressure_valve' ? 'Open in Assets →' : 'Open in Monitoring →'}</a>
     </div>`;
 }
 
@@ -995,18 +1002,6 @@ function LayerControl({
                 onClick={() => onToggle(k)}
               />
             ))}
-          </div>
-          <div className="gis-lc-section">
-            <div className="gis-lc-section-head">
-              <span>Incidents</span>
-            </div>
-            <LayerToggle
-              label="Leaks"
-              count={leakCount}
-              on={showLeaks}
-              swatch={<span className="eg-swatch" dangerouslySetInnerHTML={{ __html: markerIcon('leak', LEAK_SEVERITY_COLOR.critical, 16) }} />}
-              onClick={onToggleLeaks}
-            />
           </div>
           <div className="gis-lc-section gis-lc-status">
             <div className="gis-lc-section-head"><span>Status</span></div>
