@@ -10,7 +10,8 @@ import {
 } from '../data/network';
 import { ZONE_SEED, ZONE_CODES, buildNrwMonthly, type NrwMonth } from './nrw';
 import {
-  current, sampleAt, toneFor, worstTone, stableRand, NOW, HOURS, DAYS, QUALITY_POINTS, QUALITY_METRICS,
+  current, sampleAt, toneFor, worstTone, stableRand, breachWindows, seriesWindow, fmt, METRICS,
+  NOW, HOURS, DAYS, QUALITY_POINTS, QUALITY_METRICS,
   type Metric, type Tone, type QualityBase
 } from './series';
 
@@ -76,8 +77,7 @@ export interface MeterOps extends MeterValveProps { zone: string; pos: LatLng }
 
 /* ── incidents ── */
 export type IncidentType =
-  | 'Water quality breach' | 'Pressure anomaly' | 'Possible leak'
-  | 'Low tank level' | 'Sensor offline' | 'Abnormal reading';
+  | 'Water quality breach' | 'Pressure anomaly' | 'Low tank level';
 export type Severity = 'critical' | 'warning' | 'info';
 export type IncidentStatus = 'active' | 'acknowledged' | 'resolved';
 
@@ -121,7 +121,6 @@ export const zoneName = (code: string) => (code === 'WTW' ? 'Treatment works' : 
 const toLatLng = (c: [number, number]): LatLng => [c[1], c[0]];
 const mid = (p: PipeFeature): LatLng => toLatLng(p.geometry.coordinates[Math.floor(p.geometry.coordinates.length / 2)] as [number, number]);
 
-const OFFLINE = new Set(['SN-22', 'SN-23']);
 
 function build(network: NetworkData): Ops {
   const { pipes, assets } = network;
@@ -147,7 +146,7 @@ function build(network: NetworkData): Ops {
       // base = the static snapshot value the series is built around (before live overwrite)
       const base = baseFor('pressure', p.id, p.pressure_bar);
       const flowBase = baseFor('flow', p.id, p.flow_lps);
-      const online = !OFFLINE.has(p.id);
+      const online = true;
       const value = current('pressure', p.id, base);
       return {
         id: p.id, name: `${zoneName(zone)} · ${p.id}`, zone, pos, pipeId: p.pipe_id,
@@ -236,15 +235,15 @@ function build(network: NetworkData): Ops {
   const sensors: SensorDevice[] = [];
   pressure.forEach(p => {
     const r = stableRand(`bat:${p.id}`);
-    const battery = p.id === 'SN-24' ? 14 : Math.round(38 + r * 60);
+    const battery = Math.round(38 + r * 60);
     const signal = Math.round(-62 - stableRand(`sig:${p.id}`) * 38);
     const health: Tone = !p.online ? 'off' : battery < 20 ? 'warn' : 'ok';
     sensors.push({
       id: p.id, name: `Flow + pressure logger ${p.id.replace('SN-', '')}`, kind: 'Pressure & flow', measures: 'Pressure, flow',
       zone: p.zone, pos: p.pos, health,
-      healthNote: !p.online ? (p.id === 'SN-22' ? 'No data for 3 h 10 min' : 'No data for 2 days') : battery < 20 ? 'Low battery' : 'Reporting normally',
+      healthNote: !p.online ? 'Not reporting' : battery < 20 ? 'Low battery' : 'Reporting normally',
       battery, signal,
-      lastCommMin: p.id === 'SN-22' ? 190 : p.id === 'SN-23' ? 2 * 24 * 60 + 35 : Math.max(1, Math.round(stableRand(`lc:${p.id}`) * 4)),
+      lastCommMin: Math.max(1, Math.round(stableRand(`lc:${p.id}`) * 4)),
       reading: p.online ? `${p.value.toFixed(2)} bar · ${p.flow.toFixed(1)} L/s` : '—',
       entityId: p.id, metric: 'pressure', base: p.base,
       installed: 2019 + Math.floor(stableRand(`yr:${p.id}`) * 6)
@@ -252,13 +251,12 @@ function build(network: NetworkData): Ops {
   });
   tanks.forEach((t, i) => {
     const id = `LV-${String(i + 1).padStart(2, '0')}`;
-    const warn = id === 'LV-04';
     sensors.push({
       id, name: `Ultrasonic level sensor · ${t.name}`, kind: 'Tank level', measures: 'Level',
-      zone: t.zone, pos: t.pos, health: warn ? 'warn' : 'ok',
-      healthNote: warn ? 'Weak signal (−104 dBm)' : 'Reporting normally',
-      battery: Math.round(55 + stableRand(`bat:${id}`) * 44), signal: warn ? -104 : Math.round(-60 - stableRand(`sig:${id}`) * 25),
-      lastCommMin: warn ? 18 : 1 + (i % 3), reading: `${Math.round(t.level)} %`,
+      zone: t.zone, pos: t.pos, health: 'ok',
+      healthNote: 'Reporting normally',
+      battery: Math.round(55 + stableRand(`bat:${id}`) * 44), signal: Math.round(-60 - stableRand(`sig:${id}`) * 25),
+      lastCommMin: 1 + (i % 3), reading: `${Math.round(t.level)} %`,
       entityId: t.id, metric: 'level', base: t.base, installed: 2021 + (i % 3)
     });
   });
@@ -273,82 +271,41 @@ function build(network: NetworkData): Ops {
     });
   });
 
-  /* incidents */
-  const P = (id: string) => pressure.find(p => p.id === id)!;
-  const Q = (id: string) => quality.find(q => q.id === id)!;
-  const T = (id: string) => tanks.find(t => t.id === id)!;
-  const ago = (h: number) => NOW - h * HOURS;
-  const sn14 = P('SN-14'); const sn15 = P('SN-15');
-  const wqShauri = Q('WQ-SHAURI'); const wqKwn = Q('WQ-KWANJORA');
-  const t2 = T('TANK-02'); const t4 = T('TANK-04'); const t3 = T('TANK-03');
-  const inc = (i: Omit<Incident, 'base'> & { base?: number }): Incident => ({ base: 0, ...i });
-  const incidents: Incident[] = [
-    inc({ id: 'INC-2318', type: 'Pressure anomaly', severity: 'critical', status: 'active', title: 'Pressure anomaly detected — Ziwani 3',
-      zone: 'ZIWANI3', location: `Logger SN-14 · pipe ${sn14.pipeId}`, metric: 'pressure', entityId: 'SN-14', base: sn14.base,
-      trigger: `${sn14.value.toFixed(2)} bar, below the 1.5 bar minimum`, startedAt: ago(3.1), focus: 'asset:SN-14',
-      summary: 'Pressure fell by more than 2 bar in under an hour while flow at the same logger rose. The pattern is consistent with a main break downstream of SN-14.' }),
-    inc({ id: 'INC-2317', type: 'Possible leak', severity: 'critical', status: 'active', title: 'Possible leak — Ziwani 3, Kahembe',
-      zone: 'ZIWANI3', location: `Pipe ${sn14.pipeId} near SN-14`, metric: 'flow', entityId: 'SN-14', base: sn14.flowBase,
-      trigger: `Flow ${sn14.flow.toFixed(1)} L/s, about ${(sn14.flow - sn14.flowBase).toFixed(0)} L/s above the expected profile`, startedAt: ago(3.0), focus: `pipe:${sn14.pipeId}`,
-      summary: 'Sustained excess flow together with the pressure drop. A customer also reported water on the road surface (ticket LK-2041).' }),
-    inc({ id: 'INC-2316', type: 'Water quality breach', severity: 'warning', status: 'active', title: 'Turbidity above threshold — Shauri',
-      zone: 'SHAURI', location: wqShauri.name, metric: 'turbidity', entityId: 'WQ-SHAURI', base: wqShauri.base.turbidity,
-      trigger: `${wqShauri.values.turbidity.toFixed(2)} NTU, limit 1.0 NTU`, startedAt: ago(5.2), focus: 'asset:TB-SHAURI',
-      summary: 'Turbidity has been rising for several hours at the Ndothua kiosk. Check the Mairo Inya works and flush if it continues.' }),
-    inc({ id: 'INC-2315', type: 'Low tank level', severity: 'warning', status: 'active', title: `${t2.name} approaching low level`,
-      zone: t2.zone, location: t2.name, metric: 'level', entityId: 'TANK-02', base: t2.base,
-      trigger: `${Math.round(t2.level)} % of ${t2.capacity.toLocaleString()} m³, warning level 35 %, low level 20 %`, startedAt: ago(1.6), focus: 'asset:TANK-02',
-      summary: `Outflow has exceeded inflow for most of the day. At the current rate the reservoir reaches its 20 % low level in about ${t2.hoursToLow ? Math.max(1, Math.round(t2.hoursToLow)) : 'a few'} hours.` }),
-    inc({ id: 'INC-2314', type: 'Pressure anomaly', severity: 'warning', status: 'active', title: 'Low pressure — Ziwani 3',
-      zone: 'ZIWANI3', location: `Logger SN-15 · pipe ${sn15.pipeId}`, metric: 'pressure', entityId: 'SN-15', base: sn15.base,
-      trigger: `${sn15.value.toFixed(2)} bar, below the 1.5 bar minimum`, startedAt: ago(2.6), focus: 'asset:SN-15',
-      summary: 'Neighbouring logger is also low, which supports a single event in the Kahembe area rather than a sensor fault.' }),
-    inc({ id: 'INC-2312', type: 'Sensor offline', severity: 'info', status: 'active', title: 'Logger SN-22 not reporting — Ziwani 1',
-      zone: 'ZIWANI1', location: 'Logger SN-22', metric: 'pressure', entityId: 'SN-22', base: P('SN-22').base,
-      trigger: 'No data for 3 h 10 min', startedAt: ago(3.17), focus: 'asset:SN-22',
-      summary: 'Last message received with 41 % battery and good signal. Likely a modem or power issue on site.' }),
-    inc({ id: 'INC-2313', type: 'Water quality breach', severity: 'warning', status: 'acknowledged', title: 'Chlorine residual below range — Kwa Njora',
-      zone: 'KWANJORA', location: wqKwn.name, metric: 'chlorine', entityId: 'WQ-KWANJORA', base: wqKwn.base.chlorine,
-      trigger: `${wqKwn.values.chlorine.toFixed(2)} mg/L, minimum 0.2 mg/L`, startedAt: ago(20), focus: 'asset:PH-KWANJORA',
-      summary: 'Residual has been decaying towards Ndogino at the end of the zone. Booster dosing check scheduled.' }),
-    inc({ id: 'INC-2311', type: 'Abnormal reading', severity: 'warning', status: 'acknowledged', title: `Erratic level signal — ${t4.name}`,
-      zone: t4.zone, location: 'Level sensor LV-04', metric: 'level', entityId: 'TANK-04', base: t4.base,
-      trigger: 'Signal −104 dBm, 3 missed readings in the last hour', startedAt: ago(9), focus: 'asset:TANK-04',
-      summary: 'Readings are plausible but intermittent. Antenna inspection requested.' }),
-    inc({ id: 'INC-2309', type: 'Pressure anomaly', severity: 'warning', status: 'resolved', title: 'Pressure anomaly — Ziwani 2',
-      zone: 'ZIWANI2', location: 'Logger SN-20', metric: 'pressure', entityId: 'SN-20', base: P('SN-20').base,
-      trigger: '1.18 bar at lowest', startedAt: ago(30), resolvedAt: ago(26), focus: 'asset:SN-20', summary: 'Valve operation during planned works. Pressure restored.' }),
-    inc({ id: 'INC-2304', type: 'Water quality breach', severity: 'warning', status: 'resolved', title: 'pH above range — Ziwani 1',
-      zone: 'ZIWANI1', location: Q('WQ-ZIWANI1').name, metric: 'ph', entityId: 'WQ-ZIWANI1', base: Q('WQ-ZIWANI1').base.ph,
-      trigger: 'pH 8.6 at peak', startedAt: ago(4 * 24), resolvedAt: ago(4 * 24 - 6), focus: 'asset:PH-ZIWANI1', summary: 'Dosing correction at the works.' }),
-    inc({ id: 'INC-2301', type: 'Pressure anomaly', severity: 'warning', status: 'resolved', title: 'Pressure anomaly — Shauri',
-      zone: 'SHAURI', location: 'Logger SN-17', metric: 'pressure', entityId: 'SN-17', base: P('SN-17').base,
-      trigger: '1.26 bar at lowest', startedAt: ago(6 * 24), resolvedAt: ago(6 * 24 - 4), focus: 'asset:SN-17', summary: 'Burst on a 110 mm distribution main, repaired.' }),
-    inc({ id: 'INC-2297', type: 'Water quality breach', severity: 'critical', status: 'resolved', title: 'Turbidity critical — Ziwani 2',
-      zone: 'ZIWANI2', location: Q('WQ-ZIWANI2').name, metric: 'turbidity', entityId: 'WQ-ZIWANI2', base: Q('WQ-ZIWANI2').base.turbidity,
-      trigger: '6.2 NTU at peak, limit 5.0 NTU', startedAt: ago(9 * 24), resolvedAt: ago(9 * 24 - 14), focus: 'asset:TB-ZIWANI2', summary: 'Mains repair disturbed sediment. Zone flushed.' }),
-    inc({ id: 'INC-2294', type: 'Pressure anomaly', severity: 'critical', status: 'resolved', title: 'Pressure anomaly — Ziwani 3',
-      zone: 'ZIWANI3', location: 'Logger SN-14', metric: 'pressure', entityId: 'SN-14', base: sn14.base,
-      trigger: '1.62 bar drop', startedAt: ago(9 * 24), resolvedAt: ago(9 * 24 - 5), focus: 'asset:SN-14', summary: 'Joint failure, repaired by Crew A.' }),
-    inc({ id: 'INC-2290', type: 'Possible leak', severity: 'warning', status: 'resolved', title: 'Possible leak — Shauri',
-      zone: 'SHAURI', location: 'Logger SN-19', metric: 'pressure', entityId: 'SN-19', base: P('SN-19').base,
-      trigger: '1.4 bar drop with night-flow increase', startedAt: ago(13 * 24), resolvedAt: ago(13 * 24 - 3), focus: 'asset:SN-19', summary: 'Service-line leak found and fixed.' }),
-    inc({ id: 'INC-2286', type: 'Water quality breach', severity: 'warning', status: 'resolved', title: 'Chlorine residual below range — Ziwani 2',
-      zone: 'ZIWANI2', location: Q('WQ-ZIWANI2').name, metric: 'chlorine', entityId: 'WQ-ZIWANI2', base: Q('WQ-ZIWANI2').base.chlorine,
-      trigger: '0.17 mg/L at lowest', startedAt: ago(15 * 24), resolvedAt: ago(15 * 24 - 20), focus: 'asset:PH-ZIWANI2', summary: 'Booster chlorinator restarted.' }),
-    inc({ id: 'INC-2280', type: 'Pressure anomaly', severity: 'warning', status: 'resolved', title: 'Pressure anomaly — Shauri',
-      zone: 'SHAURI', location: 'Logger SN-17', metric: 'pressure', entityId: 'SN-17', base: P('SN-17').base,
-      trigger: '1.21 bar at lowest', startedAt: ago(17 * 24), resolvedAt: ago(17 * 24 - 6), focus: 'asset:SN-17', summary: 'Recurring at the same logger — candidate for step-testing.' }),
-    inc({ id: 'INC-2275', type: 'Low tank level', severity: 'warning', status: 'resolved', title: `${t3.name} low level`,
-      zone: t3.zone, location: t3.name, metric: 'level', entityId: 'TANK-03', base: t3.base,
-      trigger: '27 % at lowest', startedAt: ago(20 * 24), resolvedAt: ago(20 * 24 - 10), focus: 'asset:TANK-03', summary: 'Supply from Mairo Inya WTP interrupted, restored.' }),
-    inc({ id: 'INC-2271', type: 'Water quality breach', severity: 'warning', status: 'resolved', title: 'Turbidity above threshold — Shauri',
-      zone: 'SHAURI', location: wqShauri.name, metric: 'turbidity', entityId: 'WQ-SHAURI', base: wqShauri.base.turbidity,
-      trigger: '2.4 NTU at peak', startedAt: ago(22 * 24), resolvedAt: ago(22 * 24 - 10), focus: 'asset:TB-SHAURI', summary: 'Heavy rain at the Mairo Inya intake. Cleared after filter backwash.' }),
-    inc({ id: 'INC-2266', type: 'Pressure anomaly', severity: 'warning', status: 'resolved', title: 'Pressure anomaly — Ziwani 3',
-      zone: 'ZIWANI3', location: 'Logger SN-16', metric: 'pressure', entityId: 'SN-16', base: P('SN-16').base,
-      trigger: '1.6 bar at lowest', startedAt: ago(26 * 24), resolvedAt: ago(26 * 24 - 8), focus: 'asset:SN-16', summary: 'PRV fault, recalibrated.' })
+  /* alerts: every period in the last 30 days where a monitored reading left
+     its normal range. Nothing is scripted — they come from the readings. */
+  const watched: Array<{ metric: Metric; id: string; base: number; zone: string; location: string; focus: string }> = [
+    ...pressure.map(p => ({ metric: 'pressure' as Metric, id: p.id, base: p.base, zone: p.zone, location: `Logger ${p.id} · pipe ${p.pipeId}`, focus: `asset:${p.id}` })),
+    ...tanks.map(t => ({ metric: 'level' as Metric, id: t.id, base: t.base, zone: t.zone, location: t.name, focus: `asset:${t.id}` })),
+    ...quality.flatMap(q => QUALITY_METRICS.map(m => ({
+      metric: m, id: q.id, base: q.base[m as keyof QualityBase], zone: q.zone, location: q.name,
+      focus: q.zone === 'WTW' ? '' : `asset:${m === 'turbidity' ? 'TB' : 'PH'}-${q.zone}`
+    })))
   ];
+  const TYPE: Partial<Record<Metric, IncidentType>> = { pressure: 'Pressure anomaly', level: 'Low tank level' };
+  const detected = watched.flatMap(w => breachWindows(w.metric, w.id, w.base).map(win => {
+    const def = METRICS[w.metric];
+    const pts = seriesWindow(w.metric, w.id, w.base, win.start, win.end, 40);
+    const worst = pts.reduce((a, b) => (Math.abs(b.v - w.base) > Math.abs(a.v - w.base) ? b : a), pts[0]);
+    const low = worst.v < def.normal[0];
+    const limit = low ? def.normal[0] : def.normal[1];
+    const tone = pts.some(x => toneFor(w.metric, x.v) === 'crit') ? 'crit' : 'warn';
+    const hours = Math.max(1, Math.round((win.end - win.start) / HOURS));
+    return {
+      type: TYPE[w.metric] ?? 'Water quality breach',
+      severity: (tone === 'crit' ? 'critical' : 'warning') as Severity,
+      title: `${def.label} ${low ? 'below' : 'above'} range — ${zoneName(w.zone)}`,
+      zone: w.zone, location: w.location, metric: w.metric, entityId: w.id, base: w.base,
+      trigger: `${fmt(w.metric, worst.v)}, ${low ? 'below' : 'above'} the ${fmt(w.metric, limit)} limit`,
+      startedAt: win.start, resolvedAt: win.ongoing ? undefined : win.end,
+      status: (win.ongoing ? 'active' : 'resolved') as IncidentStatus,
+      focus: w.focus,
+      summary: win.ongoing
+        ? `${def.label} has been outside its normal range (${def.rangeText}) for about ${hours} h and has not yet returned.`
+        : `${def.label} was outside its normal range (${def.rangeText}) for about ${hours} h before returning to normal.`
+    };
+  }));
+  detected.sort((a, b) => b.startedAt - a.startedAt);
+  const incidents: Incident[] = detected.map((d, i) => ({ id: `ALT-${String(1000 + detected.length - i)}`, ...d }));
 
   const nrwMonthly = buildNrwMonthly();
   const last = nrwMonthly[nrwMonthly.length - 1];

@@ -118,8 +118,6 @@ button.dx-item:hover { background: hsl(var(--row-hover)) !important; }
    Map: normal street basemap, lightly muted so deep network colours read.
    ============================================================ */
 .aw-tiles-dark { filter: invert(1) hue-rotate(180deg) grayscale(0.85) brightness(0.62) contrast(1.15); }
-.dx-map .leaflet-tile-pane { filter: saturate(0.55) contrast(0.97); }
-[data-theme="dark"] .dx-map .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) grayscale(0.85) brightness(0.62) contrast(1.15); }
 
 /* engineering symbols */
 .eg-sym { position: relative; display: inline-flex; line-height: 0; filter: drop-shadow(0 0 1px rgb(0 0 0 / 0.6)); }

@@ -259,7 +259,7 @@ def main() -> None:
             "asset": "sensor", "id": f"SN-{i+1:02d}",
             "name": f"Flow + pressure · {p['properties']['remarks']}",
             "type": "flow+pressure", "flow_lps": flow,
-            "pressure_bar": round(2.6 + (i * 0.37) % 2.2, 2),
+            "pressure_bar": round(2.6 + (i * 0.37) % 1.2, 2),
             "last_seen": f"{(i * 7) % 59 + 1}s ago",
             "status": "ok",
             "pipe_id": p["properties"]["id"],

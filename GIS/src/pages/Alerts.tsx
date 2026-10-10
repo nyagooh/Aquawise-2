@@ -12,7 +12,7 @@ import { useFilters, inZone } from '../demo/filters';
 import { useIncidentState } from '../demo/incidentState';
 import { Drawer, KV, Section, Loading, SevIcon, Segmented } from '../demo/ui';
 import { LineChart } from '../demo/charts';
-import { seriesWindow, eventWindows, METRICS, NOW, HOURS, type Tone } from '../demo/series';
+import { seriesWindow, breachWindows, METRICS, NOW, HOURS, type Tone } from '../demo/series';
 import { useState } from 'react';
 
 export default function Alerts() {
@@ -80,7 +80,7 @@ function AlertDrawer({ incident: i, onClose, onView }: { incident: Incident | nu
     const span = Math.max(NOW - i.startedAt, 2 * HOURS);
     const from = i.startedAt - Math.max(span * 1.5, 6 * HOURS);
     const pts = seriesWindow(i.metric, i.entityId, i.base, from, NOW, 160);
-    const windows = eventWindows(i.metric, i.entityId).filter(w => w.end >= from)
+    const windows = breachWindows(i.metric, i.entityId, i.base, (NOW - from) / HOURS + 1).filter(w => w.end >= from)
       .map(w => ({ ...w, tone: (i.severity === 'critical' ? 'crit' : 'warn') as Tone }));
     return { pts, windows };
   }, [i]);

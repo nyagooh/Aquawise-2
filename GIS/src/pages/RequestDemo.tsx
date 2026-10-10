@@ -121,7 +121,7 @@ export default function RequestDemo() {
             </label>
             <label>
               <span>What would you like to see? <em>*</em></span>
-              <textarea required rows={4} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="We manage ~800 km of network and want to evaluate leak detection and NRW tracking." />
+              <textarea required rows={4} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="We manage ~800 km of network and want to evaluate pressure, tank-level and water-quality monitoring." />
             </label>
 
             {error && <div className="demo-modal-error" role="alert">{error}</div>}

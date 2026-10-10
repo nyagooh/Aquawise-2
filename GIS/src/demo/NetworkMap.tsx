@@ -1,12 +1,12 @@
 /**
- * Compact operational map: the real Erline Water pipe network on a quiet basemap,
- * with status-coloured monitoring points. Used on Overview, Monitoring and NRW.
+ * Compact operational map: the real Erline Water pipe network on a street
+ * basemap, with status-coloured monitoring points. Used on Overview and Monitoring.
  * The full GIS workspace lives on the Network page.
  */
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import { useTheme } from '../theme';
-import { markerIcon } from '../data/network';
+import { markerIcon, PIPE_STYLE } from '../data/network';
 import type { Ops, LatLng } from './model';
 import type { Tone } from './series';
 
@@ -20,8 +20,9 @@ export interface MapPoint {
 }
 
 const TONE_HEX: Record<Tone, string> = { ok: '#059669', warn: '#D97706', crit: '#DC2626', off: '#64748B' }; // map status palette
-// Same basemap provider as the Network page; desaturated (and inverted in dark mode) via CSS.
-const TILE = 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&apistyle=s.t%3A2%7Cp.v%3Aoff%2Cs.t%3A4%7Cp.v%3Aoff';
+// Same street basemap as the Network page, shown as-is in both themes so the
+// map is always readable behind the network.
+const TILE = 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
 const ATTR = 'Map data &copy; Google';
 
 /** Canvas renderer that ignores redraws scheduled after the map was torn down (route change / StrictMode remount). */
@@ -98,7 +99,7 @@ export function NetworkMap({ ops, points, height = 360, zone = 'ALL', zoneColor,
       const z = p.properties.zone ?? '';
       const inZone = zone === 'ALL' || z === zone;
       const custom = zoneColor?.(z);
-      const color = custom ?? (cls === 'main' ? '#C2410C' : cls === 'backfeed' ? '#334155' : '#0369A1');
+      const color = custom ?? PIPE_STYLE[cls].color;
       L.polyline(p.geometry.coordinates.map(c => [c[1], c[0]] as LatLng), {
         renderer: canvas, interactive: false,
         color, weight: cls === 'main' ? 4.5 : cls === 'backfeed' ? 2.2 : 2.2, dashArray: cls === 'backfeed' && !custom ? '5 4' : undefined,

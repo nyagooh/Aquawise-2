@@ -35,7 +35,6 @@ export default function App() {
       <Route path="/dashboard" element={<Moved to="/overview" />} />
       <Route path="/gis" element={<Moved to="/network" />} />
       <Route path="/sensors" element={<Moved to="/monitoring/sensors" />} />
-      <Route path="/leaks" element={<Moved to="/alerts" />} />
       <Route path="/nrw" element={<Moved to="/overview" />} />
       <Route path="/attribute" element={<Moved to="/assets/attributes" />} />
       <Route path="*" element={<Landing />} />

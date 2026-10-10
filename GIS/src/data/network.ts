@@ -359,8 +359,8 @@ export const PIPE_STYLE: Record<PipeClass, {
   // Functional palette: hue + width encode pipe class, so classes stay
   // distinguishable without relying on colour alone.
   main: {
-    color: '#C2410C',
-    hoverColor: '#EA580C',
+    color: '#EA580C',          // bright orange — reads on street, satellite and dark maps
+    hoverColor: '#F97316',
     weight: 6,
     hoverWeight: 6,
     opacity: 1,
@@ -369,8 +369,8 @@ export const PIPE_STYLE: Record<PipeClass, {
     description: 'Primary supply trunk · highest priority'
   },
   distribution: {
-    color: '#0369A1',
-    hoverColor: '#0284C7',
+    color: '#9333EA',          // vivid purple — distinct from orange mains on every basemap
+    hoverColor: '#A855F7',
     weight: 3.5,
     hoverWeight: 4,
     opacity: 1,
@@ -422,7 +422,7 @@ export const ASSET_STYLE: Record<AssetKind, {
   description: string;
 }> = {
   // Each asset kind is a distinct category — give it its own hue so icons
-  // read apart from the blue (#00B4FF) pipe network and from each other.
+  // read apart from the orange / purple pipe network and from each other.
   // Status semantics (green/amber/red) stay on the separate status dot.
   facility: {
     color: '#14B8A6',          // bold teal — intake / treatment works
@@ -432,7 +432,7 @@ export const ASSET_STYLE: Record<AssetKind, {
     description: 'Dam intakes, water & wastewater treatment works'
   },
   tank: {
-    color: '#6D28D9',
+    color: '#0284C7',          // sky blue — water storage, clear of the purple pipes
     ring: '#DDD6FE',
     label: 'Reservoir / tank',
     shortLabel: 'Reservoirs',
@@ -466,7 +466,7 @@ export const ASSET_ORDER: AssetKind[] = ['facility', 'tank', 'pressure_valve', '
 export const STATUS_COLOR: Record<AssetStatus, string> = {
   ok: '#10B981',     // healthy / normal
   warn: '#F59E0B',   // warning / anomaly
-  alert: '#EF4444'   // critical / leak
+  alert: '#EF4444'   // critical
 };
 export const OFFLINE_COLOR = '#94A3B8';
 export const QUALITY_SENSOR_COLOR = '#0E7490';
@@ -475,10 +475,10 @@ export const DMA_BOUNDARY_COLOR = '#8B5CF6';
 /**
  * Flat engineering map symbols shared by markers and the legend:
  * valve = bowtie, meter = circle, reservoir = square, pressure sensor = dot,
- * water-quality sensor = diamond, leak = triangle. Thin dark outline so they
+ * water-quality sensor = diamond. Thin dark outline so they
  * read on dark and satellite basemaps alike.
  */
-export type SymbolKind = 'valve' | 'meter' | 'tank' | 'pressure' | 'quality' | 'leak';
+export type SymbolKind = 'valve' | 'meter' | 'tank' | 'pressure' | 'quality';
 export function engSymbol(kind: SymbolKind, color: string, size = 14, outline = '#0B1220'): string {
   const o = `stroke="${outline}" stroke-width="1.25" stroke-linejoin="round"`;
   const v = `viewBox="0 0 16 16" width="${size}" height="${size}"`;
@@ -488,24 +488,22 @@ export function engSymbol(kind: SymbolKind, color: string, size = 14, outline = 
     case 'tank':     return `<svg ${v}><rect x="2" y="2" width="12" height="12" rx="1.5" fill="${color}" ${o}/></svg>`;
     case 'pressure': return `<svg ${v}><circle cx="8" cy="8" r="4.5" fill="${color}" ${o}/></svg>`;
     case 'quality':  return `<svg ${v}><path d="M8 2.5 13.5 8 8 13.5 2.5 8z" fill="${color}" ${o}/></svg>`;
-    case 'leak':     return `<svg ${v}><path d="M8 1.8 15 14H1z" fill="${color}" ${o}/><path d="M8 6.2v3.6M8 11.6v.1" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>`;
   }
 }
 
 /**
  * Map markers that show what the asset is: a coloured rounded tile with a
  * white line icon (reservoir, pressure sensor, water-quality probe, valve,
- * meter, leak). Status shows as a ring around the tile.
+ * meter). Status shows as a ring around the tile.
  */
-export type MarkerKind = 'plant' | 'tank' | 'pressure' | 'quality' | 'valve' | 'meter' | 'leak';
+export type MarkerKind = 'plant' | 'tank' | 'pressure' | 'quality' | 'valve' | 'meter';
 const MARKER_PATHS: Record<MarkerKind, string> = {
   plant: '<path d="M3.5 20.5V9.5l5 3v-3l5 3V4.5h7v16z"/><path d="M16.5 12s-2 2.2-2 3.6a2 2 0 0 0 4 0c0-1.4-2-3.6-2-3.6z" fill="#fff"/>',
   tank: '<ellipse cx="12" cy="6" rx="7" ry="2.5"/><path d="M5 6v12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6"/><path d="M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/>',
   pressure: '<path d="M4.5 16.5a8 8 0 1 1 15 0"/><path d="m12 13 4-4.5"/><circle cx="12" cy="13" r="1.2" fill="#fff"/>',
   quality: '<path d="M12 3.5s5.5 6 5.5 10a5.5 5.5 0 0 1-11 0c0-4 5.5-10 5.5-10z"/><path d="M9.8 14.5a2.3 2.3 0 0 0 2.2 2.2"/>',
   valve: '<path d="M3.5 10v8l8.5-4zM20.5 10v8L12 14z"/><path d="M12 14V7.5M8.5 5.5h7"/>',
-  meter: '<rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="M7 10.5h2.5M10.8 10.5h2.4M14.5 10.5H17M7 14h10"/>',
-  leak: '<path d="M12 3.5s5.5 6 5.5 10a5.5 5.5 0 0 1-11 0c0-4 5.5-10 5.5-10z"/><path d="M12 9.5v3.3M12 15.3v.1"/>'
+  meter: '<rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="M7 10.5h2.5M10.8 10.5h2.4M14.5 10.5H17M7 14h10"/>'
 };
 export function markerIcon(kind: MarkerKind, color: string, size = 22): string {
   // Line icon in the asset colour over a white halo: reads on any basemap,
@@ -517,7 +515,7 @@ export function markerIcon(kind: MarkerKind, color: string, size = 22): string {
 }
 
 /** @deprecated kept for older imports; maps to the engineering symbols. */
-export function assetGlyph(kind: 'tank' | 'valve' | 'meter' | 'leak', color: string, size = 18): string {
+export function assetGlyph(kind: 'tank' | 'valve' | 'meter', color: string, size = 18): string {
   return engSymbol(kind, color, size);
 }
 

@@ -4,8 +4,8 @@
  * Every reading shown anywhere in the app — map popups, KPIs, tables, charts —
  * comes from `sampleAt()` / `series()`, so the "current" value on a card is
  * always the last point of the chart behind it. Values are smooth value-noise
- * plus diurnal demand patterns plus scripted operational events (a turbidity
- * rise in Shauri, a pressure drop in Ziwani 3, a reservoir drawing down…).
+ * plus diurnal demand patterns — there are no scripted events; alerts come
+ * only from readings that cross their thresholds.
  *
  * No imports from the network loader: network.ts imports this file.
  */
@@ -118,85 +118,32 @@ export function fmt(metric: Metric, v: number, withUnit = true): string {
   return withUnit && d.unit ? `${n} ${d.unit}` : n;
 }
 
-/* ── scripted operational events ── */
-export interface SeriesEvent {
-  /** Hours before NOW the event starts (ramp begins). */
-  startH: number;
-  /** Hours before NOW the event ends (0 = ongoing). */
-  endH: number;
-  delta: number;
-  rampH: number;
-  /** For ongoing events: the value reached at NOW (overrides delta so "current" is stable at any time of day). */
-  target?: number;
-}
-
-/** Events keyed by `${metric}:${entityId}`. Entity ids match the network data. */
-export const EVENTS: Record<string, SeriesEvent[]> = {
-  // Ziwani 3 (Kahembe) pressure collapse — the headline incident
-  'pressure:SN-14': [{ startH: 3.5, endH: 0, delta: -2.25, rampH: 0.75, target: 0.94 }, { startH: 9 * 24, endH: 9 * 24 - 5, delta: -1.4, rampH: 1 }],
-  'pressure:SN-15': [{ startH: 3.25, endH: 0, delta: -1.05, rampH: 1, target: 1.36 }],
-  'pressure:SN-16': [{ startH: 26 * 24, endH: 26 * 24 - 8, delta: -1.3, rampH: 1 }],
-  // Ziwani 2 pressure anomaly yesterday — resolved
-  'pressure:SN-20': [{ startH: 30, endH: 26, delta: -1.2, rampH: 0.5 }],
-  // Shauri repeated anomalies over the month
-  'pressure:SN-17': [{ startH: 6 * 24, endH: 6 * 24 - 4, delta: -1.25, rampH: 0.5 }, { startH: 17 * 24, endH: 17 * 24 - 6, delta: -1.3, rampH: 0.5 }, { startH: 40 * 24, endH: 40 * 24 - 6, delta: -1.1, rampH: 1 }],
-  'pressure:SN-19': [{ startH: 13 * 24, endH: 13 * 24 - 3, delta: -1.4, rampH: 0.5 }],
-  // Sensor flows mirror the leak
-  'flow:SN-14': [{ startH: 3.5, endH: 0, delta: 9.5, rampH: 0.75 }],
-  // Ziwani Reservoir 2 drawing down
-  'level:TANK-02': [{ startH: 11, endH: 0, delta: -30, rampH: 9, target: 31 }],
-  'level:TANK-03': [{ startH: 20 * 24, endH: 20 * 24 - 10, delta: -30, rampH: 4 }],
-  // Water quality
-  'turbidity:WQ-SHAURI':  [{ startH: 7, endH: 0, delta: 3.9, rampH: 3, target: 4.6 }, { startH: 22 * 24, endH: 22 * 24 - 10, delta: 1.6, rampH: 2 }],
-  'turbidity:WQ-ZIWANI2': [{ startH: 9 * 24, endH: 9 * 24 - 14, delta: 5.6, rampH: 3 }],
-  'chlorine:WQ-KWANJORA': [{ startH: 30, endH: 0, delta: -0.14, rampH: 12, target: 0.16 }],
-  'chlorine:WQ-ZIWANI2':  [{ startH: 15 * 24, endH: 15 * 24 - 20, delta: -0.17, rampH: 6 }],
-  'ph:WQ-ZIWANI1':        [{ startH: 4 * 24, endH: 4 * 24 - 6, delta: 1.05, rampH: 2 }]
-};
-
-function eventOffset(key: string, t: number, rawNow: () => number): number {
-  const evs = EVENTS[key];
-  if (!evs) return 0;
-  let off = 0;
-  for (const e of evs) {
-    const delta = e.target !== undefined && e.endH === 0
-      ? e.target - rawNow() - evs.filter(o => o !== e && o.endH === 0).reduce((s, o) => s + o.delta, 0)
-      : e.delta;
-    const start = NOW - e.startH * HOUR;
-    const end = e.endH > 0 ? NOW - e.endH * HOUR : Infinity;
-    if (t < start) continue;
-    const up = Math.min(1, (t - start) / (e.rampH * HOUR));
-    const down = t > end ? Math.max(0, 1 - (t - end) / (e.rampH * HOUR)) : 1;
-    const k = Math.min(up, down);
-    const ease = k * k * (3 - 2 * k); // smoothstep: real events build and fade, they don't switch
-    // Resolved events wander a little while active; ongoing ones stay pinned to their target.
-    const wobble = e.endH > 0 ? 1 + 0.14 * valueNoise(`${key}:ev`, t, HOUR * 1.5) : 1;
-    off += delta * ease * wobble;
+/* ── threshold breaches ── */
+/** Periods in the last `hours` where a reading sat outside its normal range. */
+export function breachWindows(metric: Metric, id: string, base: number, hours = 30 * 24, stepMin = 30): Array<{ start: number; end: number; ongoing: boolean }> {
+  const out: Array<{ start: number; end: number; ongoing: boolean }> = [];
+  const step = stepMin * MIN;
+  let open: number | null = null;
+  for (let t = NOW - hours * HOUR; t <= NOW; t += step) {
+    const bad = toneFor(metric, sampleAt(metric, id, base, t)) !== 'ok';
+    if (bad && open === null) open = t;
+    if (!bad && open !== null) { out.push({ start: open, end: t, ongoing: false }); open = null; }
   }
-  return off;
-}
-
-/** Hours-ago windows where an entity was outside its normal range — used for anomaly markers. */
-export function eventWindows(metric: Metric, id: string): Array<{ start: number; end: number; ongoing: boolean }> {
-  return (EVENTS[`${metric}:${id}`] || []).map(e => ({
-    start: NOW - e.startH * HOUR,
-    end: e.endH > 0 ? NOW - e.endH * HOUR : NOW,
-    ongoing: e.endH === 0
-  }));
+  if (open !== null) out.push({ start: open, end: NOW, ongoing: true });
+  return out;
 }
 
 /* ── the generator ── */
 /** Value of `metric` for entity `id` (whose typical value is `base`) at time `t`. */
 export function sampleAt(metric: Metric, id: string, base: number, t: number): number {
   let v = rawSample(metric, id, base, t);
-  v += eventOffset(`${metric}:${id}`, t, () => rawSample(metric, id, base, NOW));
   if (metric === 'level') v = Math.max(3, Math.min(99, v));
   if (metric === 'turbidity') v = Math.max(0.05, v);
   if (metric === 'flow' || metric === 'pressure' || metric === 'chlorine') v = Math.max(0, v);
   return v;
 }
 
-/** Baseline behaviour without scripted events. */
+/** Baseline behaviour: diurnal pattern plus smooth noise. */
 function rawSample(metric: Metric, id: string, base: number, t: number): number {
   const h = hourOf(t);
   const n = (p: number, salt = '') => valueNoise(`${metric}:${id}${salt}`, t, p);

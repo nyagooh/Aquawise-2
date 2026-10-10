@@ -33,11 +33,8 @@ export default function Overview() {
 
 const TYPE_ICON: Record<IncidentType, JSX.Element> = {
   'Pressure anomaly': ICON.alert,
-  'Possible leak': ICON.drop,
   'Water quality breach': ICON.drop,
-  'Low tank level': ICON.tank,
-  'Sensor offline': ICON.wifiOff,
-  'Abnormal reading': ICON.trend
+  'Low tank level': ICON.tank
 };
 const sevTone = (i: Incident): IconTone => (i.severity === 'critical' ? 'crit' : i.severity === 'warning' ? 'warn' : 'off');
 
@@ -89,8 +86,6 @@ function OverviewBody({ ops }: { ops: Ops }) {
   const qNow = k.qPts[k.qPts.length - 1].v;
   const qBad = quality.filter(q => q.tone !== 'ok');
   const online = sensors.filter(s => s.health !== 'off').length;
-  const nrw = z ? z.nrw : ops.nrw.current;
-  const nrwPrev = z ? z.nrwPrev : ops.nrw.prev;
   const raisedToday = k.alertsPerDay[6];
   const avgPts = meanSeries(pressure.filter(p => p.online).map(p => series('pressure', p.id, p.base, day)));
   const avgP = avgPts[avgPts.length - 1]?.v ?? 0;
@@ -123,9 +118,6 @@ function OverviewBody({ ops }: { ops: Ops }) {
     return per[0].map((p, i) => ({ t: p.t, v: (per.reduce((a, l) => a + l[i].v, 0) / totalCap) * 100 }));
   }, [tanks, totalCap]);
   const storNow = storagePts[storagePts.length - 1]?.v ?? 0;
-  const supplied = z ? z.suppliedM3d : ops.nrw.supplied;
-  const billed = z ? z.billedM3d : ops.nrw.billed;
-  const loss = supplied - billed;
 
   return (
     <div className="dx">
@@ -156,7 +148,7 @@ function OverviewBody({ ops }: { ops: Ops }) {
           </>} flush>
           <NetworkMap ops={ops} points={mapPoints} zone={zone} height={420} onSelect={id => navigate(`/network?focus=${id}`)} />
           <div className="dx-map-legend">
-            <span><i className="ov-lg pipe" />Pipes</span><span><i className="ov-lg sq" />Reservoirs</span><span><i className="ov-lg dia" />Water quality</span>
+            <span><i className="ov-lg pipe main" />Transmission</span><span><i className="ov-lg pipe" />Distribution</span><span><i className="ov-lg sq" />Reservoirs</span><span><i className="ov-lg dia" />Water quality</span>
             <span style={{ marginLeft: 'auto' }}><Dot tone="ok" />Normal</span><span><Dot tone="warn" />Warning</span><span><Dot tone="crit" />Critical</span><span><Dot tone="off" />Offline</span>
           </div>
         </Card>
@@ -235,7 +227,6 @@ function OverviewBody({ ops }: { ops: Ops }) {
 }
 
 function headline(i: Incident): string {
-  if (i.type === 'Sensor offline') return 'No signal';
   const m = /([−-]?[\d.,]+\s*(?:bar|NTU|mg\/L|%|L\/s|dBm))/.exec(i.trigger);
   return m ? m[1].trim() : i.type;
 }

@@ -38,19 +38,6 @@ import {
   FACILITY_LABEL,
   zoneLabel
 } from '../data/network';
-import { leaks as leakData, type Leak, type LeakSeverity } from '../data';
-
-const LEAK_SEVERITY_COLOR: Record<LeakSeverity, string> = {
-  minor: '#F59E0B',
-  major: '#EF4444',
-  critical: '#EF4444'
-};
-const LEAK_SEVERITY_LABEL: Record<LeakSeverity, string> = {
-  minor: 'Minor', major: 'Major', critical: 'Critical'
-};
-const LEAK_STATUS_LABEL: Record<Leak['status'], string> = {
-  reported: 'Reported', dispatched: 'Dispatched', in_progress: 'In progress', fixed: 'Fixed'
-};
 
 const TILE_LIGHT = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
 const TILE_DARK = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
@@ -126,7 +113,6 @@ type NodeSymbology = (typeof NODE_SYMBOLOGY)[number]['key'];
 type Focus =
   | { kind: 'pipe'; feature: PipeFeature }
   | { kind: 'asset'; feature: AssetFeature }
-  | { kind: 'leak'; leak: Leak }
   | null;
 
 type LayerVis = Record<PipeClass | AssetKind, boolean>;
@@ -153,7 +139,6 @@ export default function GISMap() {
   const [network, setNetwork] = useState<NetworkData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [layers, setLayers] = useState<LayerVis>(DEFAULT_LAYERS);
-  const [showLeaks, setShowLeaks] = useState(false); // leaks are not shown on the map
   const [focus, setFocus] = useState<Focus>(null);
   const [basemap, setBasemap] = useState<Basemap>('streets');
   const [sim, setSim] = useState<SimState>('idle');
@@ -171,7 +156,6 @@ export default function GISMap() {
   const tileRef = useRef<L.TileLayer | null>(null);
   const rendererRef = useRef<L.Canvas | null>(null);
   const layerGroupsRef = useRef<Partial<Record<PipeClass | AssetKind, L.LayerGroup>>>({});
-  const leakGroupRef = useRef<L.LayerGroup | null>(null);
   const focusOutlineRef = useRef<L.Layer | null>(null);
   // Read inside Leaflet event handlers (which close over init-time values).
   const linkByRef = useRef<LinkSymbology>(linkBy);
@@ -294,7 +278,7 @@ export default function GISMap() {
         icon: assetIcon(feat)
       });
       // Only sensors and reservoirs open the detail panel; pipes, valves,
-      // meters and leaks show their hover label only.
+      // meters show their hover label only.
       if (props.asset === 'sensor' || props.asset === 'tank' || props.asset === 'meter_valve' || props.asset === 'pressure_valve') {
         marker.on('click', (e) => {
           L.DomEvent.stopPropagation(e);
@@ -307,16 +291,6 @@ export default function GISMap() {
       if (grp) marker.addTo(grp);
     });
 
-    /* leaks — georeferenced incident markers, severity-coloured */
-    const leakGroup = L.layerGroup();
-    leakGroupRef.current = leakGroup;
-    leakData.forEach((leak) => {
-      const marker = L.marker([leak.lat, leak.lng], { icon: leakIcon(leak) });
-      marker.bindTooltip(`${leak.id} · ${LEAK_SEVERITY_LABEL[leak.severity]} leak`, { direction: 'top', offset: [0, -12], opacity: 1 });
-      marker.addTo(leakGroup);
-    });
-    if (showLeaks) leakGroup.addTo(map);
-
     /* dismiss focus on empty click */
     map.on('click', () => setFocus(null));
 
@@ -324,7 +298,6 @@ export default function GISMap() {
       map.remove();
       leafletRef.current = null;
       layerGroupsRef.current = {};
-      leakGroupRef.current = null;
       tileRef.current = null;
     };
     // mode is read at init; subsequent changes handled by the tile-swap effect below
@@ -354,16 +327,6 @@ export default function GISMap() {
       if (!on && has) map.removeLayer(g);
     });
   }, [layers]);
-
-  /* ── 4b. leak layer toggle ── */
-  useEffect(() => {
-    const map = leafletRef.current;
-    const grp = leakGroupRef.current;
-    if (!map || !grp) return;
-    const has = map.hasLayer(grp);
-    if (showLeaks && !has) grp.addTo(map);
-    if (!showLeaks && has) map.removeLayer(grp);
-  }, [showLeaks]);
 
   /* ── 4c. recolour links when symbology / results change ── */
   useEffect(() => {
@@ -410,11 +373,9 @@ export default function GISMap() {
       const c = focus.feature.geometry.coordinates;
       const m = c[Math.floor(c.length / 2)];
       at = [m[1], m[0]]; html = pipePopupHtml(focus.feature);
-    } else if (focus.kind === 'asset') {
+    } else {
       const [lon, lat] = focus.feature.geometry.coordinates;
       at = [lat, lon]; html = detailPopupHtml(focus.feature, opsRef.current);
-    } else {
-      at = [focus.leak.lat, focus.leak.lng]; html = leakPopupHtml(focus.leak);
     }
     if (map.getZoom() < 15) map.setView(at, 15, { animate: false });
     const pop = L.popup({ className: 'aw-popup aw-detail', closeButton: true, maxWidth: 340, minWidth: 300, autoPanPadding: [40, 40], offset: [0, -10] })
@@ -453,12 +414,6 @@ export default function GISMap() {
       if (match) {
         setLayers((p) => ({ ...p, [match.properties.ui_class]: true }));
         setFocus({ kind: 'pipe', feature: match });
-      }
-    } else if (kind === 'leak') {
-      const match = leakData.find((l) => l.id === id);
-      if (match) {
-        setShowLeaks(true);
-        setFocus({ kind: 'leak', leak: match });
       }
     }
     // consume the param so a refresh doesn't keep re-focusing
@@ -548,9 +503,6 @@ export default function GISMap() {
               onAllPipes={setAllPipes}
               onAllAssets={setAllAssets}
               meta={network.meta}
-              showLeaks={showLeaks}
-              leakCount={leakData.length}
-              onToggleLeaks={() => setShowLeaks((x) => !x)}
               linkBy={linkBy}
               nodeBy={nodeBy}
               onLinkBy={setLinkBy}
@@ -673,47 +625,7 @@ function assetTooltip(feat: AssetFeature): string {
   return `${p.name} · ${p.flow_lps} L/s`;
 }
 
-/* Leak incident marker — pulsing teardrop, severity-coloured.
-   Fixed leaks render muted so open incidents stand out. */
-function leakIcon(leak: Leak): L.DivIcon {
-  const color = leak.severity === 'critical' ? LEAK_SEVERITY_COLOR.critical
-    : leak.severity === 'major' ? LEAK_SEVERITY_COLOR.major
-    : LEAK_SEVERITY_COLOR.minor;
-  const fixed = leak.status === 'fixed';
-  return L.divIcon({
-    className: 'aw-marker',
-    html: `<span class="eg-sym eg-leak${fixed ? ' fixed' : ''}">${markerIcon('leak', color, 22)}</span>`,
-    iconSize: [22, 22],
-    iconAnchor: [11, 11]
-  });
-}
 
-function leakPopupHtml(leak: Leak): string {
-  const color = LEAK_SEVERITY_COLOR[leak.severity];
-  const pill = leak.status === 'fixed'
-    ? `<span class="aw-pop-pill aw-pop-pill--ok">Fixed</span>`
-    : leak.status === 'reported'
-      ? `<span class="aw-pop-pill aw-pop-pill--bad">Reported</span>`
-      : `<span class="aw-pop-pill aw-pop-pill--warn">${escapeHtml(LEAK_STATUS_LABEL[leak.status])}</span>`;
-  return `
-    <div class="aw-pop">
-      <div class="aw-pop-head">
-        <span class="aw-pop-swatch dot" style="background:${color}"></span>
-        <div class="aw-pop-head-text">
-          <div class="aw-pop-title">${escapeHtml(LEAK_SEVERITY_LABEL[leak.severity])} leak</div>
-          <div class="aw-pop-sub">${escapeHtml(leak.id)} · ${escapeHtml(zoneLabel(leak.zone))}</div>
-        </div>
-        ${pill}
-      </div>
-      <div class="aw-pop-grid">
-        <div><span>Address</span><strong>${escapeHtml(leak.address)}</strong></div>
-        <div><span>Pipe</span><strong>${escapeHtml(leak.pipe || '—')}</strong></div>
-        <div><span>Reported</span><strong>${escapeHtml(leak.reported)}</strong></div>
-        <div><span>Source</span><strong>${escapeHtml(leak.source)}</strong></div>
-      </div>
-      <div class="aw-pop-foot">Click again for full incident record →</div>
-    </div>`;
-}
 
 /* ─────────────────────────────────────────
    Click popups — Qatium-style key facts at
@@ -954,9 +866,6 @@ function LayerControl({
   onAllPipes,
   onAllAssets,
   meta,
-  showLeaks,
-  leakCount,
-  onToggleLeaks,
   linkBy,
   nodeBy,
   onLinkBy,
@@ -969,9 +878,6 @@ function LayerControl({
   onAllPipes: (on: boolean) => void;
   onAllAssets: (on: boolean) => void;
   meta: NetworkData['meta'];
-  showLeaks: boolean;
-  leakCount: number;
-  onToggleLeaks: () => void;
   linkBy: LinkSymbology;
   nodeBy: NodeSymbology;
   onLinkBy: (k: LinkSymbology) => void;
@@ -1124,7 +1030,6 @@ const BASEMAP_TABS: Array<{ key: Basemap; label: string; title: string }> = [
   { key: 'streets', label: 'Map', title: 'Street map' },
   { key: 'satellite', label: 'Satellite', title: 'Aerial imagery — no labels' },
   { key: 'dark', label: 'Dark', title: 'Dark street map' },
-  { key: 'none', label: 'No basemap', title: 'Engineering canvas — model only' }
 ];
 
 function WorkspaceToolbar({ basemap, onBasemap, onFit, sim, onSimulate }: {
@@ -1394,52 +1299,6 @@ function AssetPanel({ feature, onClose }: { feature: AssetFeature; onClose: () =
   );
 }
 
-function LeakPanel({ leak, onClose }: { leak: Leak; onClose: () => void }) {
-  const color = LEAK_SEVERITY_COLOR[leak.severity];
-  const isFixed = leak.status === 'fixed';
-  return (
-    <SidePanel
-      open
-      onClose={onClose}
-      kind={`${LEAK_SEVERITY_LABEL[leak.severity]} leak`}
-      title={leak.id}
-      pill={{
-        tone: isFixed ? 'safe' : leak.status === 'reported' ? 'danger' : 'warn',
-        label: LEAK_STATUS_LABEL[leak.status]
-      }}
-    >
-      <SectionLabel>Incident</SectionLabel>
-      <SpRow label="Severity" value={LEAK_SEVERITY_LABEL[leak.severity]} color={color} />
-      <SpRow label="Zone" value={zoneLabel(leak.zone)} />
-      <SpRow label="Address" value={leak.address} />
-      <SpRow label="On pipe" value={leak.pipe || '—'} mono />
-      <SpRow label="Coordinates" value={`${leak.lat.toFixed(4)}, ${leak.lng.toFixed(4)}`} mono />
-
-      <div style={{ height: 14 }} />
-      <SectionLabel>Report</SectionLabel>
-      <SpRow label="Reported" value={leak.reported} mono />
-      <SpRow label="Caller" value={leak.caller} />
-      <SpRow label="Phone" value={leak.phone} mono />
-      <SpRow label="Source" value={leak.source} />
-      <SpRow label="Notes" value={leak.notes} />
-
-      {(leak.crew || leak.leakType || leak.cause || leak.fixDescription || leak.materials || leak.cost) && (
-        <>
-          <div style={{ height: 14 }} />
-          <SectionLabel>Resolution</SectionLabel>
-          {leak.leakType && <SpRow label="Leak type" value={leak.leakType} />}
-          {leak.cause && <SpRow label="Cause" value={leak.cause} />}
-          {leak.fixDescription && <SpRow label="Fix" value={leak.fixDescription} />}
-          {leak.crew && <SpRow label="Crew" value={leak.crew} />}
-          {leak.materials && <SpRow label="Materials" value={leak.materials} />}
-          {leak.cost && <SpRow label="Cost" value={leak.cost} mono />}
-          {leak.timeStarted && <SpRow label="Started" value={leak.timeStarted} mono />}
-          {leak.timeFixed && <SpRow label="Fixed" value={leak.timeFixed} mono />}
-        </>
-      )}
-    </SidePanel>
-  );
-}
 
 function Sparkline({ base }: { base: number }) {
   const points = useMemo(() => {

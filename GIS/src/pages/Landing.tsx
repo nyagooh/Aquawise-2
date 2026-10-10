@@ -170,7 +170,7 @@ function Hero({ onDemo, onTalk }: { onDemo: () => void; onTalk: () => void }) {
         <div className="ed-hero-frame rv">
           <img className="ed-hero-bg" src="/img/treatment-plant.jpg" alt="" />
           <div className="ed-hero-shot">
-            <img src="/img/ui/view-overview.webp" alt="AquaWise Overview: network health, active alerts, water quality, NRW, network map and issues needing attention" />
+            <img src="/img/ui/view-overview.webp" alt="AquaWise Overview: network health, active alerts, water quality, pressure, network map and issues needing attention" />
           </div>
         </div>
       </div>

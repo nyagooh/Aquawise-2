@@ -250,7 +250,7 @@ function maintenance(a: AssetRow): Array<{ t: number; what: string }> {
   const out: Array<{ t: number; what: string }> = [];
   const r = (k: string) => stableRand(`${a.id}:${k}`);
   if (a.kind === 'Pipe') {
-    if (a.condition === 'Poor') out.push({ t: NOW - Math.round(40 + r('a') * 200) * DAYS, what: 'Leak repair — clamp fitted' });
+    if (a.condition === 'Poor') out.push({ t: NOW - Math.round(40 + r('a') * 200) * DAYS, what: 'Joint repair — clamp fitted' });
     out.push({ t: NOW - Math.round(250 + r('b') * 500) * DAYS, what: 'Condition survey (visual)' });
   } else if (a.kind === 'Sensor') {
     out.push({ t: NOW - Math.round(20 + r('a') * 90) * DAYS, what: 'Battery check and calibration' });

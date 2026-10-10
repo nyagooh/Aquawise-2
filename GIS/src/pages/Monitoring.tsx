@@ -17,7 +17,7 @@ import { LineChart, ChartLegend, BarList, Sparkline, TankGauge, TONE_COLOR, SERI
 import { NetworkMap, type MapPoint } from '../demo/NetworkMap';
 import { markerIcon } from '../data/network';
 import {
-  series, sampleAt, meanSeries, eventWindows, toneFor, worstTone, fmt, METRICS, QUALITY_METRICS, NOW, HOURS,
+  series, sampleAt, meanSeries, breachWindows, toneFor, worstTone, fmt, METRICS, QUALITY_METRICS, NOW, HOURS,
   rangeSpec, type Metric, type Tone, type RangeSpec
 } from '../demo/series';
 
@@ -56,8 +56,8 @@ export default function Monitoring() {
 /* ═════════════ helpers ═════════════ */
 const change24 = (m: Metric, id: string, base: number) => sampleAt(m, id, base, NOW) - sampleAt(m, id, base, NOW - 24 * HOURS);
 const signed = (v: number, d: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(d)}`;
-function windowsFor(metric: Metric, ids: string[]) {
-  return ids.flatMap(id => eventWindows(metric, id)).map(w => ({ ...w, tone: 'warn' as Tone }));
+function windowsFor(metric: Metric, items: Array<{ id: string; base: number }>, hours: number) {
+  return items.flatMap(x => breachWindows(metric, x.id, x.base, hours)).map(w => ({ ...w, tone: 'warn' as Tone }));
 }
 function useScoped(ops: Ops) {
   const { zone, spec } = useFilters();
@@ -99,7 +99,7 @@ function MonitoringOverview({ ops }: { ops: Ops }) {
   const ptsOnline = online.length + s.tanks.length + s.quality.length;
   const sensorsOff = s.sensors.filter(x => x.health === 'off').length;
   const qBad = s.quality.filter(q => q.tone !== 'ok');
-  const abnormal = s.incidents.filter(i => i.type !== 'Sensor offline' && NOW - i.startedAt < 7 * 24 * HOURS)
+  const abnormal = s.incidents.filter(i => NOW - i.startedAt < 7 * 24 * HOURS)
     .sort((a, b) => b.startedAt - a.startedAt);
 
   const mapPoints: MapPoint[] = [
@@ -113,7 +113,7 @@ function MonitoringOverview({ ops }: { ops: Ops }) {
   const groups = [
     { key: 'q', icon: 'quality' as const, color: '#0E7490', name: 'Water quality', what: 'Turbidity, pH, chlorine, conductivity, temperature', total: s.quality.length, ok: okCount(s.quality), href: '/monitoring/water-quality' },
     { key: 'p', icon: 'pressure' as const, color: '#1D4ED8', name: 'Pressure', what: `Average ${avgP.toFixed(2)} bar across ${online.length} loggers`, total: s.pressure.length, ok: okCount(s.pressure), href: '/monitoring/pressure' },
-    { key: 't', icon: 'tank' as const, color: '#6D28D9', name: 'Tank levels', what: s.tanks.length ? `Average ${Math.round(avgLevel)} % across ${s.tanks.length} reservoirs` : 'No reservoirs in this zone', total: s.tanks.length, ok: okCount(s.tanks), href: '/monitoring/tank-levels' },
+    { key: 't', icon: 'tank' as const, color: '#0284C7', name: 'Tank levels', what: s.tanks.length ? `Average ${Math.round(avgLevel)} % across ${s.tanks.length} reservoirs` : 'No reservoirs in this zone', total: s.tanks.length, ok: okCount(s.tanks), href: '/monitoring/tank-levels' },
     { key: 's', icon: 'meter' as const, color: '#475467', name: 'Sensors', what: `${sensorsOff} offline · ${s.sensors.filter(x => x.health === 'warn').length} low battery or weak signal`, total: s.sensors.length, ok: s.sensors.filter(x => x.health === 'ok').length, href: '/monitoring/sensors' }
   ];
 
@@ -222,7 +222,7 @@ function WaterQuality({ ops }: { ops: Ops }) {
           <Segmented options={QUALITY_METRICS.map(m => ({ key: m, label: METRICS[m].label.replace('Residual chlorine', 'Chlorine') }))} value={param} onChange={setParam} size="sm" />
           <Segmented options={[{ key: 'one', label: 'This point' }, { key: 'all', label: 'Compare points' }]} value={compare ? 'all' : 'one'} onChange={k => setCompare(k === 'all')} size="sm" />
         </>}>
-        <LineChart series={chartSeries} metric={param} height={300} windows={compare ? [] : windowsFor(param, [point.id])} />
+        <LineChart series={chartSeries} metric={param} height={300} windows={compare ? [] : windowsFor(param, [{ id: point.id, base: point.base[param as keyof typeof point.base] }], s.spec.hours)} />
         <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <ChartLegend items={[
             ...(compare ? [] : [{ label: METRICS[param].label, color: 'hsl(var(--primary))' }]),
@@ -260,7 +260,7 @@ function QualityDrawer({ point, spec, incidents, onClose }: { point: QualityPoin
             <KV rows={QUALITY_METRICS.map(x => [`${METRICS[x].label} · ${METRICS[x].rangeText}`, <span key={x} className={point.tones[x] !== 'ok' ? `t-${point.tones[x]}` : ''}>{fmt(x, point.values[x])}</span>])} />
           </Section>
           <Section title={`History · ${spec.label}`} actions={<Segmented size="sm" options={QUALITY_METRICS.map(x => ({ key: x, label: METRICS[x].label.replace('Residual chlorine', 'Chlorine').replace('Conductivity', 'Cond.').replace('Temperature', 'Temp.') }))} value={m} onChange={setM} />}>
-            <LineChart series={[{ id: point.id, label: point.name, points: series(m, point.id, point.base[m as keyof typeof point.base], spec) }]} metric={m} height={200} windows={windowsFor(m, [point.id])} />
+            <LineChart series={[{ id: point.id, label: point.name, points: series(m, point.id, point.base[m as keyof typeof point.base], spec) }]} metric={m} height={200} windows={windowsFor(m, [{ id: point.id, base: point.base[m as keyof typeof point.base] }], spec.hours)} />
           </Section>
           <Section title="Related alerts">
             <RelatedAlerts list={incidents.filter(i => i.entityId === point.id)} />
@@ -290,14 +290,13 @@ function Pressure({ ops }: { ops: Ops }) {
   const zonesInScope = ops.zones.filter(z => inZone(z.code, s.zone));
   const lowZones = zonesInScope.filter(z => ops.pressure.some(p => p.zone === z.code && p.online && p.value < METRICS.pressure.normal[0]));
   const highZones = zonesInScope.filter(z => stats.some(x => x.p.zone === z.code && x.max > METRICS.pressure.normal[1]));
-  const anomalies = s.incidents.filter(i => i.metric === 'pressure' || i.type === 'Possible leak');
+  const anomalies = s.incidents.filter(i => i.metric === 'pressure');
   const activeAnoms = anomalies.filter(i => i.status !== 'resolved');
 
   const chart: ChartSeries[] = selected.length
     ? selected.map((id, i) => { const p = ops.pressure.find(x => x.id === id)!; return { id, label: `${p.id} · ${zoneName(p.zone)}`, points: series('pressure', p.id, p.base, s.spec), color: SERIES_COLORS[i % SERIES_COLORS.length] }; })
     : [{ id: 'avg', label: s.zone === 'ALL' ? 'Network average' : `${zoneName(s.zone)} average`, points: meanSeries(online.map(p => series('pressure', p.id, p.base, s.spec))) }];
   const toggle = (id: string) => setSelected(sel => sel.includes(id) ? sel.filter(x => x !== id) : [...sel, id].slice(-5));
-  const leak = activeAnoms.find(i => i.type === 'Possible leak');
 
   const cols: Column<typeof stats[number]>[] = [
     { key: 'cmp', label: 'Compare', render: r => <input type="checkbox" checked={selected.includes(r.p.id)} onChange={() => toggle(r.p.id)} onClick={e => e.stopPropagation()} aria-label={`Compare ${r.p.id}`} />, width: 64 },
@@ -321,16 +320,9 @@ function Pressure({ ops }: { ops: Ops }) {
         <Kpi label="Pressure anomalies" value={activeAnoms.length} tone={activeAnoms.some(a => a.severity === 'critical') ? 'crit' : activeAnoms.length ? 'warn' : 'ok'} sub={`${anomalies.length - activeAnoms.length} cleared in the last 30 days`} onClick={() => navigate('/alerts')} />
       </div>
 
-      {leak && (
-        <Insight tone="crit">
-          <span><b>Potential leak, {zoneName(leak.zone)}.</b> Pressure at SN-14 dropped by more than 2 bar while flow at the same logger rose. Neighbouring logger SN-15 is also low, which points to a main break rather than a sensor fault.{' '}
-            <button className="dx-link" onClick={() => navigate(`/alerts?id=${leak.id}`)}>Open incident</button> · <button className="dx-link" onClick={() => navigate(`/network?focus=${leak.focus}`)}>View on network</button></span>
-        </Insight>
-      )}
-
-      <Card title="Pressure over time" sub={`${selected.length ? `${selected.length} logger${selected.length > 1 ? 's' : ''} compared` : chart[0].label} · ${s.spec.label}. Shaded windows mark recorded anomalies.`}
+      <Card title="Pressure over time" sub={`${selected.length ? `${selected.length} logger${selected.length > 1 ? 's' : ''} compared` : chart[0].label} · ${s.spec.label}. Shaded windows mark readings outside the normal range.`}
         actions={selected.length ? <button className="dx-btn" onClick={() => setSelected([])}>Show average</button> : <span className="dx-muted">Tick loggers below to compare</span>}>
-        <LineChart series={chart} metric="pressure" height={300} windows={windowsFor('pressure', selected.length ? selected : online.map(p => p.id))} />
+        <LineChart series={chart} metric="pressure" height={300} windows={windowsFor('pressure', selected.length ? online.filter(p => selected.includes(p.id)) : online, s.spec.hours)} />
         <div style={{ marginTop: 10, display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'space-between' }}>
           <ChartLegend items={[{ label: 'Acceptable range', color: '', band: true }, { label: 'Warning threshold', color: 'hsl(var(--warning))', dashed: true }, { label: 'Critical threshold', color: 'hsl(var(--danger))', dashed: true }]} />
           {selected.length > 0 && <ChartLegend items={chart.map(c => ({ label: c.label, color: c.color! }))} />}
@@ -364,7 +356,7 @@ function Pressure({ ops }: { ops: Ops }) {
         <DataTable columns={cols} rows={stats} rowKey={r => r.p.id} onRowClick={r => toggle(r.p.id)} defaultSort={{ key: 'st', dir: 1 }} />
       </Card>
 
-      <Card title="Related alerts" sub="Pressure anomalies and possible leaks" flush>
+      <Card title="Related alerts" sub="Pressure readings outside the normal range" flush>
         <DataTable columns={incidentCols()} rows={anomalies.sort((a, b) => b.startedAt - a.startedAt)} rowKey={i => i.id} onRowClick={i => navigate(`/alerts?id=${i.id}`)} />
       </Card>
     </>
