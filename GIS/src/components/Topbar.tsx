@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { zones, sensors, pipes } from '../data';
 import { useFilters } from '../demo/filters';
 import { useTheme } from '../theme';
-import { useOps } from '../demo/model';
-import { withState, useIncidentState } from '../demo/incidentState';
+import { AlertsMenu } from './AlertsMenu';
 import type { RangeKey } from '../demo/series';
 import { ZONE_CODES, zoneName } from '../demo/model';
 
@@ -56,9 +55,6 @@ export function Topbar({ title, sub, onToggleNav, filters }: Props) {
   };
 
   const { mode, toggle } = useTheme();
-  const ops = useOps();
-  useIncidentState();
-  const active = ops ? withState(ops.incidents).filter(i => i.status === 'active').length : 0;
   return (
     <header className="topbar aw-tb">
       {onToggleNav && (
@@ -167,10 +163,7 @@ export function Topbar({ title, sub, onToggleNav, filters }: Props) {
             ? <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><circle cx={12} cy={12} r={4} /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>
             : <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z" /></svg>}
         </button>
-        <Link to="/alerts" className="aw-tb-icon aw-bell" aria-label={`Alerts, ${active} active`}>
-          <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4l2-2z" /><path d="M10 21h4" /></svg>
-          {active > 0 && <i />}
-        </Link>
+        <AlertsMenu />
         <span className="aw-avatar" title="Demo user · read-only">AM</span>
       </div>
     </header>

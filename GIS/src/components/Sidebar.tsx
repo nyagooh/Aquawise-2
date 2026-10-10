@@ -1,8 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useOps } from '../demo/model';
-import { withState, useIncidentState } from '../demo/incidentState';
 
-export type Active = 'overview' | 'network' | 'monitoring' | 'alerts' | 'nrw' | 'assets' | 'reports';
+export type Active = 'overview' | 'network' | 'monitoring' | 'alerts' | 'assets' | 'reports';
 
 const I = (d: JSX.Element) => (
   <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{d}</svg>
@@ -25,8 +24,6 @@ const ITEMS: Array<{ key: Active; label: string; href: string }> = [
   { key: 'overview',   label: 'Overview',   href: '/overview' },
   { key: 'network',    label: 'Network',    href: '/network' },
   { key: 'monitoring', label: 'Monitoring', href: '/monitoring' },
-  { key: 'alerts',     label: 'Alerts',     href: '/alerts' },
-  { key: 'nrw',        label: 'NRW',        href: '/nrw' },
   { key: 'assets',     label: 'Assets',     href: '/assets' },
   { key: 'reports',    label: 'Reports',    href: '/reports' }
 ];
@@ -40,8 +37,6 @@ const MON_SUB = [
 export function Sidebar({ active, collapsed }: { active: Active; collapsed?: boolean; onToggle?: () => void }) {
   const ops = useOps();
   const { pathname } = useLocation();
-  useIncidentState();
-  const activeAlertCount = ops ? withState(ops.incidents).filter(a => a.status === 'active').length : 0;
   const offline = ops ? ops.sensors.filter(s => s.health === 'off').length : 0;
   return (
     <aside className={`sidebar aw-sb${collapsed ? ' collapsed' : ''}`}>
@@ -58,7 +53,6 @@ export function Sidebar({ active, collapsed }: { active: Active; collapsed?: boo
             <Link to={item.href} title={item.label} className={`aw-sb-link${item.key === active ? ' active' : ''}`}>
               {NAV_ICONS[item.key]}
               <span className="sb-text">{item.label}</span>
-              {item.key === 'alerts' && activeAlertCount > 0 && <span className="aw-sb-badge">{activeAlertCount}</span>}
               {item.key === 'monitoring' && (
                 <svg className="sb-text aw-sb-chev" width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true"><path d={active === 'monitoring' ? 'm6 9 6 6 6-6' : 'm9 6 6 6-6 6'} /></svg>
               )}
