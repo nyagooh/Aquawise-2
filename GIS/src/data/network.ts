@@ -369,8 +369,8 @@ export const PIPE_STYLE: Record<PipeClass, {
     description: 'Primary supply trunk · highest priority'
   },
   distribution: {
-    color: '#F0ABFC',          // light fuchsia — bright against green/brown satellite imagery
-    hoverColor: '#FAE8FF',
+    color: '#22D3EE',          // bright cyan — water convention, high contrast on satellite imagery
+    hoverColor: '#67E8F9',
     weight: 3.5,
     hoverWeight: 4,
     opacity: 1,
@@ -422,7 +422,7 @@ export const ASSET_STYLE: Record<AssetKind, {
   description: string;
 }> = {
   // Each asset kind is a distinct category — give it its own hue so icons
-  // read apart from the orange / purple pipe network and from each other.
+  // read apart from the orange / cyan pipe network and from each other.
   // Status semantics (green/amber/red) stay on the separate status dot.
   facility: {
     color: '#14B8A6',          // bold teal — intake / treatment works
