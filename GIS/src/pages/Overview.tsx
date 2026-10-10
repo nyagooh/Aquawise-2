@@ -213,7 +213,7 @@ function OverviewBody({ ops }: { ops: Ops }) {
             <BadgeDelta text={`${Math.abs(((flowNow - flowAvg) / (flowAvg || 1)) * 100).toFixed(0)} %`} good up={flowNow >= flowAvg} />
           </div>
           <p className="dx-muted ov-note">vs 24-hour average {flowAvg.toFixed(0)} L/s</p>
-          {flowHourly.length > 0 && <BarChart points={flowHourly} height={170} format={v => `${v.toFixed(0)} L/s`} />}
+          {flowHourly.length > 0 && <BarChart points={flowHourly} height={170} format={v => v.toFixed(0)} />}
         </Card>
 
         <Card title="Tank levels" sub={`${tanks.length} reservoir${tanks.length === 1 ? '' : 's'} · combined storage`} actions={<Link className="dx-link" to="/monitoring/tank-levels">View all →</Link>}>
@@ -229,13 +229,13 @@ function OverviewBody({ ops }: { ops: Ops }) {
         <Card title="NRW" sub={z ? z.name : 'All zones · per day'} actions={<Link className="dx-link" to="/nrw">View all →</Link>}>
           <div className="ov-donut">
             <Donut size={150} thickness={16} label={`${nrw.toFixed(1)}%`} sub="non-revenue"
-              parts={[{ label: 'Billed', value: billed, color: 'hsl(var(--primary))' }, { label: 'Estimated loss', value: loss, color: '#C7D9F8' }]} />
+              parts={[{ label: 'Billed', value: billed, color: 'hsl(var(--primary))' }, { label: 'Estimated loss', value: loss, color: 'hsl(var(--warning))' }]} />
             <BadgeDelta text={`${Math.abs(nrw - nrwPrev).toFixed(1)} pts vs last month`} good={nrw < nrwPrev} up={nrw > nrwPrev} />
           </div>
           <div className="dx-rows" style={{ marginTop: 12 }}>
             <div className="dx-row"><i className="ov-sw" style={{ background: 'hsl(var(--foreground) / 0.25)' }} /><span className="name">Supplied</span><span className="val">{supplied.toLocaleString()} m³</span></div>
             <div className="dx-row"><i className="ov-sw" style={{ background: 'hsl(var(--primary))' }} /><span className="name">Billed</span><span className="val">{billed.toLocaleString()} m³</span></div>
-            <div className="dx-row"><i className="ov-sw" style={{ background: '#C7D9F8' }} /><span className="name">Estimated loss</span><span className="val">{loss.toLocaleString()} m³</span></div>
+            <div className="dx-row"><i className="ov-sw" style={{ background: 'hsl(var(--warning))' }} /><span className="name">Estimated loss</span><span className="val">{loss.toLocaleString()} m³</span></div>
           </div>
         </Card>
       </div>

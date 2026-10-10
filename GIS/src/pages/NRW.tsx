@@ -114,7 +114,7 @@ function NrwBody({ ops }: { ops: Ops }) {
             <span style={{ marginLeft: 'auto' }}>● Leak incident · ◆ Customer report</span>
           </div>
         </Card>
-        <Card title="Water balance" sub="Monthly volume, billed vs lost (m³)">
+        <Card title="Water balance" sub="Monthly volume, billed vs lost · thousands of m³">
           <StackedColumns height={300} data={hist.map(m => ({ label: m.month, values: [m.billed, m.supplied - m.billed] }))}
             keys={[{ label: 'Billed', color: 'hsl(var(--primary))' }, { label: 'Lost (NRW)', color: TONE_COLOR.warn }]} />
           <div style={{ marginTop: 8 }}><ChartLegend items={[{ label: 'Billed consumption', color: 'hsl(var(--primary))' }, { label: 'Non-revenue water', color: 'hsl(var(--warning))' }]} /></div>
