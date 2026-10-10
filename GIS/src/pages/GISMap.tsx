@@ -12,10 +12,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import L from 'leaflet';
 import { Shell } from '../components/Shell';
 import { SidePanel, SpRow } from '../components/SidePanel';
-import { useOps, ago } from '../demo/model';
+import { useOps, ago, zoneName, type Ops } from '../demo/model';
 import { withState, useIncidentState } from '../demo/incidentState';
 import { LineChart } from '../demo/charts';
-import { series, rangeSpec, type Metric } from '../demo/series';
+import { series, rangeSpec, METRICS, toneFor, type Metric, type Tone } from '../demo/series';
 import { useTheme } from '../theme';
 import {
   loadNetwork,
@@ -33,6 +33,8 @@ import {
   STATUS_COLOR,
   QUALITY_SENSOR_COLOR,
   assetGlyph,
+  engSymbol,
+  markerIcon,
   zoneLabel
 } from '../data/network';
 import { leaks as leakData, type Leak, type LeakSeverity } from '../data';
@@ -56,12 +58,13 @@ const TILE_ATTR =
 // Google tiles — real imagery without a proxy. `lyrs=s` is pure satellite with
 // NO labels/roads (clean backdrop for the network); `lyrs=m` is the street map.
 const GOOGLE_KEY = (import.meta as { env?: { VITE_GOOGLE_MAPS_API_KEY?: string } }).env?.VITE_GOOGLE_MAPS_API_KEY || '';
-const TILE_GOOGLE_STREETS = 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
+// apistyle hides points of interest and transit so only the network carries icons
+const TILE_GOOGLE_STREETS = 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&apistyle=s.t%3A2%7Cp.v%3Aoff%2Cs.t%3A4%7Cp.v%3Aoff';
 const TILE_GOOGLE_SATELLITE = 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}';
 const TILE_GOOGLE_ATTR = 'Imagery &copy; <a href="https://www.google.com/maps">Google</a> · water demo data';
 
 /** Basemap mode — street map, label-free satellite, or bare engineering canvas. */
-type Basemap = 'streets' | 'satellite' | 'none';
+type Basemap = 'dark' | 'streets' | 'satellite' | 'none';
 
 /** Build the active basemap tile layer for the current mode + theme. */
 function makeTileLayer(basemap: Basemap, dark: boolean): L.TileLayer | null {
@@ -69,6 +72,10 @@ function makeTileLayer(basemap: Basemap, dark: boolean): L.TileLayer | null {
   // keepBuffer + updateWhenZooming:false keep already-loaded tiles painted while
   // panning/zooming, so the map doesn't flash grey between tile fetches.
   const common = { attribution: TILE_GOOGLE_ATTR, subdomains: '0123', maxZoom: 20, keepBuffer: 4, updateWhenZooming: false };
+  if (basemap === 'dark') {
+    // Street map darkened in CSS (.aw-tiles-dark) so network colours carry the view.
+    return L.tileLayer(TILE_GOOGLE_STREETS, { ...common, className: 'aw-tiles-dark' });
+  }
   if (basemap === 'satellite') {
     return L.tileLayer(TILE_GOOGLE_SATELLITE, common);
   }
@@ -146,7 +153,7 @@ export default function GISMap() {
   const [layers, setLayers] = useState<LayerVis>(DEFAULT_LAYERS);
   const [showLeaks, setShowLeaks] = useState(true);
   const [focus, setFocus] = useState<Focus>(null);
-  const [basemap, setBasemap] = useState<Basemap>('satellite');
+  const [basemap, setBasemap] = useState<Basemap>('streets');
   const [sim, setSim] = useState<SimState>('idle');
   const [linkBy, setLinkBy] = useState<LinkSymbology>('class');
   const [nodeBy, setNodeBy] = useState<NodeSymbology>('asset');
@@ -154,6 +161,11 @@ export default function GISMap() {
 
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletRef = useRef<L.Map | null>(null);
+  const opsData = useOps();
+  const opsRef = useRef<Ops | null>(null);
+  opsRef.current = opsData;
+  const nav = useNavigate();
+  const detailRef = useRef<L.Popup | null>(null);
   const tileRef = useRef<L.TileLayer | null>(null);
   const rendererRef = useRef<L.Canvas | null>(null);
   const layerGroupsRef = useRef<Partial<Record<PipeClass | AssetKind, L.LayerGroup>>>({});
@@ -248,16 +260,6 @@ export default function GISMap() {
         lineJoin: 'round',
         renderer
       });
-      line.bindPopup(() => pipePopupHtml(feat), {
-        className: 'aw-popup aw-popup-pipe',
-        closeButton: false,
-        offset: [0, -2],
-        maxWidth: 280
-      });
-      line.on('click', (e) => {
-        L.DomEvent.stopPropagation(e);
-        setFocus({ kind: 'pipe', feature: feat });
-      });
       line.on('mouseover', () => line.setStyle({
         color: style.hoverColor,
         weight: style.hoverWeight,
@@ -272,7 +274,7 @@ export default function GISMap() {
        when zoomed all the way out. */
     map.on('zoomend', () => {
       const z = map.getZoom();
-      const scale = z >= 17 ? 1.35 : z >= 15 ? 1.15 : z >= 13 ? 1 : 0.78;
+      const scale = z >= 17 ? 1.4 : z >= 15 ? 1.2 : z >= 13 ? 1.05 : 0.95;
       Object.entries(groups).forEach(([key, grp]) => {
         if (!grp || !PIPE_KEYS.includes(key as PipeClass)) return;
         const style = PIPE_STYLE[key as PipeClass];
@@ -289,16 +291,15 @@ export default function GISMap() {
       const marker = L.marker([lat, lon], {
         icon: assetIcon(feat)
       });
-      marker.bindPopup(() => assetPopupHtml(feat), {
-        className: `aw-popup aw-popup-${props.asset}`,
-        closeButton: false,
-        offset: [0, -14],
-        maxWidth: 280
-      });
-      marker.on('click', (e) => {
-        L.DomEvent.stopPropagation(e);
-        setFocus({ kind: 'asset', feature: feat });
-      });
+      // Only sensors and reservoirs open the detail panel; pipes, valves,
+      // meters and leaks show their hover label only.
+      if (props.asset === 'sensor' || props.asset === 'tank' || props.asset === 'meter_valve') {
+        marker.on('click', (e) => {
+          L.DomEvent.stopPropagation(e);
+          marker.closeTooltip();
+          setFocus({ kind: 'asset', feature: feat });
+        });
+      }
       marker.bindTooltip(assetTooltip(feat), { direction: 'top', offset: [0, -10], opacity: 1 });
       const grp = groups[props.asset];
       if (grp) marker.addTo(grp);
@@ -309,16 +310,6 @@ export default function GISMap() {
     leakGroupRef.current = leakGroup;
     leakData.forEach((leak) => {
       const marker = L.marker([leak.lat, leak.lng], { icon: leakIcon(leak) });
-      marker.bindPopup(() => leakPopupHtml(leak), {
-        className: 'aw-popup aw-popup-leak',
-        closeButton: false,
-        offset: [0, -14],
-        maxWidth: 280
-      });
-      marker.on('click', (e) => {
-        L.DomEvent.stopPropagation(e);
-        setFocus({ kind: 'leak', leak });
-      });
       marker.bindTooltip(`${leak.id} · ${LEAK_SEVERITY_LABEL[leak.severity]} leak`, { direction: 'top', offset: [0, -12], opacity: 1 });
       marker.addTo(leakGroup);
     });
@@ -406,14 +397,41 @@ export default function GISMap() {
       });
       ring.addTo(map);
       focusOutlineRef.current = ring;
-      map.flyToBounds(ring.getBounds(), { duration: 0.5, padding: [40, 40], maxZoom: 17 });
-    } else if (focus?.kind === 'asset') {
-      const [lon, lat] = focus.feature.geometry.coordinates;
-      map.flyTo([lat, lon], Math.max(map.getZoom(), 16), { duration: 0.5 });
-    } else if (focus?.kind === 'leak') {
-      map.flyTo([focus.leak.lat, focus.leak.lng], Math.max(map.getZoom(), 16), { duration: 0.5 });
     }
+    /* Details open on top of the map, anchored to the element (no side panel). */
+    const prev = detailRef.current;
+    detailRef.current = null; // detach first so its 'remove' handler doesn't clear the new focus
+    prev?.remove();
+    if (!focus) return;
+    let at: L.LatLngExpression; let html: string;
+    if (focus.kind === 'pipe') {
+      const c = focus.feature.geometry.coordinates;
+      const m = c[Math.floor(c.length / 2)];
+      at = [m[1], m[0]]; html = pipePopupHtml(focus.feature);
+    } else if (focus.kind === 'asset') {
+      const [lon, lat] = focus.feature.geometry.coordinates;
+      at = [lat, lon]; html = detailPopupHtml(focus.feature, opsRef.current);
+    } else {
+      at = [focus.leak.lat, focus.leak.lng]; html = leakPopupHtml(focus.leak);
+    }
+    if (map.getZoom() < 15) map.setView(at, 15, { animate: false });
+    const pop = L.popup({ className: 'aw-popup aw-detail', closeButton: true, maxWidth: 340, minWidth: 300, autoPanPadding: [40, 40], offset: [0, -10] })
+      .setLatLng(at).setContent(html).openOn(map);
+    pop.on('remove', () => { if (detailRef.current === pop) { detailRef.current = null; setFocus(null); } });
+    detailRef.current = pop;
   }, [focus]);
+
+  /* links inside popups navigate within the app */
+  useEffect(() => {
+    const map = leafletRef.current; if (!map) return;
+    const el = map.getContainer();
+    const onClick = (e: MouseEvent) => {
+      const a = (e.target as HTMLElement).closest('[data-nav]') as HTMLElement | null;
+      if (a) { e.preventDefault(); nav(a.dataset.nav!); }
+    };
+    el.addEventListener('click', onClick);
+    return () => el.removeEventListener('click', onClick);
+  }, [nav, network]);
 
   /* ── 6. honour ?focus=<kind>:<id> from deep links ── */
   useEffect(() => {
@@ -540,18 +558,8 @@ export default function GISMap() {
           </>
         )}
       </div>
-      <SimulationStrip sim={sim} onRun={runSimulate} linkBy={linkBy} nodeBy={nodeBy} hasResults={hasResults} />
       </div>
 
-      {focus?.kind === 'pipe' && (
-        <PipePanel feature={focus.feature} onClose={() => setFocus(null)} />
-      )}
-      {focus?.kind === 'asset' && (
-        <AssetPanel feature={focus.feature} onClose={() => setFocus(null)} />
-      )}
-      {focus?.kind === 'leak' && (
-        <LeakPanel leak={focus.leak} onClose={() => setFocus(null)} />
-      )}
     </Shell>
   );
 }
@@ -623,39 +631,26 @@ function assetIcon(feat: AssetFeature): L.DivIcon {
   const kind = props.asset;
   const status = props.status;
   const palette = ASSET_STYLE[kind];
-  const statusColor = STATUS_COLOR[status];
-  const flag = status !== 'ok' ? `<span class="aw-badge-status" style="background:${statusColor}"></span>` : '';
+  const ring = status !== 'ok' ? ` alert" style="--halo:${STATUS_COLOR[status]}` : '';
   if (kind === 'tank') {
     const level = (props as { level_pct: number }).level_pct;
     const lvlColor = level >= 35 ? '#10B981' : level >= 20 ? '#F59E0B' : '#EF4444';
     return L.divIcon({
       className: 'aw-marker',
-      html: `<div class="aw-pin aw-pin-tank" style="--ac:${palette.color};--lc:${lvlColor}">
-        <div class="aw-pin-head">${assetGlyph('tank', palette.color, 18)}<span class="aw-pin-level"><i style="width:${level}%"></i></span></div>
-        <span class="aw-pin-tag">${level}%</span>
-      </div>`,
-      iconSize: [40, 48],
-      iconAnchor: [20, 40]
-    });
-  }
-  if (kind === 'pressure_valve' || kind === 'meter_valve') {
-    return L.divIcon({
-      className: 'aw-marker',
-      html: `<div class="aw-badge" style="--ac:${palette.color}">${assetGlyph(kind === 'pressure_valve' ? 'valve' : 'meter', palette.color, 16)}${flag}</div>`,
-      iconSize: [26, 26],
-      iconAnchor: [13, 13]
+      html: `<div class="eg-tank"><span class="eg-sym${ring}">${markerIcon('tank', palette.color, 24)}</span><span class="eg-tag"><i style="background:${lvlColor}"></i>${level}%</span></div>`,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12]
     });
   }
   const sub = (props as { subtype?: string }).subtype;
-  const sensorColor = sub === 'ph' || sub === 'turbidity' ? QUALITY_SENSOR_COLOR : palette.color;
+  const quality = sub === 'ph' || sub === 'turbidity';
+  const mk = kind === 'pressure_valve' ? 'valve' : kind === 'meter_valve' ? 'meter' : quality ? 'quality' : 'pressure';
+  const color = quality ? QUALITY_SENSOR_COLOR : palette.color;
   return L.divIcon({
     className: 'aw-marker',
-    html: `<div class="aw-asset-marker aw-sensor${status !== 'ok' ? ` is-${status}` : ''}" style="--ac:${sensorColor};--sc:${statusColor}">
-      <span class="aw-sensor-pulse"></span>
-      <span class="aw-sensor-dot"></span>
-    </div>`,
-    iconSize: [18, 18],
-    iconAnchor: [9, 9]
+    html: `<span class="eg-sym${ring}">${markerIcon(mk, color, 20)}</span>`,
+    iconSize: [20, 20],
+    iconAnchor: [10, 10]
   });
 }
 
@@ -676,12 +671,9 @@ function leakIcon(leak: Leak): L.DivIcon {
   const fixed = leak.status === 'fixed';
   return L.divIcon({
     className: 'aw-marker',
-    html: `<div class="aw-leakpin${fixed ? ' fixed' : ''}" style="--lk:${color}">
-      <svg viewBox="0 0 32 40" width="28" height="35"><path d="M16 1.5C8 1.5 2 7.4 2 15c0 9.6 14 23.5 14 23.5S30 24.6 30 15C30 7.4 24 1.5 16 1.5z" fill="${color}" stroke="#fff" stroke-width="2"/></svg>
-      <span class="aw-leakpin-glyph">${assetGlyph('leak', '#fff', 14)}</span>
-    </div>`,
-    iconSize: [28, 35],
-    iconAnchor: [14, 34]
+    html: `<span class="eg-sym eg-leak${fixed ? ' fixed' : ''}">${markerIcon('leak', color, 22)}</span>`,
+    iconSize: [22, 22],
+    iconAnchor: [11, 11]
   });
 }
 
@@ -848,6 +840,62 @@ function assetPopupHtml(feat: AssetFeature): string {
     </div>`;
 }
 
+/** Rich detail card for sensors and reservoirs: live reading, safe range, 24 h trend, recent alerts. */
+function detailPopupHtml(feat: AssetFeature, ops: Ops | null): string {
+  const p = feat.properties;
+  if (!ops || (p.asset !== 'sensor' && p.asset !== 'tank' && p.asset !== 'meter_valve')) return assetPopupHtml(feat);
+  const day = rangeSpec('24H');
+  let title = p.name; let kind = ''; let metric: Metric = 'pressure'; let entity = p.id; let base = 0;
+  let rows: Array<[string, string]> = []; let href = '/monitoring'; let zone = '';
+  if (p.asset === 'meter_valve') {
+    const m = ops.meters.find(x => x.id === p.id);
+    if (!m) return assetPopupHtml(feat);
+    // Bulk meter: consumption expressed as an average flow so it can be trended.
+    metric = 'flow'; base = m.consumption_m3d / 86.4; zone = m.zone; kind = 'Bulk meter'; title = m.name; href = '/assets';
+    const today = Math.round(series('flow', m.id, base, day).reduce((a, x) => a + x.v, 0) / 97 * 86.4);
+    rows = [['Today', `${today.toLocaleString()} m³`], ['Average', `${m.consumption_m3d.toLocaleString()} m³/day`], ['Size', `⌀ ${m.size_mm} mm`], ['Valve', m.state === 'throttled' ? 'Throttled' : 'Open']];
+  } else if (p.asset === 'tank') {
+    const t = ops.tanks.find(x => x.id === p.id);
+    if (!t) return assetPopupHtml(feat);
+    title = t.name; kind = 'Reservoir · level sensor'; metric = 'level'; base = t.base; zone = t.zone; href = '/monitoring/tank-levels';
+    rows = [['Level', `${Math.round(t.level)} %`], ['Stored', `${Math.round(t.volume).toLocaleString()} m³`], ['Capacity', `${t.capacity.toLocaleString()} m³`], ['Last 6 h', `${t.change6h >= 0 ? '+' : '−'}${Math.abs(t.change6h).toFixed(0)} pts`]];
+  } else if (p.subtype === 'ph' || p.subtype === 'turbidity') {
+    const z = p.id.split('-').slice(1).join('-');
+    const q = ops.quality.find(x => x.zone === z);
+    if (!q) return assetPopupHtml(feat);
+    metric = p.subtype === 'ph' ? 'ph' : 'turbidity'; entity = q.id; base = q.base[metric as 'ph' | 'turbidity']; zone = q.zone;
+    title = q.name; kind = 'Water-quality monitoring point'; href = '/monitoring/water-quality';
+    rows = (['turbidity', 'ph', 'chlorine', 'conductivity'] as Metric[]).map(m => [METRICS[m].label.replace('Residual chlorine', 'Chlorine'), `${q.values[m].toFixed(METRICS[m].decimals)}${METRICS[m].unit ? ` ${METRICS[m].unit}` : ''}`]);
+  } else {
+    const s = ops.pressure.find(x => x.id === p.id);
+    if (!s) return assetPopupHtml(feat);
+    base = s.base; zone = s.zone; kind = 'Pressure & flow logger'; title = `Logger ${s.id}`; href = '/monitoring/pressure';
+    rows = [['Pressure', s.online ? `${s.value.toFixed(2)} bar` : '—'], ['Flow', s.online ? `${s.flow.toFixed(1)} L/s` : '—'], ['Safe range', METRICS.pressure.rangeText], ['On pipe', s.pipeId]];
+  }
+  const pts = series(metric, entity, base, day);
+  const now = pts[pts.length - 1].v;
+  const tone: Tone = p.asset === 'meter_valve' ? (p.status === 'ok' ? 'ok' : p.status === 'warn' ? 'warn' : 'crit') : toneFor(metric, now);
+  const toneLabel = { ok: 'Normal', warn: 'Warning', crit: 'Critical', off: 'Offline' }[tone];
+  const W = 296, H = 54;
+  const lo = Math.min(...pts.map(x => x.v)), hi = Math.max(...pts.map(x => x.v));
+  const path = pts.map((x, i) => `${i ? 'L' : 'M'}${((i / (pts.length - 1)) * W).toFixed(1)},${(H - 3 - ((x.v - lo) / (hi - lo || 1)) * (H - 6)).toFixed(1)}`).join('');
+  const col = tone === 'ok' ? '#1769E8' : tone === 'warn' ? '#D97706' : '#DC2626';
+  const alerts = withState(ops.incidents).filter(i => i.entityId === entity || i.focus === `asset:${p.id}`).filter(i => i.status !== 'resolved');
+  return `
+    <div class="aw-detail-card">
+      <div class="dt-head">
+        <div><div class="dt-kind">${escapeHtml(kind)}</div><div class="dt-title">${escapeHtml(title)}</div><div class="dt-sub">${escapeHtml(zoneName(zone))} · ${escapeHtml(p.id)}</div></div>
+        <span class="dt-pill ${tone}">${toneLabel}</span>
+      </div>
+      <div class="dt-grid">${rows.map(([k, v]) => `<div><span>${escapeHtml(k)}</span><b>${escapeHtml(v)}</b></div>`).join('')}</div>
+      <div class="dt-trend"><span>${p.asset === 'meter_valve' ? 'Consumption (flow)' : escapeHtml(METRICS[metric].label)} · last 24 h</span>
+        <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="none"><path d="${path}L${W},${H}L0,${H}Z" fill="${col}" opacity="0.08"/><path d="${path}" fill="none" stroke="${col}" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>
+      </div>
+      ${alerts.length ? `<div class="dt-alerts">${alerts.slice(0, 2).map(a => `<a href="#" data-nav="/alerts?id=${a.id}"><i class="${a.severity}"></i>${escapeHtml(a.title.split(' — ')[0])}<em>${escapeHtml(ago(a.startedAt))}</em></a>`).join('')}</div>` : ''}
+      <a href="#" class="dt-link" data-nav="${href}">${p.asset === 'meter_valve' ? 'Open in Assets →' : 'Open in Monitoring →'}</a>
+    </div>`;
+}
+
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) =>
     c === '&' ? '&amp;' :
@@ -956,49 +1004,15 @@ function LayerControl({
               label="Leaks"
               count={leakCount}
               on={showLeaks}
-              swatch={
-                <svg width={14} height={14} viewBox="0 0 24 24">
-                  <path d="M12 2C12 2 5 10 5 15a7 7 0 0 0 14 0c0-5-7-13-7-13z" fill={LEAK_SEVERITY_COLOR.critical} />
-                </svg>
-              }
+              swatch={<span className="eg-swatch" dangerouslySetInnerHTML={{ __html: markerIcon('leak', LEAK_SEVERITY_COLOR.critical, 16) }} />}
               onClick={onToggleLeaks}
             />
-          </div>
-          <div className="gis-lc-section">
-            <div className="gis-lc-section-head"><span>Link symbology</span></div>
-            <select
-              className="gis-symbology-select"
-              value={linkBy}
-              onChange={(e) => onLinkBy(e.target.value as LinkSymbology)}
-            >
-              {LINK_SYMBOLOGY.map((o) => (
-                <option key={o.key} value={o.key} disabled={o.needsSim && !hasResults}>
-                  {o.label}{o.needsSim && !hasResults ? ' · run simulation' : ''}
-                </option>
-              ))}
-            </select>
-            <RampLegend linkBy={linkBy} hasResults={hasResults} />
-          </div>
-          <div className="gis-lc-section">
-            <div className="gis-lc-section-head"><span>Node symbology</span></div>
-            <select
-              className="gis-symbology-select"
-              value={nodeBy}
-              onChange={(e) => onNodeBy(e.target.value as NodeSymbology)}
-            >
-              {NODE_SYMBOLOGY.map((o) => (
-                <option key={o.key} value={o.key} disabled={o.needsSim && !hasResults}>
-                  {o.label}{o.needsSim && !hasResults ? ' · run simulation' : ''}
-                </option>
-              ))}
-            </select>
           </div>
           <div className="gis-lc-section gis-lc-status">
             <div className="gis-lc-section-head"><span>Status</span></div>
             <div className="gis-lc-status-row">
-              <span><span className="gis-status-dot" style={{ background: STATUS_COLOR.ok }} />Healthy</span>
-              <span><span className="gis-status-dot" style={{ background: STATUS_COLOR.warn }} />Anomaly</span>
-              <span><span className="gis-status-dot" style={{ background: STATUS_COLOR.alert }} />Critical</span>
+              <span><span className="gis-status-dot ring" style={{ borderColor: STATUS_COLOR.warn }} />Warning halo</span>
+              <span><span className="gis-status-dot ring" style={{ borderColor: STATUS_COLOR.alert }} />Critical halo</span>
             </div>
           </div>
           <div className="gis-lc-foot">
@@ -1067,15 +1081,10 @@ function PipeSwatch({ cls }: { cls: PipeClass }) {
 
 function AssetSwatch({ kind }: { kind: AssetKind }) {
   const c = ASSET_STYLE[kind].color;
-  if (kind === 'sensor') {
-    return (
-      <span className="aw-swatch-sensors" aria-hidden="true">
-        <i style={{ background: c }} /><i style={{ background: QUALITY_SENSOR_COLOR }} />
-      </span>
-    );
-  }
-  const glyph = assetGlyph(kind === 'tank' ? 'tank' : kind === 'pressure_valve' ? 'valve' : 'meter', c, 14);
-  return <span className={`aw-badge sm${kind === 'tank' ? ' sq' : ''}`} style={{ ['--ac' as string]: c }} dangerouslySetInnerHTML={{ __html: glyph }} />;
+  const html = kind === 'sensor'
+    ? markerIcon('pressure', c, 16) + markerIcon('quality', QUALITY_SENSOR_COLOR, 16)
+    : markerIcon(kind === 'tank' ? 'tank' : kind === 'pressure_valve' ? 'valve' : 'meter', c, 16);
+  return <span className="eg-swatch" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
 /* Legend was merged into LayerControl — see status block + per-row swatches. */
@@ -1085,7 +1094,9 @@ function AssetSwatch({ kind }: { kind: AssetKind }) {
    ───────────────────────────────────────── */
 
 const BASEMAP_TABS: Array<{ key: Basemap; label: string; title: string }> = [
+  { key: 'streets', label: 'Map', title: 'Street map' },
   { key: 'satellite', label: 'Satellite', title: 'Aerial imagery — no labels' },
+  { key: 'dark', label: 'Dark', title: 'Dark street map' },
   { key: 'none', label: 'No basemap', title: 'Engineering canvas — model only' }
 ];
 
@@ -1114,17 +1125,6 @@ function WorkspaceToolbar({ basemap, onBasemap, onFit, sim, onSimulate }: {
         <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
           <path d="M4 9V4h5 M20 9V4h-5 M4 15v5h5 M20 15v5h-5" />
         </svg>
-      </button>
-      <div className="gis-toolbar-spacer" />
-      <button
-        type="button"
-        className={`gis-simulate-btn sim-${sim}`}
-        onClick={onSimulate}
-        disabled={sim === 'running'}
-        title="Run hydraulic simulation"
-      >
-        <span className="gis-sim-dot" />
-        {sim === 'running' ? 'Running…' : 'Run simulation'}
       </button>
     </div>
   );

@@ -6,6 +6,7 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import { useTheme } from '../theme';
+import { markerIcon } from '../data/network';
 import type { Ops, LatLng } from './model';
 import type { Tone } from './series';
 
@@ -18,9 +19,9 @@ export interface MapPoint {
   size?: number;
 }
 
-const TONE_HEX: Record<Tone, string> = { ok: '#10B981', warn: '#F59E0B', crit: '#EF4444', off: '#94A3B8' }; // map status palette
+const TONE_HEX: Record<Tone, string> = { ok: '#059669', warn: '#D97706', crit: '#DC2626', off: '#64748B' }; // map status palette
 // Same basemap provider as the Network page; desaturated (and inverted in dark mode) via CSS.
-const TILE = 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
+const TILE = 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&apistyle=s.t%3A2%7Cp.v%3Aoff%2Cs.t%3A4%7Cp.v%3Aoff';
 const ATTR = 'Map data &copy; Google';
 
 /** Canvas renderer that ignores redraws scheduled after the map was torn down (route change / StrictMode remount). */
@@ -97,11 +98,11 @@ export function NetworkMap({ ops, points, height = 360, zone = 'ALL', zoneColor,
       const z = p.properties.zone ?? '';
       const inZone = zone === 'ALL' || z === zone;
       const custom = zoneColor?.(z);
-      const color = custom ?? (cls === 'main' ? '#F97316' : cls === 'backfeed' ? '#64748B' : '#18AEEA');
+      const color = custom ?? (cls === 'main' ? '#C2410C' : cls === 'backfeed' ? '#334155' : '#0369A1');
       L.polyline(p.geometry.coordinates.map(c => [c[1], c[0]] as LatLng), {
         renderer: canvas, interactive: false,
-        color, weight: cls === 'main' ? 3 : cls === 'backfeed' ? 1.4 : 1.2, dashArray: cls === 'backfeed' && !custom ? '5 4' : undefined,
-        opacity: inZone ? (cls === 'main' ? 0.95 : 0.7) : 0.12
+        color, weight: cls === 'main' ? 4.5 : cls === 'backfeed' ? 2.2 : 2.2, dashArray: cls === 'backfeed' && !custom ? '5 4' : undefined,
+        opacity: inZone ? (cls === 'main' ? 1 : 0.85) : 0.15
       }).addTo(g);
     }
     m.fitBounds(coreBounds(ops, zone), { padding: [16, 16], maxZoom: 15, animate: false });
@@ -118,7 +119,7 @@ export function NetworkMap({ ops, points, height = 360, zone = 'ALL', zoneColor,
       const icon = L.divIcon({
         className: '',
         iconSize: [size, size],
-        html: `<span class="dx-pin ${p.shape ?? 'circle'} ${p.tone}${sel ? ' sel' : ''}" style="width:${size}px;height:${size}px;background:${TONE_HEX[p.tone]}"></span>`
+        html: `<span class="eg-sym${p.tone === 'crit' ? ' alert' : ''}${sel ? ' sel' : ''}" style="--halo:${TONE_HEX[p.tone]}">${markerIcon(p.shape === 'square' ? 'tank' : p.shape === 'diamond' ? 'quality' : 'pressure', TONE_HEX[p.tone], size + 8)}</span>`
       });
       const mk = L.marker(p.pos, { icon, keyboard: false, zIndexOffset: order.indexOf(p.tone) * 100 + (sel ? 1000 : 0) });
       mk.bindTooltip(p.label, { direction: 'top', offset: [0, -size / 2], className: 'dx-maptip' });

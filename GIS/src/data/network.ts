@@ -340,9 +340,9 @@ export const PIPE_STYLE: Record<PipeClass, {
   // Functional palette: hue + width encode pipe class, so classes stay
   // distinguishable without relying on colour alone.
   main: {
-    color: '#F97316',
-    hoverColor: '#FB923C',
-    weight: 4,
+    color: '#C2410C',
+    hoverColor: '#EA580C',
+    weight: 6,
     hoverWeight: 6,
     opacity: 1,
     label: 'Transmission main',
@@ -350,9 +350,9 @@ export const PIPE_STYLE: Record<PipeClass, {
     description: 'Primary supply trunk · highest priority'
   },
   distribution: {
-    color: '#18AEEA',
-    hoverColor: '#5CC8F2',
-    weight: 2.5,
+    color: '#0369A1',
+    hoverColor: '#0284C7',
+    weight: 3.5,
     hoverWeight: 4,
     opacity: 1,
     label: 'Distribution main',
@@ -360,9 +360,9 @@ export const PIPE_STYLE: Record<PipeClass, {
     description: 'Neighbourhood feeder · zone backbone'
   },
   household: {
-    color: '#20C997',
-    hoverColor: '#5ADBB3',
-    weight: 1.5,
+    color: '#65A30D',
+    hoverColor: '#84CC16',
+    weight: 2.2,
     hoverWeight: 3,
     opacity: 0.95,
     label: 'Service connection',
@@ -370,9 +370,9 @@ export const PIPE_STYLE: Record<PipeClass, {
     description: 'Service line to customer property'
   },
   backfeed: {
-    color: '#64748B',
-    hoverColor: '#94A3B8',
-    weight: 2,
+    color: '#334155',
+    hoverColor: '#475569',
+    weight: 3,
     hoverWeight: 3.5,
     dashArray: '6 5',
     opacity: 1,
@@ -381,9 +381,9 @@ export const PIPE_STYLE: Record<PipeClass, {
     description: 'Reversible supply path · currently closed'
   },
   boundary: {
-    color: '#94A3B8',
-    hoverColor: '#CBD5E1',
-    weight: 1.5,
+    color: '#64748B',
+    hoverColor: '#94A3B8',
+    weight: 2,
     hoverWeight: 3,
     dashArray: '6 4',
     opacity: 0.9,
@@ -406,32 +406,32 @@ export const ASSET_STYLE: Record<AssetKind, {
   // read apart from the blue (#00B4FF) pipe network and from each other.
   // Status semantics (green/amber/red) stay on the separate status dot.
   tank: {
-    color: '#7C3AED',
+    color: '#6D28D9',
     ring: '#DDD6FE',
     label: 'Reservoir / tank',
     shortLabel: 'Reservoirs',
     description: 'Reservoir level-sensor telemetry'
   },
   pressure_valve: {
-    color: '#F59E0B',
+    color: '#B45309',
     ring: '#FDE68A',
     label: 'Valve (PRV)',
     shortLabel: 'Valves',
     description: 'Pressure-reducing valve · live drift'
   },
   meter_valve: {
-    color: '#EC4899',
+    color: '#BE185D',
     ring: '#FBCFE8',
     label: 'Meter / pump',
     shortLabel: 'Meters',
     description: 'Consumption-metered valve assembly'
   },
   sensor: {
-    color: '#2563EB',
+    color: '#1D4ED8',
     ring: '#BFDBFE',
     label: 'Sensors',
     shortLabel: 'Sensors',
-    description: 'Pressure (blue) and water-quality (violet) sensors'
+    description: 'Pressure (blue) and water-quality (teal) sensors'
   }
 };
 
@@ -443,25 +443,55 @@ export const STATUS_COLOR: Record<AssetStatus, string> = {
   alert: '#EF4444'   // critical / leak
 };
 export const OFFLINE_COLOR = '#94A3B8';
-export const QUALITY_SENSOR_COLOR = '#8B5CF6';
+export const QUALITY_SENSOR_COLOR = '#0E7490';
 export const DMA_BOUNDARY_COLOR = '#8B5CF6';
 
 /**
- * Map glyphs shared by markers and the legend: white badge, coloured ring,
- * engineering symbol inside. Returned as SVG strings for Leaflet divIcons.
+ * Flat engineering map symbols shared by markers and the legend:
+ * valve = bowtie, meter = circle, reservoir = square, pressure sensor = dot,
+ * water-quality sensor = diamond, leak = triangle. Thin dark outline so they
+ * read on dark and satellite basemaps alike.
  */
-export function assetGlyph(kind: 'tank' | 'valve' | 'meter' | 'leak', color: string, size = 18): string {
-  const st = `fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"`;
+export type SymbolKind = 'valve' | 'meter' | 'tank' | 'pressure' | 'quality' | 'leak';
+export function engSymbol(kind: SymbolKind, color: string, size = 14, outline = '#0B1220'): string {
+  const o = `stroke="${outline}" stroke-width="1.25" stroke-linejoin="round"`;
+  const v = `viewBox="0 0 16 16" width="${size}" height="${size}"`;
   switch (kind) {
-    case 'valve': // gate valve: bowtie body, stem and handwheel
-      return `<svg viewBox="0 0 24 24" width="${size}" height="${size}"><path d="M3.5 10.5v9l8.5-4.5zM20.5 10.5v9L12 15z" fill="${color}"/><path d="M12 15V7" ${st}/><path d="M7.5 5.5h9" ${st} stroke-width="2.4"/></svg>`;
-    case 'meter': // flow meter: dial with needle and pipe stubs
-      return `<svg viewBox="0 0 24 24" width="${size}" height="${size}"><path d="M1.5 13h3.5M19 13h3.5" ${st}/><circle cx="12" cy="13" r="6.5" ${st}/><path d="M12 13l3.2-3.4" ${st}/><circle cx="12" cy="13" r="1.4" fill="${color}"/><path d="M8.6 9.3h.01M12 7.9h.01" ${st} stroke-width="2.4"/></svg>`;
-    case 'tank': // reservoir: cylinder
-      return `<svg viewBox="0 0 24 24" width="${size}" height="${size}"><ellipse cx="12" cy="6" rx="7" ry="2.6" ${st}/><path d="M5 6v12c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6V6" ${st}/><path d="M5 12c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6" ${st} opacity="0.55"/></svg>`;
-    case 'leak':
-      return `<svg viewBox="0 0 24 24" width="${size}" height="${size}"><path d="M12 3.5s5.5 6 5.5 10a5.5 5.5 0 0 1-11 0c0-4 5.5-10 5.5-10z" fill="${color}"/><path d="M9.6 14.2a2.6 2.6 0 0 0 2.4 2.4" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+    case 'valve':    return `<svg ${v}><path d="M1.5 3.5v9L8 8zM14.5 3.5v9L8 8z" fill="${color}" ${o}/></svg>`;
+    case 'meter':    return `<svg ${v}><circle cx="8" cy="8" r="5.5" fill="${color}" ${o}/><circle cx="8" cy="8" r="1.6" fill="${outline}"/></svg>`;
+    case 'tank':     return `<svg ${v}><rect x="2" y="2" width="12" height="12" rx="1.5" fill="${color}" ${o}/></svg>`;
+    case 'pressure': return `<svg ${v}><circle cx="8" cy="8" r="4.5" fill="${color}" ${o}/></svg>`;
+    case 'quality':  return `<svg ${v}><path d="M8 2.5 13.5 8 8 13.5 2.5 8z" fill="${color}" ${o}/></svg>`;
+    case 'leak':     return `<svg ${v}><path d="M8 1.8 15 14H1z" fill="${color}" ${o}/><path d="M8 6.2v3.6M8 11.6v.1" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>`;
   }
+}
+
+/**
+ * Map markers that show what the asset is: a coloured rounded tile with a
+ * white line icon (reservoir, pressure sensor, water-quality probe, valve,
+ * meter, leak). Status shows as a ring around the tile.
+ */
+export type MarkerKind = 'tank' | 'pressure' | 'quality' | 'valve' | 'meter' | 'leak';
+const MARKER_PATHS: Record<MarkerKind, string> = {
+  tank: '<ellipse cx="12" cy="6" rx="7" ry="2.5"/><path d="M5 6v12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6"/><path d="M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/>',
+  pressure: '<path d="M4.5 16.5a8 8 0 1 1 15 0"/><path d="m12 13 4-4.5"/><circle cx="12" cy="13" r="1.2" fill="#fff"/>',
+  quality: '<path d="M12 3.5s5.5 6 5.5 10a5.5 5.5 0 0 1-11 0c0-4 5.5-10 5.5-10z"/><path d="M9.8 14.5a2.3 2.3 0 0 0 2.2 2.2"/>',
+  valve: '<path d="M3.5 10v8l8.5-4zM20.5 10v8L12 14z"/><path d="M12 14V7.5M8.5 5.5h7"/>',
+  meter: '<rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="M7 10.5h2.5M10.8 10.5h2.4M14.5 10.5H17M7 14h10"/>',
+  leak: '<path d="M12 3.5s5.5 6 5.5 10a5.5 5.5 0 0 1-11 0c0-4 5.5-10 5.5-10z"/><path d="M12 9.5v3.3M12 15.3v.1"/>'
+};
+export function markerIcon(kind: MarkerKind, color: string, size = 22): string {
+  // Line icon in the asset colour over a white halo: reads on any basemap,
+  // no tiles or badges.
+  const paths = MARKER_PATHS[kind].replace(/fill="#fff"/g, `fill="${color}"`);
+  return `<span class="mk mk-${kind}" style="width:${size}px;height:${size}px"><svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke-linecap="round" stroke-linejoin="round">`
+    + `<g stroke="#fff" stroke-width="5.5">${MARKER_PATHS[kind]}</g>`
+    + `<g stroke="${color}" stroke-width="2.2">${paths}</g></svg></span>`;
+}
+
+/** @deprecated kept for older imports; maps to the engineering symbols. */
+export function assetGlyph(kind: 'tank' | 'valve' | 'meter' | 'leak', color: string, size = 18): string {
+  return engSymbol(kind, color, size);
 }
 
 export const MATERIAL_TINT: Record<string, string> = {
