@@ -92,6 +92,9 @@ function OverviewBody({ ops }: { ops: Ops }) {
   const nrw = z ? z.nrw : ops.nrw.current;
   const nrwPrev = z ? z.nrwPrev : ops.nrw.prev;
   const raisedToday = k.alertsPerDay[6];
+  const avgPts = meanSeries(pressure.filter(p => p.online).map(p => series('pressure', p.id, p.base, day)));
+  const avgP = avgPts[avgPts.length - 1]?.v ?? 0;
+  const avgP24 = avgPts[0]?.v ?? 0;
 
   const mapPoints: MapPoint[] = useMemo(() => [
     ...pressure.map(p => ({ id: `asset:${p.id}`, pos: p.pos, tone: p.tone, label: `${p.id} · ${p.online ? fmt('pressure', p.value) : 'offline'}`, size: 11 })),
@@ -137,9 +140,9 @@ function OverviewBody({ ops }: { ops: Ops }) {
           value={<span className="ov-q">{qBad.length ? 'Attention' : 'Good'}<Dot tone={qBad.length ? 'warn' : 'ok'} /></span>}
           sub={`${qNow.toFixed(0)} % of readings within range`}
           chart={<SparkArea points={k.qPts} tone="blue" width={96} />} onClick={() => navigate('/monitoring/water-quality')} />
-        <Kpi label={z ? `NRW · ${z.name}` : 'NRW'} icon={ICON.pie} iconTone="blue" value={nrw.toFixed(1)} unit="%"
-          delta={{ text: `${Math.abs(nrw - nrwPrev).toFixed(1)} pts`, good: nrw < nrwPrev, up: nrw > nrwPrev }} sub="vs last month"
-          chart={<SparkArea points={ops.nrwMonthly.map(m => ({ t: m.t, v: z ? m.byZone[z.code] : m.nrw }))} tone="blue" width={96} />} onClick={() => navigate('/nrw')} />
+        <Kpi label="Average pressure" icon={ICON.gauge} value={avgP.toFixed(2)} unit="bar"
+          delta={{ text: `${Math.abs(avgP - avgP24).toFixed(2)} bar`, good: avgP >= avgP24, up: avgP >= avgP24 }} sub="vs 24 h ago"
+          chart={<SparkArea points={avgPts} tone="blue" width={96} />} onClick={() => navigate('/monitoring/pressure')} />
         <Kpi label="Sensors online" icon={ICON.signal} iconTone="ok" value={online} unit={`/ ${sensors.length}`}
           sub={`${Math.round((online / Math.max(1, sensors.length)) * 100)} % online`}
           chart={<SparkBars values={k.sensorsOnline.map(v => v - Math.min(...k.sensorsOnline) + 1)} tone="ok" width={80} />} onClick={() => navigate('/monitoring/sensors')} />
@@ -170,7 +173,7 @@ function OverviewBody({ ops }: { ops: Ops }) {
                 </div>
                 <div className="dx-item-val">
                   <b>{headline(i)}</b>
-                  <span>{ago(i.startedAt)}{i.status === 'acknowledged' ? ' · ack' : ''}</span>
+                  <span>{ago(i.startedAt)}</span>
                 </div>
                 <span className="dx-item-chev">{ICON.chevron}</span>
               </button>
@@ -207,7 +210,7 @@ function OverviewBody({ ops }: { ops: Ops }) {
           <LineChart series={[{ id: 'p', label: 'Average pressure', points: pSeries }]} metric="pressure" height={170} />
         </Card>
 
-        <Card title="Flow" sub={`${flowLoggers.length} loggers · total, hourly`} actions={<Link className="dx-link" to="/monitoring/pressure">View all →</Link>}>
+        <Card title="Flow" sub={`${flowLoggers.length} loggers, hourly`} actions={<Link className="dx-link" to="/monitoring/pressure">View all →</Link>}>
           <div className="ov-big">
             <b>{flowNow.toFixed(0)}<small>L/s</small></b>
             <BadgeDelta text={`${Math.abs(((flowNow - flowAvg) / (flowAvg || 1)) * 100).toFixed(0)} %`} good up={flowNow >= flowAvg} />
@@ -216,7 +219,7 @@ function OverviewBody({ ops }: { ops: Ops }) {
           {flowHourly.length > 0 && <BarChart points={flowHourly} height={170} format={v => v.toFixed(0)} />}
         </Card>
 
-        <Card title="Tank levels" sub={`${tanks.length} reservoir${tanks.length === 1 ? '' : 's'} · combined storage`} actions={<Link className="dx-link" to="/monitoring/tank-levels">View all →</Link>}>
+        <Card title="Tank levels" sub={`${tanks.length} reservoirs, combined`} actions={<Link className="dx-link" to="/monitoring/tank-levels">View all →</Link>}>
           {tanks.length ? (
             <>
               <div className="ov-big"><b>{Math.round(storNow)}<small>%</small></b></div>
@@ -226,18 +229,6 @@ function OverviewBody({ ops }: { ops: Ops }) {
           ) : <p className="dx-muted">No reservoirs in this zone.</p>}
         </Card>
 
-        <Card title="NRW" sub={z ? z.name : 'All zones · per day'} actions={<Link className="dx-link" to="/nrw">View all →</Link>}>
-          <div className="ov-donut">
-            <Donut size={150} thickness={16} label={`${nrw.toFixed(1)}%`} sub="non-revenue"
-              parts={[{ label: 'Billed', value: billed, color: 'hsl(var(--primary))' }, { label: 'Estimated loss', value: loss, color: 'hsl(var(--warning))' }]} />
-            <BadgeDelta text={`${Math.abs(nrw - nrwPrev).toFixed(1)} pts vs last month`} good={nrw < nrwPrev} up={nrw > nrwPrev} />
-          </div>
-          <div className="dx-rows" style={{ marginTop: 12 }}>
-            <div className="dx-row"><i className="ov-sw" style={{ background: 'hsl(var(--foreground) / 0.25)' }} /><span className="name">Supplied</span><span className="val">{supplied.toLocaleString()} m³</span></div>
-            <div className="dx-row"><i className="ov-sw" style={{ background: 'hsl(var(--primary))' }} /><span className="name">Billed</span><span className="val">{billed.toLocaleString()} m³</span></div>
-            <div className="dx-row"><i className="ov-sw" style={{ background: 'hsl(var(--warning))' }} /><span className="name">Estimated loss</span><span className="val">{loss.toLocaleString()} m³</span></div>
-          </div>
-        </Card>
       </div>
     </div>
   );
