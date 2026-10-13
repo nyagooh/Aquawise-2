@@ -7,7 +7,8 @@
  * (the library Tremor is built on) with Tremor's styling, tooltip and colours.
  *
  * Blue is the default series colour; green/amber/red appear only for
- * acceptable ranges, thresholds and out-of-range readings.
+ * acceptable ranges, thresholds and out-of-range readings. Lines are drawn as
+ * steps: each reading holds until the next one arrives, as sensors report.
  */
 import { useMemo, type ReactNode } from 'react';
 import {
@@ -108,7 +109,7 @@ export interface ChartSeries { id: string; label: string; points: Point[]; color
  * area; several render as lines for comparison.
  */
 export function LineChart({
-  series, metric, height = 260, band, windows = [], marker, yLabel, format, showThresholds = true, area = true, yMin
+  series, metric, height = 260, band, windows = [], marker, yLabel, format, showThresholds = true, area = true, yMin, domain
 }: {
   series: ChartSeries[];
   metric?: Metric;
@@ -121,9 +122,13 @@ export function LineChart({
   showThresholds?: boolean;
   area?: boolean;
   yMin?: number;
+  /** Force at least this value range, so several small charts share one scale. */
+  domain?: [number, number];
 }) {
   const def = metric ? METRICS[metric] : null;
   const fmtV = format ?? ((v: number) => `${def ? v.toFixed(def.decimals) : v.toFixed(1)}${def?.unit ? ` ${def.unit}` : ''}`);
+  // Long series are averaged into at most 48 steps so the stepped line stays readable at any size.
+  series = useMemo(() => series.map(s => ({ ...s, points: stepBuckets(s.points) })), [series]);
   const single = series.length === 1;
   const base = series[0]?.points ?? [];
   const t0 = base[0]?.t ?? 0; const t1 = base[base.length - 1]?.t ?? 1;
@@ -151,6 +156,7 @@ export function LineChart({
       if (Number.isFinite(bandR[0]) && Math.abs(bandR[0] - mid) < reach) lo = Math.min(lo, bandR[0]);
       if (Number.isFinite(bandR[1]) && Math.abs(bandR[1] - mid) < reach) hi = Math.max(hi, bandR[1]);
     }
+    if (domain) { lo = Math.min(lo, domain[0]); hi = Math.max(hi, domain[1]); }
     if (yMin !== undefined) lo = Math.min(lo, yMin);
     const pad = hi - lo || Math.abs(hi) * 0.1 || 1;
     const floor = yMin !== undefined ? yMin : lo - pad * 0.08;
@@ -160,7 +166,7 @@ export function LineChart({
       if (ticks[ticks.length - 1] < 100 && hi > 90) ticks.push(100);
     }
     return { rows, yDomain: [ticks[0], ticks[ticks.length - 1]] as [number, number], yTicks: ticks };
-  }, [series, metric, single, bandR, showThresholds, yMin, base]);
+  }, [series, metric, single, bandR, showThresholds, yMin, base, domain]);
 
   const thresholds = def && showThresholds
     ? (['normal', 'crit'] as const).flatMap(k => def[k].map(v => ({ v, k })))
@@ -209,18 +215,31 @@ export function LineChart({
             ) : null}
           />
           {series.map((s, si) => single && area ? (
-            <Area key={s.id} dataKey={`s${si}`} type="monotone" stroke={s.color ?? BLUE} strokeWidth={1.75} fill={`url(#${gid})`}
+            <Area key={s.id} dataKey={`s${si}`} type="stepAfter" stroke={s.color ?? BLUE} strokeWidth={1.75} fill={`url(#${gid})`}
               dot={false} activeDot={{ r: 4.5, strokeWidth: 2, stroke: '#fff', fill: s.color ?? BLUE }} isAnimationActive={false} connectNulls />
           ) : (
-            <Line key={s.id} dataKey={`s${si}`} type="monotone" stroke={s.color ?? SERIES_COLORS[si % SERIES_COLORS.length]} strokeWidth={1.75}
+            <Line key={s.id} dataKey={`s${si}`} type="stepAfter" stroke={s.color ?? SERIES_COLORS[si % SERIES_COLORS.length]} strokeWidth={1.75}
               dot={false} activeDot={{ r: 4.5, strokeWidth: 2, stroke: '#fff' }} isAnimationActive={false} connectNulls />
           ))}
-          {single && metric && <Line dataKey="warn" type="monotone" stroke={TONE_HEX.warn} strokeWidth={2.5} dot={false} activeDot={false} isAnimationActive={false} connectNulls={false} legendType="none" />}
-          {single && metric && <Line dataKey="crit" type="monotone" stroke={TONE_HEX.crit} strokeWidth={2.5} dot={false} activeDot={false} isAnimationActive={false} connectNulls={false} legendType="none" />}
+          {single && metric && <Line dataKey="warn" type="stepAfter" stroke={TONE_HEX.warn} strokeWidth={2.5} dot={false} activeDot={false} isAnimationActive={false} connectNulls={false} legendType="none" />}
+          {single && metric && <Line dataKey="crit" type="stepAfter" stroke={TONE_HEX.crit} strokeWidth={2.5} dot={false} activeDot={false} isAnimationActive={false} connectNulls={false} legendType="none" />}
         </ComposedChart>
       </ResponsiveContainer>
     </div>
   );
+}
+
+function stepBuckets(points: Point[], max = 48): Point[] {
+  if (points.length <= max * 1.5) return points;
+  const size = Math.ceil(points.length / max);
+  const out: Point[] = [];
+  for (let i = 0; i < points.length; i += size) {
+    const chunk = points.slice(i, i + size);
+    out.push({ t: chunk[0].t, v: chunk.reduce((acc, p) => acc + p.v, 0) / chunk.length });
+  }
+  const last = points[points.length - 1];
+  if (out[out.length - 1].t !== last.t) out.push({ t: last.t, v: out[out.length - 1].v });
+  return out;
 }
 
 /** Legend that can also describe bands and dashed threshold lines. */
@@ -279,7 +298,7 @@ export function Sparkline({ points, tone, width = 96, height = 28 }: { points: P
   if (points.length < 2) return null;
   return (
     <SparkLineChart data={points.map(p => ({ t: p.t, v: p.v }))} index="t" categories={['v']}
-      colors={[tone && tone !== 'ok' ? TONE_TREMOR[tone] : TB]} style={{ width, height }} curveType="monotone" />
+      colors={[tone && tone !== 'ok' ? TONE_TREMOR[tone] : TB]} style={{ width, height }} curveType="step" />
   );
 }
 
@@ -288,7 +307,7 @@ export function SparkArea({ points, tone, width = 110, height = 40, fluid }: { p
   if (points.length < 2) return null;
   return (
     <SparkAreaChart data={points.map(p => ({ t: p.t, v: p.v }))} index="t" categories={['v']}
-      colors={[TONE_TREMOR[tone ?? 'blue']]} style={{ width: fluid ? '100%' : width, height }} curveType="monotone" />
+      colors={[TONE_TREMOR[tone ?? 'blue']]} style={{ width: fluid ? '100%' : width, height }} curveType="step" />
   );
 }
 
@@ -412,7 +431,8 @@ export function StatusDonut({ parts, label, sub, size = 132 }: {
 }
 
 /* ── heatmap: readings as a grid of squares ── */
-const HEAT_BLUE = ['#E8F1FE', '#C7DCFC', '#9DC1F8', '#6A9EF2', '#3D7BE8', '#1F5FD1', '#174BAA'];
+/** Multi-hue scale (teal → blue → violet) so neighbouring values read as different colours, not shades of one blue. */
+const HEAT_BLUE = ['#D5F3EE', '#8EDCCB', '#3FBFB0', '#2B98C6', '#2F6FDB', '#4F4CC9', '#6B2FA8'];
 
 /** Columns for a range: hourly for a day, 6-hourly for a week, daily beyond. */
 function heatBuckets(spec: RangeSpec): { count: number; spanMs: number } {
@@ -425,7 +445,7 @@ function heatBuckets(spec: RangeSpec): { count: number; spanMs: number } {
 
 /**
  * One row per monitoring point, one square per time block. Normal readings are
- * shaded blue by where they sit in the normal range; warnings and critical
+ * shaded teal → blue → violet by where they sit in the normal range; warnings and critical
  * readings are amber and red. Hover a square for its time and value.
  */
 export function Heatmap({ rows, metric, spec, showValues, scale, onRowClick }: {
@@ -454,7 +474,7 @@ export function Heatmap({ rows, metric, spec, showValues, scale, onRowClick }: {
     if (c.tone === 'crit') return { bg: '#E5484D', fg: '#fff' };
     if (c.tone === 'warn') return { bg: '#F2A93B', fg: '#3B2600' };
     const k = Math.max(0, Math.min(HEAT_BLUE.length - 1, Math.round(((c.v - lo) / (hi - lo || 1)) * (HEAT_BLUE.length - 1))));
-    return { bg: HEAT_BLUE[k], fg: k >= 4 ? '#fff' : '#1E3A6E' };
+    return { bg: HEAT_BLUE[k], fg: k >= 3 ? '#fff' : '#0B3B3A' };
   };
   return (
     <div className="hm" style={{ ['--hm-cols' as string]: count }}>
@@ -484,6 +504,99 @@ export function Heatmap({ rows, metric, spec, showValues, scale, onRowClick }: {
         <span className="hm-key"><i style={{ background: '#F2A93B' }} />Warning</span>
         <span className="hm-key"><i style={{ background: '#E5484D' }} />Critical</span>
       </div>
+    </div>
+  );
+}
+
+/* ── squares in a line: where a reading sits on its scale ── */
+/** Display scale per metric for the range squares. */
+const RANGE_SCALE: Partial<Record<Metric, [number, number]>> = {
+  turbidity: [0, 2], ph: [5.5, 9.5], chlorine: [0, 1.2], conductivity: [0, 1600], temperature: [10, 32], pressure: [0, 5.5], level: [0, 100]
+};
+
+/**
+ * A row of squares spanning the metric's scale. Each square is tinted by the
+ * zone it covers (normal, warning, critical); the square holding the current
+ * reading is filled solid.
+ */
+export function RangeSquares({ metric, value, count = 20 }: { metric: Metric; value: number; count?: number }) {
+  const def = METRICS[metric];
+  const [lo, hi] = RANGE_SCALE[metric] ?? [Math.min(0, value), value * 2 || 1];
+  const step = (hi - lo) / count;
+  const at = Math.max(0, Math.min(count - 1, Math.floor((value - lo) / step)));
+  return (
+    <div className="rs" aria-label={`${fmt(metric, value)} on a scale of ${fmt(metric, lo)} to ${fmt(metric, hi)}`}>
+      <div className="rs-row">
+        {Array.from({ length: count }, (_, i) => {
+          const tone = toneFor(metric, lo + (i + 0.5) * step);
+          return <i key={i} className={`rs-sq t-${tone}${i === at ? ' on' : ''}`} />;
+        })}
+      </div>
+      <div className="rs-scale"><span>{fmt(metric, lo, false)}</span><span>{def.rangeText}</span><span>{fmt(metric, hi, false)}</span></div>
+    </div>
+  );
+}
+
+/** Reservoir as a tank outline filled to its level, with the warning (35 %) and low (20 %) marks. */
+export function TankFill({ level, tone, warn = 35, low = 20, width = 64, height = 96 }: { level: number; tone: Tone; warn?: number; low?: number; width?: number; height?: number }) {
+  const pad = 4; const h = height - pad * 2; const w = width - pad * 2;
+  const y = (pct: number) => pad + h * (1 - pct / 100);
+  const fill = tone === 'ok' ? BLUE : TONE_HEX[tone];
+  const id = `tf${Math.round(level * 10)}${tone}`;
+  return (
+    <svg className="tf" width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${Math.round(level)} percent full`}>
+      <defs><clipPath id={id}><rect x={pad} y={pad} width={w} height={h} rx={7} /></clipPath></defs>
+      <rect x={pad} y={pad} width={w} height={h} rx={7} className="tf-shell" />
+      <g clipPath={`url(#${id})`}>
+        <rect x={pad} y={y(level)} width={w} height={h} fill={fill} opacity={0.85} />
+        <rect x={pad} y={y(level)} width={w} height={3} fill="#fff" opacity={0.35} />
+      </g>
+      <line x1={pad} x2={pad + w} y1={y(warn)} y2={y(warn)} stroke={TONE_HEX.warn} strokeWidth={1.25} strokeDasharray="3 2" />
+      <line x1={pad} x2={pad + w} y1={y(low)} y2={y(low)} stroke={TONE_HEX.crit} strokeWidth={1.25} strokeDasharray="3 2" />
+      <rect x={pad} y={pad} width={w} height={h} rx={7} fill="none" className="tf-edge" />
+    </svg>
+  );
+}
+
+/**
+ * Range plot: one row per group on a shared scale. The tinted band is the
+ * normal range, the bar spans the lowest to highest reading, the dot is now.
+ */
+export function RangeRows({ rows, metric, scale }: {
+  rows: Array<{ key: string; label: string; min: number; max: number; now: number; sub?: string }>;
+  metric: Metric; scale?: [number, number];
+}) {
+  const def = METRICS[metric];
+  const [lo, hi] = scale ?? (metric === 'pressure' ? [1, 5] : RANGE_SCALE[metric]) ?? [0, 1];
+  const x = (v: number) => `${Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100))}%`;
+  const nLo = Number.isFinite(def.normal[0]) ? def.normal[0] : lo; const nHi = Number.isFinite(def.normal[1]) ? def.normal[1] : hi;
+  return (
+    <div className="rr">
+      {rows.map(r => {
+        const tone = toneFor(metric, r.now);
+        return (
+          <div key={r.key} className="rr-row">
+            <div className="rr-lbl"><b>{r.label}</b>{r.sub && <span>{r.sub}</span>}</div>
+            <div className={`rr-val${tone !== 'ok' ? ` t-${tone}` : ''}`}>{fmt(metric, r.now)}</div>
+            <div className="rr-track">
+              <span className="rr-band" style={{ left: x(nLo), width: `calc(${x(nHi)} - ${x(nLo)})` }} />
+              <span className="rr-span" style={{ left: x(r.min), width: `calc(${x(r.max)} - ${x(r.min)})` }} title={`${fmt(metric, r.min)} – ${fmt(metric, r.max)}`} />
+              <span className={`rr-dot t-${tone}`} style={{ left: x(r.now) }} />
+            </div>
+          </div>
+        );
+      })}
+      <div className="rr-ticks"><span>{fmt(metric, lo)}</span><span>{fmt(metric, (lo + hi) / 2)}</span><span>{fmt(metric, hi)}</span></div>
+    </div>
+  );
+}
+
+/** Proportional bar in the comparison palette, with a matching ranked legend. */
+export function ShareBar({ parts }: { parts: Array<{ key: string; value: number; color: string; label: string }> }) {
+  const total = parts.reduce((a, p) => a + p.value, 0) || 1;
+  return (
+    <div className="sb" role="img" aria-label={parts.map(p => `${p.label} ${Math.round((p.value / total) * 100)} %`).join(', ')}>
+      {parts.map(p => <span key={p.key} style={{ flexGrow: p.value, background: p.color }} title={`${p.label} · ${((p.value / total) * 100).toFixed(0)} %`} />)}
     </div>
   );
 }

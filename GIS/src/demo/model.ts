@@ -40,7 +40,6 @@ export { ZONE_CODES } from './nrw';
 export interface PressurePoint {
   id: string; name: string; zone: string; pos: LatLng; pipeId: string;
   base: number; value: number; tone: Tone;
-  flowBase: number; flow: number;
   online: boolean;
 }
 export interface TankOps {
@@ -57,7 +56,7 @@ export interface QualityPointOps {
   values: Record<Metric, number>; tones: Partial<Record<Metric, Tone>>; tone: Tone;
   updatedMin: number;
 }
-export type DeviceKind = 'Pressure & flow' | 'Tank level' | 'Water quality';
+export type DeviceKind = 'Pressure' | 'Tank level' | 'Water quality';
 export interface SensorDevice {
   id: string; name: string; kind: DeviceKind; measures: string;
   zone: string; pos: LatLng;
@@ -135,7 +134,7 @@ function build(network: NetworkData): Ops {
     return best?.zone ?? 'SHAURI';
   };
 
-  /* pressure points: real flow + pressure sensors */
+  /* pressure points: the network's pressure loggers (the utility has no flow sensors) */
   const pressure: PressurePoint[] = assets
     .filter(a => a.properties.asset === 'sensor' && !(a.properties as SensorProps).subtype)
     .map(a => {
@@ -145,13 +144,12 @@ function build(network: NetworkData): Ops {
       const zone = pz && ZONE_CODES.includes(pz) ? pz : nearestZone(pos);
       // base = the static snapshot value the series is built around (before live overwrite)
       const base = baseFor('pressure', p.id, p.pressure_bar);
-      const flowBase = baseFor('flow', p.id, p.flow_lps);
       const online = true;
       const value = current('pressure', p.id, base);
       return {
         id: p.id, name: `${zoneName(zone)} · ${p.id}`, zone, pos, pipeId: p.pipe_id,
         base, value, tone: online ? toneFor('pressure', value) : 'off',
-        flowBase, flow: current('flow', p.id, flowBase), online
+        online
       };
     });
 
@@ -240,12 +238,12 @@ function build(network: NetworkData): Ops {
     const signal = Math.round(-62 - stableRand(`sig:${p.id}`) * 38);
     const health: Tone = !p.online ? 'off' : battery < 20 ? 'warn' : 'ok';
     sensors.push({
-      id: p.id, name: `Flow + pressure logger ${p.id.replace('SN-', '')}`, kind: 'Pressure & flow', measures: 'Pressure, flow',
+      id: p.id, name: `Pressure logger ${p.id.replace('SN-', '')}`, kind: 'Pressure', measures: 'Pressure',
       zone: p.zone, pos: p.pos, health,
       healthNote: !p.online ? 'Not reporting' : battery < 20 ? 'Low battery' : 'Reporting normally',
       battery, signal,
       lastCommMin: Math.max(1, Math.round(stableRand(`lc:${p.id}`) * 4)),
-      reading: p.online ? `${p.value.toFixed(2)} bar · ${p.flow.toFixed(1)} L/s` : '—',
+      reading: p.online ? `${p.value.toFixed(2)} bar` : '—',
       entityId: p.id, metric: 'pressure', base: p.base,
       installed: 2019 + Math.floor(stableRand(`yr:${p.id}`) * 6)
     });
@@ -345,7 +343,7 @@ async function loadOps(): Promise<Ops> {
   const raw = await fetch(`${base.replace(/\/$/, '')}/data/erline-assets.geojson`).then(r => r.json());
   for (const f of raw.features as Array<{ properties: Record<string, unknown> }>) {
     const p = f.properties;
-    if (p.asset === 'sensor') { BASES[`pressure:${p.id}`] = p.pressure_bar as number; BASES[`flow:${p.id}`] = p.flow_lps as number; }
+    if (p.asset === 'sensor') { BASES[`pressure:${p.id}`] = p.pressure_bar as number; }
     if (p.asset === 'tank') BASES[`level:${p.id}`] = p.level_pct as number;
   }
   return build(await loadNetwork());

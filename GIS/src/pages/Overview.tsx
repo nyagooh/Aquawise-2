@@ -10,7 +10,7 @@ import { useOps, ago, zoneName, type Ops, type Incident, type IncidentType } fro
 import { useFilters, inZone } from '../demo/filters';
 import { withState, useIncidentState } from '../demo/incidentState';
 import { Card, Kpi, Dot, Loading, IconTile, ICON, BadgeDelta, Segmented, type IconTone } from '../demo/ui';
-import { LineChart, SparkArea, SparkBars, Donut, BarChart } from '../demo/charts';
+import { LineChart, SparkArea, SparkBars, RangeRows } from '../demo/charts';
 import { NetworkMap, type MapPoint } from '../demo/NetworkMap';
 import { markerIcon } from '../data/network';
 import { series, rangeSpec, meanSeries, sampleAt, toneFor, worstTone, fmt, METRICS, QUALITY_METRICS, NOW, HOURS, type Tone, type Point } from '../demo/series';
@@ -104,14 +104,16 @@ function OverviewBody({ ops }: { ops: Ops }) {
   const pzLoggers = ops.pressure.filter(p => p.zone === pz.code && p.online);
   const pSeries = meanSeries(pzLoggers.map(p => series('pressure', p.id, p.base, day)));
   const pNow = pSeries[pSeries.length - 1]?.v ?? 0; const pThen = pSeries[0]?.v ?? 0;
-  const flowLoggers = useMemo(() => pressure.filter(p => p.online), [pressure]);
-  const flowHourly: Point[] = useMemo(() => {
-    const s = flowLoggers.map(p => series('flow', p.id, p.flowBase, rangeSpec('24H')));
-    if (!s.length) return [];
-    return s[0].map((pt, i) => ({ t: pt.t, v: s.reduce((acc, l) => acc + l[i].v, 0) })).filter((_, i) => i % 4 === 0);
-  }, [flowLoggers]);
-  const flowNow = flowHourly[flowHourly.length - 1]?.v ?? 0;
-  const flowAvg = flowHourly.reduce((a, p) => a + p.v, 0) / Math.max(1, flowHourly.length);
+  /* pressure by zone: lowest and highest logger reading over 24 h, and the zone average now */
+  const zoneRanges = useMemo(() => ops.zones.filter(zz => inZone(zz.code, zone)).map(zz => {
+    const loggers = pressure.filter(p => p.zone === zz.code && p.online);
+    if (!loggers.length) return null;
+    const vals = loggers.flatMap(p => series('pressure', p.id, p.base, day).map(x => x.v));
+    return { key: zz.code, label: zz.name, sub: `${loggers.length} logger${loggers.length === 1 ? '' : 's'}`,
+      min: Math.min(...vals), max: Math.max(...vals), now: loggers.reduce((a, p) => a + p.value, 0) / loggers.length };
+  }).filter(<T,>(x: T | null): x is T => !!x).sort((a, b) => a.now - b.now), [ops.zones, zone, pressure, day]);
+  const levelSensors = sensors.filter(s => s.kind === 'Tank level');
+  const pressureSensors = sensors.filter(s => s.kind === 'Pressure');
   const totalCap = tanks.reduce((a, t) => a + t.capacity, 0);
   const storagePts: Point[] = useMemo(() => {
     if (!tanks.length) return [];
@@ -205,13 +207,9 @@ function OverviewBody({ ops }: { ops: Ops }) {
           <LineChart series={[{ id: 'p', label: 'Average pressure', points: pSeries }]} metric="pressure" height={170} />
         </Card>
 
-        <Card title="Flow" sub={`${flowLoggers.length} loggers, hourly`} actions={<Link className="dx-link" to="/monitoring/pressure">View all →</Link>}>
-          <div className="ov-big">
-            <b>{flowNow.toFixed(0)}<small>L/s</small></b>
-            <BadgeDelta text={`${Math.abs(((flowNow - flowAvg) / (flowAvg || 1)) * 100).toFixed(0)} %`} good up={flowNow >= flowAvg} />
-          </div>
-          <p className="dx-muted ov-note">vs 24-hour average {flowAvg.toFixed(0)} L/s</p>
-          {flowHourly.length > 0 && <BarChart points={flowHourly} height={170} format={v => v.toFixed(0)} />}
+        <Card title="Pressure by zone" sub={`${pressureSensors.length} pressure · ${levelSensors.length} level sensors`} actions={<Link className="dx-link" to="/monitoring/pressure">View all →</Link>}>
+          <p className="dx-muted ov-note" style={{ marginTop: 0 }}>Bar: 24 h low to high · square: now · green: normal range</p>
+          <RangeRows rows={zoneRanges} metric="pressure" />
         </Card>
 
         <Card title="Tank levels" sub={`${tanks.length} reservoirs, combined`} actions={<Link className="dx-link" to="/monitoring/tank-levels">View all →</Link>}>

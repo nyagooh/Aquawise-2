@@ -4,7 +4,7 @@
  * Renders the raw water, transmission and distribution lines plus the
  * service-area outline from the converted Erline shapefiles, the surveyed
  * intakes / treatment plants / reservoirs, and a synthesized telemetry
- * overlay (pressure valves, meter valves, flow+pressure sensors). Click any asset to see its full operational
+ * overlay (pressure valves, meter valves, pressure sensors). Click any asset to see its full operational
  * profile in the side panel.
  */
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
@@ -592,7 +592,7 @@ function assetTooltip(feat: AssetFeature): string {
   if (p.asset === 'tank') return `${p.name} · level sensor ${p.level_pct}%`;
   if (p.asset === 'pressure_valve') return `${p.name} · ${p.live_bar} bar`;
   if (p.asset === 'meter_valve') return `${p.name} · ⌀${p.size_mm} mm`;
-  return `${p.name} · ${p.flow_lps} L/s`;
+  return `${p.name} · ${p.pressure_bar} bar`;
 }
 
 
@@ -745,7 +745,6 @@ function assetPopupHtml(feat: AssetFeature): string {
         ${statusPill}
       </div>
       <div class="aw-pop-grid">
-        <div><span>Flow</span><strong>${p.flow_lps} L/s</strong></div>
         <div><span>Pressure</span><strong>${p.pressure_bar} bar</strong></div>
         <div><span>Last reading</span><strong>${escapeHtml(p.last_seen)}</strong></div>
         <div><span>On pipe</span><strong>${escapeHtml(p.pipe_id)}</strong></div>
@@ -790,8 +789,8 @@ function detailPopupHtml(feat: AssetFeature, ops: Ops | null): string {
   } else {
     const s = ops.pressure.find(x => x.id === p.id);
     if (!s) return assetPopupHtml(feat);
-    base = s.base; zone = s.zone; kind = 'Pressure & flow logger'; title = `Logger ${s.id}`; href = '/monitoring/pressure';
-    rows = [['Pressure', s.online ? `${s.value.toFixed(2)} bar` : '—'], ['Flow', s.online ? `${s.flow.toFixed(1)} L/s` : '—'], ['Safe range', METRICS.pressure.rangeText], ['On pipe', s.pipeId]];
+    base = s.base; zone = s.zone; kind = 'Pressure logger'; title = `Logger ${s.id}`; href = '/monitoring/pressure';
+    rows = [['Pressure', s.online ? `${s.value.toFixed(2)} bar` : '—'], ['Safe range', METRICS.pressure.rangeText], ['On pipe', s.pipeId]];
   }
   const pts = series(metric, entity, base, day);
   const now = pts[pts.length - 1].v;
@@ -1120,19 +1119,18 @@ function AssetPanel({ feature, onClose }: { feature: AssetFeature; onClose: () =
     <SidePanel
       open
       onClose={onClose}
-      kind="Flow + pressure sensor"
+      kind="Pressure sensor"
       title={p.name}
       pill={{ tone: p.status === 'ok' ? 'safe' : p.status === 'warn' ? 'warn' : 'danger', label: p.status === 'ok' ? 'Normal' : p.status === 'warn' ? 'Warning' : 'Critical' }}
     >
       <SectionLabel>Live reading</SectionLabel>
-      <SpRow label="Flow rate" value={`${p.flow_lps} L/s`} mono color="#2563EB" />
       <SpRow label="Pressure" value={`${p.pressure_bar} bar`} mono color={STATUS_COLOR[p.status]} />
-      <SpRow label="Sensor type" value={p.type} />
+      <SpRow label="Sensor type" value="Pressure" />
       <SpRow label="Last reading" value={p.last_seen} mono />
       <div style={{ height: 14 }} />
-      <SectionLabel>Consumption trend</SectionLabel>
-      <Sparkline base={p.flow_lps} />
-      <SpRow label="24h volume" value={`${Math.round(p.flow_lps * 86.4).toLocaleString()} m³`} mono />
+      <SectionLabel>Pressure trend</SectionLabel>
+      <Sparkline base={p.pressure_bar} />
+      <SpRow label="Safe range" value={METRICS.pressure.rangeText} mono />
       <div style={{ height: 14 }} />
       <SectionLabel>Linkage</SectionLabel>
       <SpRow label="On pipe" value={p.pipe_id} mono />

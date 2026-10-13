@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { submitDemoRequest } from '../api';
 import { grantDemoAccess, hasDemoAccess } from '../access';
+import WaveBackdrop from '../components/WaveBackdrop';
 import '../landing.css';
 
 export default function DemoHub() {
@@ -52,27 +53,40 @@ export default function DemoHub() {
         </div>
       </header>
 
-      <main className="ed-wrap xd-grid">
-        <section className="xd-form-col">
-          <p className="ed-eyebrow">Live demo · Erline Water network</p>
-          <h1 className="xd-title">Explore the demo</h1>
-          <p className="xd-sub">See a real utility network the way AquaWise sees it: live water quality, pressure and tank levels on one map. Tell us where to reach you and we’ll open it straight away.</p>
-          <form className="xd-form" onSubmit={submit}>
-            <label>
-              <span>Work email</span>
-              <input type="email" required autoComplete="email" placeholder="you@utility.co.ke" value={email} onChange={e => setEmail(e.target.value)} />
-            </label>
-            <label>
-              <span>Company</span>
-              <input type="text" required autoComplete="organization" placeholder="Your utility or organisation" value={company} onChange={e => setCompany(e.target.value)} />
-            </label>
-            <button type="submit" className="ed-btn ed-btn-blue" disabled={busy}>{busy ? 'Opening…' : 'Explore the demo'}</button>
-          </form>
-          <p className="xd-note">No password and no sales call. We’ll only use your email to follow up about AquaWise.</p>
-        </section>
-        <figure className="xd-shot">
-          <img src="/img/ui/view-overview.webp" alt="AquaWise Overview showing network health, alerts, water quality, the network map and issues needing attention" />
-        </figure>
+      <main className="xd-stage">
+        <WaveBackdrop className="wv-page" />
+        <div className="xd-card">
+          <section className="xd-form-col">
+            <p className="ed-eyebrow">Live demo · Erline Water network</p>
+            <h1 className="xd-title">Explore the demo</h1>
+            <p className="xd-sub">See a real utility network the way AquaWise sees it: live water quality, pressure and tank levels on one map.</p>
+            <form className="xd-form" onSubmit={submit}>
+              <label>
+                <span>Work email</span>
+                <input type="email" required autoComplete="email" placeholder="you@utility.co.ke" value={email} onChange={e => setEmail(e.target.value)} />
+              </label>
+              <label>
+                <span>Company</span>
+                <input type="text" required autoComplete="organization" placeholder="Your utility or organisation" value={company} onChange={e => setCompany(e.target.value)} />
+              </label>
+              <button type="submit" className="ed-btn ed-btn-blue" disabled={busy}>{busy ? 'Opening…' : 'Explore the demo'}</button>
+            </form>
+            <p className="xd-note">No password and no sales call. We’ll only use your email to follow up about AquaWise.</p>
+          </section>
+          <figure className="xd-visual">
+            <img src="/img/reservoir-pipes.jpg" alt="Blue transmission mains and a storage reservoir at a treatment works" />
+            <div className="xd-glass xd-glass-top">
+              <span className="xd-live"><i />Live now</span>
+              <b>Erline Water</b>
+              <span>Nyahururu, Kenya</span>
+            </div>
+            <ul className="xd-glass xd-stats">
+              <li><b>121<small>km</small></b><span>of pipe mapped</span></li>
+              <li><b>35</b><span>sensors reporting</span></li>
+              <li><b>15<small>min</small></b><span>between readings</span></li>
+            </ul>
+          </figure>
+        </div>
       </main>
     </div>
   );

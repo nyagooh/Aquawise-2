@@ -8,12 +8,15 @@ import { useOps, ago, zoneName, type Ops } from '../demo/model';
 import { useFilters, inZone } from '../demo/filters';
 import { withState, useIncidentState } from '../demo/incidentState';
 import { Card, Kpi, Status, Tabs, Select, SearchInput, DataTable, Drawer, KV, Section, Loading, SevIcon, type Column } from '../demo/ui';
-import { SegmentBar, LineChart, TONE_COLOR } from '../demo/charts';
+import { LineChart, Columns, BarList, StatusDonut, ShareBar } from '../demo/charts';
 import { series, rangeSpec, stableRand, NOW, DAYS, type Metric, type Tone } from '../demo/series';
 
 type Kind = 'Pipe' | 'Reservoir' | 'Valve' | 'Sensor' | 'Meter';
 type Condition = 'Good' | 'Fair' | 'Poor' | 'Unknown';
 const COND_TONE: Record<Condition, Tone> = { Good: 'ok', Fair: 'warn', Poor: 'crit', Unknown: 'off' };
+/** Material colours: comparison hues; asbestos cement keeps amber (replacement priority), unknown is grey. */
+const MAT_COLORS = ['#1769E8', '#0E9384', '#7A5AF8', '#36A3D9', '#C11574', '#475467', '#84ADFF', '#2ED3B7'];
+const matColor = (m: string, i: number) => (m === 'AC' ? '#E59A17' : m === 'Unknown' ? '#98A2B3' : MAT_COLORS[i % MAT_COLORS.length]);
 
 interface AssetRow {
   id: string; kind: Kind; name: string; zone: string; pos: [number, number] | null;
@@ -107,6 +110,16 @@ function AssetsBody({ ops }: { ops: Ops }) {
     ['20 – 29 years', y => !!y && year - y >= 20 && year - y < 30], ['30 + years', y => !!y && year - y >= 30], ['Unknown', y => !y]
   ];
   const conds: Condition[] = ['Good', 'Fair', 'Poor', 'Unknown'];
+  const ageOf = (p: AssetRow) => (p.installed ? year - p.installed : null);
+  const materials = byMaterial.sort((a, b) => b[1] - a[1]).map(([m, km], i) => {
+    const segs = pipes.filter(p => (p.material ?? 'Unknown') === m);
+    const ages = segs.map(ageOf).filter((a): a is number => a !== null);
+    return { m, km, segs: segs.length, color: matColor(m, i), avgAge: ages.length ? ages.reduce((a, b) => a + b, 0) / ages.length : null };
+  });
+  const transKm = pipes.filter(p => p.pipeClass === 'transmission').reduce((a, p) => a + (p.lengthM ?? 0), 0) / 1000;
+  const kinds: Kind[] = ['Pipe', 'Reservoir', 'Valve', 'Sensor', 'Meter'];
+  const kmWhere = (f: (p: AssetRow) => boolean) => pipes.filter(f).reduce((a, p) => a + (p.lengthM ?? 0), 0) / 1000;
+  const byZone = groupSum(pipes.filter(p => p.zone !== '—'), p => p.zone, p => (p.lengthM ?? 0) / 1000).sort((a, b) => b[1] - a[1]);
   const counts = (k: Kind | null) => scoped.filter(r => !k || r.kind === k).length;
 
   const cols: Column<AssetRow>[] = [
@@ -129,24 +142,74 @@ function AssetsBody({ ops }: { ops: Ops }) {
         <Kpi label="Poor or unknown condition" value={scoped.filter(r => r.condition === 'Poor' || r.condition === 'Unknown').length.toLocaleString()} tone="warn" sub="candidates for inspection" onClick={() => setCond('Poor')} />
       </div>
 
-      <div className="dx-cols three">
-        <Card title="Pipe material" sub="By length (km)">
-          <BoxTiles rows={byMaterial.sort((a, b) => b[1] - a[1]).map(([m, km]) => ({ key: m, label: m, value: km, display: `${km.toFixed(1)} km`, tone: m === 'AC' ? 'warn' as Tone : m === 'Unknown' ? 'off' as Tone : undefined, sub: m === 'AC' ? 'Asbestos cement — replacement priority' : undefined }))} onRowClick={k => { setTab('pipes'); setMaterial(k); }} />
+      <div className="dx-cols main-side">
+        <Card title="Pipe network by material" sub={`${lengthKm.toFixed(1)} km across ${pipes.length.toLocaleString()} segments · click a row to filter the register`}>
+          <ShareBar parts={materials.map(r => ({ key: r.m, label: r.m, value: r.km, color: r.color }))} />
+          <table className="as-table">
+            <thead><tr><th>Material</th><th className="r">Length</th><th className="r">Share</th><th className="r">Segments</th><th className="r">Avg age</th><th /></tr></thead>
+            <tbody>
+              {materials.map(r => (
+                <tr key={r.m} onClick={() => { setTab('pipes'); setMaterial(r.m); }}>
+                  <td><i className="as-sw" style={{ background: r.color }} />{r.m}{r.m === 'AC' && <span className="as-flag">replace</span>}</td>
+                  <td className="r strong">{r.km.toFixed(1)} km</td>
+                  <td className="r">{((r.km / (lengthKm || 1)) * 100).toFixed(0)} %</td>
+                  <td className="r">{r.segs}</td>
+                  <td className="r">{r.avgAge === null ? '—' : `${r.avgAge.toFixed(0)} yrs`}</td>
+                  <td className="as-bar"><span style={{ width: `${(r.km / (materials[0]?.km || 1)) * 100}%`, background: r.color }} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </Card>
-        <Card title="Pipe age" sub="Segments by installation year">
-          <BoxTiles rows={ageBands.map(([label, f]) => { const n = pipes.filter(p => f(p.installed)).length; return { key: label, label, value: n, display: `${n.toLocaleString()} segments`, tone: label === '30 + years' ? 'warn' as Tone : label === 'Unknown' ? 'off' as Tone : undefined }; })} />
-        </Card>
-        <Card title="Asset condition" sub="All asset types">
-          <SegmentBar parts={conds.map(c => ({ label: c, value: scoped.filter(r => r.condition === c).length, color: TONE_COLOR[COND_TONE[c]] }))} />
-          <div className="dx-rows" style={{ marginTop: 12 }}>
-            {conds.map(c => (
-              <button key={c} type="button" className="dx-row" style={{ background: 'none', border: 0, borderBottom: '1px solid hsl(var(--border))', font: 'inherit', color: 'inherit', cursor: 'pointer', textAlign: 'left' }} onClick={() => setCond(c)}>
-                <Status tone={COND_TONE[c]} label={c} /><span className="name" />
-                <span className="val">{scoped.filter(r => r.condition === c).length.toLocaleString()}</span>
-              </button>
-            ))}
+        <Card title="Asset condition" sub={`${scoped.length.toLocaleString()} assets · click to filter`}>
+          <div className="sn-split">
+            <StatusDonut label={`${Math.round((scoped.filter(r => r.condition === 'Good').length / Math.max(1, scoped.length)) * 100)} %`} sub="good"
+              parts={conds.map(c => ({ label: c, value: scoped.filter(r => r.condition === c).length, tone: COND_TONE[c] }))} />
+            <div className="sn-legend">
+              {conds.map(c => (
+                <button key={c} type="button" onClick={() => setCond(c)}><Status tone={COND_TONE[c]} label={c} /><b>{scoped.filter(r => r.condition === c).length.toLocaleString()}</b></button>
+              ))}
+            </div>
           </div>
-          <p className="dx-muted" style={{ fontSize: '0.75rem', marginTop: 8 }}>Pipe condition is estimated from material and age until inspection data is recorded.</p>
+          <table className="as-matrix">
+            <thead><tr><th />{conds.map(c => <th key={c}>{c}</th>)}</tr></thead>
+            <tbody>
+              {kinds.map(k => {
+                const ofKind = scoped.filter(r => r.kind === k);
+                if (!ofKind.length) return null;
+                return (
+                  <tr key={k}>
+                    <th>{k === 'Reservoir' ? 'Tanks' : `${k}s`}</th>
+                    {conds.map(c => {
+                      const n = ofKind.filter(r => r.condition === c).length; const share = n / ofKind.length;
+                      return <td key={c} className={`t-${COND_TONE[c]}`} style={{ ['--a' as string]: n ? 0.12 + share * 0.6 : 0 }}><span>{n || '·'}</span></td>;
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <p className="dx-muted" style={{ fontSize: '0.75rem', marginTop: 10 }}>Pipe condition is estimated from material and age until inspection data is recorded.</p>
+        </Card>
+      </div>
+
+      <div className="dx-cols three">
+        <Card title="Pipe age" sub="Kilometres of pipe by years in service">
+          <Columns data={ageBands.map(([label, f]) => ({ label: label.replace(' years', ''), value: Math.round(kmWhere(p => f(p.installed)) * 10) / 10 }))} format={v => v.toFixed(0)} height={190} />
+          <div className="as-stats">
+            {ageBands.map(([label, f]) => <div key={label}><b>{pipes.filter(p => f(p.installed)).length}</b><span>{label}</span></div>)}
+          </div>
+        </Card>
+        <Card title="Point assets by type" sub="Count of non-pipe assets">
+          <Columns data={kinds.filter(k => k !== 'Pipe').map(k => ({ label: k === 'Reservoir' ? 'Tanks' : `${k}s`, value: scoped.filter(r => r.kind === k).length }))} format={v => v.toFixed(0)} height={190} color="violet" />
+          <div className="as-stats">
+            <div><b>{transKm.toFixed(1)}</b><span>km transmission</span></div>
+            <div><b>{(lengthKm - transKm).toFixed(1)}</b><span>km distribution</span></div>
+            <div><b>{ops.tanks.filter(t => inZone(t.zone, zone)).reduce((a, t) => a + t.capacity, 0).toLocaleString()}</b><span>m³ storage</span></div>
+          </div>
+        </Card>
+        <Card title="Network by zone" sub="Kilometres of pipe">
+          <BarList rows={byZone.map(([z, km]) => ({ key: z, label: zoneName(z), value: km, display: `${km.toFixed(1)} km`, sub: `${pipes.filter(p => p.zone === z).length} segments · ${scoped.filter(r => r.zone === z && r.kind !== 'Pipe').length} point assets` }))} />
         </Card>
       </div>
 
@@ -245,28 +308,4 @@ function groupSum<T>(rows: T[], key: (r: T) => string, val: (r: T) => number): A
   const m = new Map<string, number>();
   rows.forEach(r => m.set(key(r), (m.get(key(r)) ?? 0) + val(r)));
   return [...m.entries()];
-}
-
-/** Proportions as a grid of boxes: each box holds the value, its share and a filled block. */
-function BoxTiles({ rows, onRowClick }: {
-  rows: Array<{ key: string; label: string; value: number; display: string; tone?: Tone; sub?: string }>;
-  onRowClick?: (key: string) => void;
-}) {
-  const total = rows.reduce((a, r) => a + r.value, 0) || 1;
-  return (
-    <div className="bx-tiles">
-      {rows.map(r => {
-        const share = (r.value / total) * 100;
-        const Tag = onRowClick ? 'button' : 'div';
-        return (
-          <Tag key={r.key} type={onRowClick ? 'button' : undefined} className={`bx-tile${onRowClick ? ' click' : ''}`} onClick={onRowClick ? () => onRowClick(r.key) : undefined} title={r.sub}>
-            <span className="bx-tile-lbl">{r.label}{r.sub && <i className={`t-${r.tone ?? 'warn'}`}> ·  priority</i>}</span>
-            <b>{r.display}</b>
-            <span className="bx-tile-share">{share < 1 ? '< 1' : share.toFixed(0)} %</span>
-            <span className="bx-tile-fill" style={{ height: `${Math.max(3, share)}%`, background: r.tone === 'warn' ? 'hsl(var(--warning) / 0.14)' : r.tone === 'off' ? 'hsl(var(--offline) / 0.18)' : 'hsl(var(--primary) / 0.1)' }} />
-          </Tag>
-        );
-      })}
-    </div>
-  );
 }

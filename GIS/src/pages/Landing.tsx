@@ -17,6 +17,7 @@ import {
 import { SparkAreaChart } from '@tremor/react';
 import { Area, CartesianGrid, ComposedChart, Line, ReferenceArea, ReferenceDot, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from 'recharts';
 import { LineChart, ChartLegend } from '../demo/charts';
+import WaveBackdrop from '../components/WaveBackdrop';
 import '../landing.css';
 
 /* ═════════════ motion helpers ═════════════ */
@@ -154,11 +155,11 @@ function Hero({ onDemo, onTalk }: { onDemo: () => void; onTalk: () => void }) {
   return (
     <section className="ed-hero">
       <div className="ed-wrap ed-hero-copy">
-        <p className="ed-eyebrow rv">Water quality · Pressure · Tank levels · GIS</p>
+        <p className="ed-eyebrow ed-pill rv"><i />Water quality · Pressure · Tank levels · GIS</p>
         <h1 className="ed-hero-h rv">The smart water grid<br />for water utilities</h1>
         <p className="ed-hero-sub rv">
           Your whole network, live on one map. Spot a pressure drop, a dirty reading or a draining tank
-          the moment it happens — and fix it before your customers ever notice.
+          the moment it happens, and fix it before your customers ever notice.
         </p>
         <div className="ed-row ed-hero-ctas rv">
           <button type="button" className="ed-btn ed-btn-blue" onClick={onDemo}>Explore demo</button>
@@ -167,36 +168,12 @@ function Hero({ onDemo, onTalk }: { onDemo: () => void; onTalk: () => void }) {
       </div>
       <div className="ed-wrap">
         <div className="ed-hero-frame rv">
-          <HeroWaves />
-          <div className="ed-hero-chip c1"><i className="ok" />Turbidity 0.31 NTU · works outlet</div>
-          <div className="ed-hero-chip c2"><i className="warn" />Kwa Njora Reservoir · running low</div>
           <div className="ed-hero-shot">
             <img src="/img/ui/view-overview.webp" alt="AquaWise Overview: network health, active alerts, water quality, pressure, network map and issues needing attention" />
           </div>
         </div>
       </div>
     </section>
-  );
-}
-
-/** Water behind the hero screenshot: three wave layers drifting at different speeds. */
-function HeroWaves() {
-  // One period of a smooth wave, drawn twice across a 2400-wide tile so it loops seamlessly.
-  const wave = (amp: number, y: number) =>
-    `M0 ${y} C 300 ${y - amp}, 300 ${y + amp}, 600 ${y} S 900 ${y - amp}, 1200 ${y} S 1500 ${y + amp}, 1800 ${y} S 2100 ${y - amp}, 2400 ${y} V 200 H 0 Z`;
-  return (
-    <div className="ed-water" aria-hidden="true">
-      <div className="ed-water-shine" />
-      {[
-        { cls: 'w1', amp: 26, y: 70 },
-        { cls: 'w2', amp: 20, y: 95 },
-        { cls: 'w3', amp: 14, y: 120 }
-      ].map(w => (
-        <svg key={w.cls} className={`ed-wave ${w.cls}`} viewBox="0 0 2400 200" preserveAspectRatio="none">
-          <path d={wave(w.amp, w.y)} />
-        </svg>
-      ))}
-    </div>
   );
 }
 
@@ -579,17 +556,24 @@ function Final({ onDemo, onTalk }: { onDemo: () => void; onTalk: () => void }) {
   return (
     <>
       <section className="ed-final">
-        <div className="ed-wrap ed-final-in">
-          <p className="ed-label light rv">Ready when you are</p>
-          <h2 className="ed-giant rv">Run a smarter <span className="muted">water network.</span></h2>
-          <p className="ed-final-sub rv">See your network the way AquaWise does — live, on one map.</p>
-          <div className="ed-row rv">
-            <button type="button" className="ed-btn ed-btn-white" onClick={onDemo}>Explore demo <Arrow /></button>
-            <button type="button" className="ed-btn ed-btn-ghost" onClick={onTalk}>Talk to us</button>
+        <WaveBackdrop className="wv-final" />
+        <div className="ed-wrap ed-final-grid">
+          <div className="ed-final-in">
+            <p className="ed-label light rv">Ready when you are</p>
+            <h2 className="ed-giant rv">Run a smarter <span className="muted">water network.</span></h2>
+            <p className="ed-final-sub rv">See your network the way AquaWise does — live, on one map.</p>
+            <div className="ed-row rv">
+              <button type="button" className="ed-btn ed-btn-white" onClick={onDemo}>Explore demo <Arrow /></button>
+              <button type="button" className="ed-btn ed-btn-ghost" onClick={onTalk}>Talk to us</button>
+            </div>
           </div>
-        </div>
-        <div className="ed-final-shot" aria-hidden="true">
-          <img src="/img/ui/view-network.webp" alt="" loading="lazy" />
+          <div className="ed-final-glass rv" aria-hidden="true">
+            <div className="ed-final-shot">
+              <img src="/img/ui/view-network.webp" alt="" loading="lazy" />
+            </div>
+            <div className="ed-final-chip c1"><i className="ok" />35 / 35 sensors online</div>
+            <div className="ed-final-chip c2"><i className="warn" />Kwa Njora Reservoir · 5 %</div>
+          </div>
         </div>
       </section>
       <footer className="ed-footer">

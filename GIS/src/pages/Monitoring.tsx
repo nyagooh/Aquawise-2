@@ -13,7 +13,7 @@ import {
 import { useFilters, inZone } from '../demo/filters';
 import { withState, useIncidentState } from '../demo/incidentState';
 import { Card, Kpi, Status, Dot, Tabs, Segmented, Select, SearchInput, DataTable, Drawer, KV, Section, Loading, Insight, SevIcon, type Column } from '../demo/ui';
-import { LineChart, ChartLegend, BarList, SegmentBar, StatusTracker, LevelGauge, MiniBar, StatusDonut, Heatmap, TONE_COLOR, SERIES_COLORS, type ChartSeries } from '../demo/charts';
+import { LineChart, ChartLegend, BarList, SegmentBar, StatusTracker, MiniBar, StatusDonut, Heatmap, RangeSquares, RangeRows, TankFill, Sparkline, TONE_COLOR, type ChartSeries } from '../demo/charts';
 import { NetworkMap, type MapPoint } from '../demo/NetworkMap';
 import { markerIcon, MARKER_COLOR } from '../data/network';
 import {
@@ -196,8 +196,10 @@ function WaterQuality({ ops }: { ops: Ops }) {
   if (!point) return <Card><p className="dx-muted">No water-quality monitoring points in this zone.</p></Card>;
 
   const chartSeries: ChartSeries[] = compare
-    ? s.quality.map((q, i) => ({ id: q.id, label: q.name, points: series(param, q.id, q.base[param as keyof typeof q.base], s.spec), color: SERIES_COLORS[i % SERIES_COLORS.length] }))
+    ? s.quality.map(q => ({ id: q.id, label: q.name, points: series(param, q.id, q.base[param as keyof typeof q.base], s.spec) }))
     : [{ id: point.id, label: point.name, points: series(param, point.id, point.base[param as keyof typeof point.base], s.spec) }];
+  const allVals = chartSeries.flatMap(c => c.points.map(p => p.v));
+  const sharedDomain: [number, number] = [Math.min(...allVals), Math.max(...allVals)];
   const events = s.incidents.filter(i => i.type === 'Water quality breach').sort((a, b) => b.startedAt - a.startedAt);
 
   const cols: Column<QualityPointOps>[] = [
@@ -222,8 +224,8 @@ function WaterQuality({ ops }: { ops: Ops }) {
             const ch = change24(m, point.id, point.base[m as keyof typeof point.base]);
             return (
               <Kpi key={m} label={d.label} tone={tone} value={fmt(m, v, false)} unit={d.unit || undefined} onClick={() => setParam(m)} selected={param === m}
-                sub={<>Range {d.rangeText} · {signed(ch, d.decimals)} in 24 h</>}>
-                <div style={{ marginTop: 10 }}><StatusTracker items={[{ metric: m, id: point.id, base: point.base[m as keyof typeof point.base] }]} /></div>
+                sub={<>{signed(ch, d.decimals)}{d.unit ? ` ${d.unit}` : ''} in 24 h</>}>
+                <RangeSquares metric={m} value={v} />
               </Kpi>
             );
           })}
@@ -235,15 +237,29 @@ function WaterQuality({ ops }: { ops: Ops }) {
           <Segmented options={QUALITY_METRICS.map(m => ({ key: m, label: METRICS[m].label.replace('Residual chlorine', 'Chlorine') }))} value={param} onChange={setParam} size="sm" />
           <Segmented options={[{ key: 'one', label: 'This point' }, { key: 'all', label: 'Compare points' }]} value={compare ? 'all' : 'one'} onChange={k => setCompare(k === 'all')} size="sm" />
         </>}>
-        <LineChart series={chartSeries} metric={param} height={300} windows={compare ? [] : windowsFor(param, [{ id: point.id, base: point.base[param as keyof typeof point.base] }], s.spec.hours)} />
-        <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        {compare ? (
+          <div className="wq-multi">
+            {s.quality.map((q, i) => {
+              const tone = q.tones[param] ?? 'ok';
+              return (
+                <button key={q.id} type="button" className={`wq-mini${q.id === point.id ? ' sel' : ''}`} onClick={() => { setPointId(q.id); setCompare(false); }}>
+                  <div className="wq-mini-head"><span><Dot tone={tone} /> {q.name}</span><b className={tone !== 'ok' ? `t-${tone}` : ''}>{fmt(param, q.values[param])}</b></div>
+                  <LineChart series={[chartSeries[i]]} metric={param} height={130} domain={sharedDomain} />
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <LineChart series={chartSeries} metric={param} height={300} windows={windowsFor(param, [{ id: point.id, base: point.base[param as keyof typeof point.base] }], s.spec.hours)} />
+        )}
+        <div style={{ marginTop: 10 }}>
           <ChartLegend items={[
-            ...(compare ? [] : [{ label: METRICS[param].label, color: 'hsl(var(--primary))' }]),
+            { label: METRICS[param].label, color: 'hsl(var(--primary))' },
             { label: `Acceptable range (${METRICS[param].rangeText})`, color: '', band: true },
             { label: 'Warning threshold', color: 'hsl(var(--warning))', dashed: true },
             { label: 'Critical threshold', color: 'hsl(var(--danger))', dashed: true }
           ]} />
-          {compare && <ChartLegend items={chartSeries.map(c => ({ label: c.label, color: c.color! }))} />}
+          {compare && <p className="dx-muted" style={{ fontSize: '0.75rem', marginTop: 6 }}>All points share one scale. Click a chart to open that point.</p>}
         </div>
       </Card>
 
@@ -313,7 +329,6 @@ function Pressure({ ops }: { ops: Ops }) {
     { key: 'min', label: 'Min', align: 'right', render: r => r.min.toFixed(2), sort: r => r.min },
     { key: 'max', label: 'Max', align: 'right', render: r => r.max.toFixed(2), sort: r => r.max },
     { key: 'trend', label: 'Last 24 h', render: r => <StatusTracker items={[{ metric: 'pressure', id: r.p.id, base: r.p.base }]} buckets={12} /> },
-    { key: 'flow', label: 'Flow (L/s)', align: 'right', render: r => r.p.flow.toFixed(1), sort: r => r.p.flow },
     { key: 'st', label: 'Status', render: r => <Status tone={r.p.tone} />, sort: r => -toneRank(r.p.tone) }
   ];
 
@@ -327,16 +342,17 @@ function Pressure({ ops }: { ops: Ops }) {
         <Kpi label="Pressure anomalies" value={activeAnoms.length} tone={activeAnoms.some(a => a.severity === 'critical') ? 'crit' : activeAnoms.length ? 'warn' : 'ok'} sub={`${anomalies.length - activeAnoms.length} cleared in the last 30 days`} onClick={() => navigate('/alerts')} />
       </div>
 
-      <Card title="Pressure over time" sub={`Every logger · ${s.spec.label}. Each square is the average pressure for that period; darker blue is higher, amber and red are outside the normal range.`}>
+      <Card title="Pressure over time" sub={`Every logger · ${s.spec.label}. Each square is the average pressure for that period: teal is lower, violet is higher; amber and red are outside the normal range.`}>
         <Heatmap rows={heatRows} metric="pressure" spec={s.spec} />
       </Card>
 
       <div className="dx-cols three">
-        <Card title="Pressure by zone" sub="Current average">
-          <BarList max={5} rows={zonesInScope.filter(z => ops.pressure.some(p => p.zone === z.code && p.online)).map(z => {
-            const tone = worstTone(ops.pressure.filter(p => p.zone === z.code && p.online).map(p => p.tone));
-            return { key: z.code, label: z.name, value: z.pressureAvg, display: `${z.pressureAvg.toFixed(2)} bar`, tone };
-          }).sort((a, b) => a.value - b.value)} />
+        <Card title="Pressure by zone" sub={`Lowest to highest reading · ${s.spec.label.toLowerCase()}; square is the average now`}>
+          <RangeRows metric="pressure" rows={zonesInScope.map(z => {
+            const zs = stats.filter(x => x.p.zone === z.code);
+            if (!zs.length) return null;
+            return { key: z.code, label: z.name, sub: `${zs.length} logger${zs.length === 1 ? '' : 's'}`, min: Math.min(...zs.map(x => x.min)), max: Math.max(...zs.map(x => x.max)), now: zs.reduce((a, x) => a + x.p.value, 0) / zs.length };
+          }).filter(<T,>(x: T | null): x is T => !!x).sort((a, b) => a.now - b.now)} />
         </Card>
         <Card title="Lowest readings" sub={s.spec.label}>
           <div className="dx-rows">
@@ -380,7 +396,6 @@ function TankLevels({ ops }: { ops: Ops }) {
     { key: 'z', label: 'Zone', render: t => <span className="nowrap">{zoneName(t.zone)}</span> },
     { key: 'l', label: 'Level', align: 'right', render: t => <span className={t.tone !== 'ok' ? `t-${t.tone} strong` : ''}>{Math.round(t.level)} %</span>, sort: t => t.level },
     { key: 'v', label: 'Volume (m³)', align: 'right', render: t => Math.round(t.volume).toLocaleString(), sort: t => t.volume },
-    { key: 'io', label: 'In / out (L/s)', align: 'right', render: t => <span className="nowrap">{t.inflow.toFixed(1)} / {t.outflow.toFixed(1)}</span> },
     { key: 'ch', label: 'Change 6 h', align: 'right', render: t => <span className="nowrap">{signed(t.change6h, 0)} pts</span>, sort: t => t.change6h },
     { key: 'h24', label: 'Last 24 h', render: t => <StatusTracker items={[{ metric: 'level', id: t.id, base: t.base }]} buckets={12} /> },
     { key: 'ttl', label: 'Time to low level', align: 'right', render: t => t.level < 20 ? <span className="t-crit strong nowrap">At low level</span> : t.hoursToLow ? <span className="t-warn strong">{t.hoursToLow.toFixed(1)} h</span> : <span className="dx-muted nowrap">Normal pattern</span>, sort: t => t.hoursToLow ?? 999 },
@@ -396,13 +411,18 @@ function TankLevels({ ops }: { ops: Ops }) {
         <Kpi label="Abnormal drawdown" value={s.tanks.filter(t => t.abnormal).length} tone={s.tanks.some(t => t.abnormal) ? 'warn' : 'ok'} sub="falling faster than the same hours yesterday" />
       </div>
 
+      <div className="tank-key"><span><i className="dash warn" />Warning level 35 %</span><span><i className="dash crit" />Low level 20 %</span><span>Line: level over the last 24 h</span></div>
       <div className="tank-cards">
         {s.tanks.map(t => (
           <button key={t.id} type="button" className="tank-card" onClick={() => setOpen(t)}>
-            <div className="tank-card-name"><Dot tone={t.tone} />{t.name}</div>
-            <div className="tank-card-val"><b className={t.tone !== 'ok' ? `t-${t.tone}` : ''}>{Math.round(t.level)} %</b><span>{Math.round(t.volume).toLocaleString()} / {t.capacity.toLocaleString()} m³</span></div>
-            <LevelGauge level={t.level} />
-            <div className={`tank-card-note${t.abnormal || t.tone !== 'ok' ? ' t-warn' : ''}`}>{t.level < 20 ? 'Below low level' : t.abnormal ? `Draining ${Math.abs(t.vsYesterday).toFixed(0)} pts faster than usual` : `${signed(t.change6h, 0)} pts in 6 h`}</div>
+            <TankFill level={t.level} tone={t.tone} width={52} height={84} />
+            <div className="tank-card-body">
+              <div className="tank-card-name">{t.name}</div>
+              <b className={`tank-card-pct${t.tone !== 'ok' ? ` t-${t.tone}` : ''}`}>{Math.round(t.level)}<small>% full</small></b>
+              <span className="tank-card-vol">{Math.round(t.volume).toLocaleString()} of {t.capacity.toLocaleString()} m³</span>
+              <Sparkline points={series('level', t.id, t.base, rangeSpec('24H'))} tone={t.tone} width={120} height={22} />
+              <div className={`tank-card-note${t.tone === 'crit' ? ' t-crit' : t.abnormal || t.tone !== 'ok' ? ' t-warn' : ''}`}>{t.level < 20 ? 'Below low level (20 %)' : t.level < 35 ? 'Below warning level (35 %)' : t.abnormal ? `Draining ${Math.abs(t.vsYesterday).toFixed(0)} pts faster than usual` : `${signed(t.change6h, 0)} pts in the last 6 h`}</div>
+            </div>
           </button>
         ))}
       </div>
@@ -424,7 +444,7 @@ function TankLevels({ ops }: { ops: Ops }) {
             <KV rows={[
               ['Level', `${Math.round(open.level)} %`], ['Volume', `${Math.round(open.volume).toLocaleString()} m³`],
               ['Capacity', `${open.capacity.toLocaleString()} m³`], ['Change (6 h)', `${signed(open.change6h, 0)} pts`],
-              ['vs same time yesterday', `${signed(open.vsYesterday, 0)} pts`], ['Inflow / outflow', `${open.inflow} / ${open.outflow} L/s`],
+              ['vs same time yesterday', `${signed(open.vsYesterday, 0)} pts`],
               ['Warning / low level', '35 % / 20 %'], ['Time to low level', open.level < 20 ? 'At low level' : open.hoursToLow ? `${open.hoursToLow.toFixed(1)} h` : 'Normal daily pattern']
             ]} />
             <Section title={`Level · ${s.spec.label}`}>
@@ -465,7 +485,7 @@ function Sensors({ ops }: { ops: Ops }) {
   return (
     <>
       <div className="dx-grid-kpi four">
-        <Kpi label="Total sensors" value={s.sensors.length} sub={`${s.sensors.filter(d => d.kind === 'Pressure & flow').length} pressure · ${s.sensors.filter(d => d.kind === 'Tank level').length} level · ${s.sensors.filter(d => d.kind === 'Water quality').length} quality`} />
+        <Kpi label="Total sensors" value={s.sensors.length} sub={`${s.sensors.filter(d => d.kind === 'Pressure').length} pressure · ${s.sensors.filter(d => d.kind === 'Tank level').length} level · ${s.sensors.filter(d => d.kind === 'Water quality').length} quality`} />
         <Kpi label="Online" tone="ok" value={s.sensors.filter(d => d.health === 'ok').length} onClick={() => setHealth('ok')} sub="reporting normally" />
         <Kpi label="Warning" tone="warn" value={s.sensors.filter(d => d.health === 'warn').length} onClick={() => setHealth('warn')} sub="low battery or weak signal" />
         <Kpi label="Offline" tone="off" value={s.sensors.filter(d => d.health === 'off').length} onClick={() => setHealth('off')} sub="no data received" />
@@ -501,7 +521,7 @@ function Sensors({ ops }: { ops: Ops }) {
       <Card title="Devices" sub="The hardware layer that feeds Monitoring. Click a sensor for device details." flush>
         <div className="dx-filters">
           <SearchInput value={q} onChange={setQ} placeholder="Search sensor or location" />
-          <Select label="Type" value={kind} onChange={setKind} options={[{ value: 'ALL', label: 'All types' }, { value: 'Pressure & flow', label: 'Pressure & flow' }, { value: 'Tank level', label: 'Tank level' }, { value: 'Water quality', label: 'Water quality' }]} />
+          <Select label="Type" value={kind} onChange={setKind} options={[{ value: 'ALL', label: 'All types' }, { value: 'Pressure', label: 'Pressure' }, { value: 'Tank level', label: 'Tank level' }, { value: 'Water quality', label: 'Water quality' }]} />
           <Select label="Status" value={health} onChange={setHealth} options={[{ value: 'ALL', label: 'All' }, { value: 'ok', label: 'Online' }, { value: 'warn', label: 'Warning' }, { value: 'off', label: 'Offline' }]} />
           <span className="dx-muted" style={{ marginLeft: 'auto' }}>{rows.length} of {s.sensors.length}</span>
         </div>
