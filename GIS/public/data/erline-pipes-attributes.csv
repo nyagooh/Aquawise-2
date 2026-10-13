@@ -1,0 +1,147 @@
+ID,Layer,Network,Name,Zone,Material,Year laid,Length (m),Status,Service
+RW-01,Raw water lines,Raw Water Main,Mairo Inya Intake to Mairo Inya WTP,,Steel,,256.1,open,in-service
+RW-02,Raw water lines,Raw Water Main,Kwa Njora Intake to Kwa Njora WTP,,Steel,,645.9,open,in-service
+TM-01,Transmission Lines,Transmission Main,Mairo Inya WTP to Ziwani Reservoirs,,Steel,,3067.5,open,in-service
+TM-02,Transmission Lines,Transmission Main,Ziwani 1 to Shauri Reservoir,,Steel,,1844.1,open,in-service
+TM-03,Transmission Lines,Transmission Main,Ziwani Reservoir 3 to Kahembe TC,,Steel,,5501.9,open,in-service
+TM-04,Transmission Lines,Transmission Main,Ziwani 2 Reservoir to Shamata,,Steel,,3483.3,open,in-service
+TM-05,Transmission Lines,Transmission Main,Ngai Ndeithia to Harvesters,,Steel,,2645.4,open,in-service
+TM-06,Transmission Lines,Transmission Main,Ziwani Reservoir 2 to Gathanga,,Steel,,2188.0,open,in-service
+TM-07,Transmission Lines,Transmission Main,Ngai Ndeithia to Harvesters,,Steel,,980.0,open,in-service
+TM-08,Transmission Lines,Transmission Main,Kwa Njora WTP to Kwa Njora Reservoir,,Steel,,1155.6,open,in-service
+TM-09,Transmission Lines,Transmission Main,Kwa Njora Reservoir to Ndogino,,Steel,,2931.5,open,in-service
+TM-10,Transmission Lines,Transmission Main,Shauri Reservoir to Ndothua,,Steel,,2221.1,open,in-service
+TM-11,Transmission Lines,Transmission Main,Shauri Reservoir to Shauri,,Steel,,3122.6,open,in-service
+DL-001,Distribution lines,Distribution Main,,ZIWANI3,HDPE,2026,743.8,open,in-service
+DL-002,Distribution lines,Distribution Main,,ZIWANI3,PVC,2010,163.8,open,in-service
+DL-003,Distribution lines,Distribution Main,,ZIWANI3,HDPE,2023,144.6,open,in-service
+DL-004,Distribution lines,Distribution Main,,ZIWANI3,uPVC,2022,210.8,open,in-service
+DL-005,Distribution lines,Distribution Main,,ZIWANI3,PVC,2024,195.2,open,in-service
+DL-006,Distribution lines,Distribution Main,,ZIWANI3,PVC,2021,183.2,open,in-service
+DL-007,Distribution lines,Distribution Main,,ZIWANI3,PVC,2021,174.5,open,in-service
+DL-008,Distribution lines,Distribution Main,,ZIWANI3,PVC,2011,79.1,open,in-service
+DL-009,Distribution lines,Distribution Main,,ZIWANI2,DI,2011,657.9,open,in-service
+DL-010,Distribution lines,Distribution Main,,ZIWANI2,AC,2005,469.6,open,in-service
+DL-011,Distribution lines,Distribution Main,,ZIWANI2,uPVC,2008,640.6,open,in-service
+DL-012,Distribution lines,Distribution Main,,ZIWANI2,PVC,2013,497.2,open,in-service
+DL-013,Distribution lines,Distribution Main,,ZIWANI2,uPVC,2021,383.9,open,in-service
+DL-014,Distribution lines,Distribution Main,,ZIWANI2,PVC,2008,210.1,open,in-service
+DL-015,Distribution lines,Distribution Main,,ZIWANI2,GI,2011,696.1,open,in-service
+DL-016,Distribution lines,Distribution Main,,ZIWANI2,HDPE,2025,811.3,open,in-service
+DL-017,Distribution lines,Distribution Main,,ZIWANI3,HDPE,2020,2032.5,open,in-service
+DL-018,Distribution lines,Distribution Main,,ZIWANI3,PVC,2016,751.3,open,in-service
+DL-019,Distribution lines,Distribution Main,,ZIWANI3,uPVC,2006,133.0,open,in-service
+DL-020,Distribution lines,Distribution Main,,ZIWANI3,HDPE,2024,490.4,open,in-service
+DL-021,Distribution lines,Distribution Main,,ZIWANI3,AC,2006,201.1,open,in-service
+DL-022,Distribution lines,Distribution Main,,ZIWANI3,AC,2006,1887.8,open,in-service
+DL-023,Distribution lines,Distribution Main,,ZIWANI3,uPVC,2020,800.4,open,in-service
+DL-024,Distribution lines,Distribution Main,,ZIWANI3,PVC,2006,967.2,open,in-service
+DL-025,Distribution lines,Distribution Main,,ZIWANI3,PVC,2006,1524.8,open,in-service
+DL-026,Distribution lines,Distribution Main,,ZIWANI3,DI,2005,719.8,open,in-service
+DL-027,Distribution lines,Distribution Main,,ZIWANI3,HDPE,2023,1320.2,open,in-service
+DL-028,Distribution lines,Distribution Main,,ZIWANI3,DI,2014,440.1,open,in-service
+DL-029,Distribution lines,Distribution Main,,ZIWANI3,uPVC,2012,960.5,open,in-service
+DL-030,Distribution lines,Distribution Main,,ZIWANI3,HDPE,2018,781.0,open,in-service
+DL-031,Distribution lines,Distribution Main,,ZIWANI2,PVC,2011,317.1,open,in-service
+DL-032,Distribution lines,Distribution Main,,ZIWANI3,PVC,2022,974.8,open,in-service
+DL-033,Distribution lines,Distribution Main,,ZIWANI2,PVC,2022,231.9,open,in-service
+DL-034,Distribution lines,Distribution Main,,ZIWANI2,HDPE,2026,211.4,open,in-service
+DL-035,Distribution lines,Distribution Main,,ZIWANI2,HDPE,2023,75.3,open,in-service
+DL-036,Distribution lines,Distribution Main,,ZIWANI3,HDPE,2024,588.1,open,in-service
+DL-037,Distribution lines,Distribution Main,,ZIWANI2,uPVC,2022,503.1,open,in-service
+DL-038,Distribution lines,Distribution Main,,ZIWANI2,HDPE,2023,1363.8,open,in-service
+DL-039,Distribution lines,Distribution Main,,ZIWANI2,GI,2011,533.3,open,in-service
+DL-040,Distribution lines,Distribution Main,,ZIWANI2,GI,2011,423.0,open,in-service
+DL-041,Distribution lines,Distribution Main,,ZIWANI2,PVC,2024,208.1,open,in-service
+DL-042,Distribution lines,Distribution Main,,ZIWANI2,PVC,2023,146.2,open,in-service
+DL-043,Distribution lines,Distribution Main,,ZIWANI2,PVC,2023,232.2,open,in-service
+DL-044,Distribution lines,Distribution Main,,ZIWANI2,PVC,2023,188.4,open,in-service
+DL-045,Distribution lines,Distribution Main,,ZIWANI2,PVC,2008,1075.1,open,in-service
+DL-046,Distribution lines,Distribution Main,,ZIWANI2,PVC,2019,438.7,open,in-service
+DL-047,Distribution lines,Distribution Main,,ZIWANI2,uPVC,2023,263.9,open,in-service
+DL-048,Distribution lines,Distribution Main,,ZIWANI2,HDPE,2026,1349.0,open,in-service
+DL-049,Distribution lines,Distribution Main,,ZIWANI2,PVC,2005,255.7,open,in-service
+DL-050,Distribution lines,Distribution Main,,ZIWANI2,uPVC,2019,333.3,open,in-service
+DL-051,Distribution lines,Distribution Main,,ZIWANI2,uPVC,2022,195.4,open,in-service
+DL-052,Distribution lines,Distribution Main,,ZIWANI2,PVC,2010,264.3,open,in-service
+DL-053,Distribution lines,Distribution Main,,ZIWANI2,HDPE,2020,953.7,open,in-service
+DL-054,Distribution lines,Distribution Main,,ZIWANI2,HDPE,2020,961.4,open,in-service
+DL-055,Distribution lines,Distribution Main,,ZIWANI1,HDPE,2019,754.5,open,in-service
+DL-056,Distribution lines,Distribution Main,,ZIWANI1,PVC,2007,305.0,open,in-service
+DL-057,Distribution lines,Distribution Main,,ZIWANI1,HDPE,2025,518.1,open,in-service
+DL-058,Distribution lines,Distribution Main,,ZIWANI1,PVC,2021,381.3,open,in-service
+DL-059,Distribution lines,Distribution Main,,ZIWANI2,PVC,2011,119.2,open,in-service
+DL-060,Distribution lines,Distribution Main,,ZIWANI1,HDPE,2026,732.5,open,in-service
+DL-061,Distribution lines,Distribution Main,,ZIWANI2,uPVC,2007,94.2,open,in-service
+DL-062,Distribution lines,Distribution Main,,ZIWANI1,GI,2011,200.2,open,in-service
+DL-063,Distribution lines,Distribution Main,,ZIWANI1,PVC,2021,477.9,open,in-service
+DL-064,Distribution lines,Distribution Main,,ZIWANI1,PVC,2018,183.0,open,in-service
+DL-065,Distribution lines,Distribution Main,,ZIWANI1,uPVC,2021,725.9,open,in-service
+DL-066,Distribution lines,Distribution Main,,SHAURI,PVC,2016,358.3,open,in-service
+DL-067,Distribution lines,Distribution Main,,SHAURI,PVC,2017,807.8,open,in-service
+DL-068,Distribution lines,Distribution Main,,SHAURI,AC,2007,870.9,open,in-service
+DL-069,Distribution lines,Distribution Main,,SHAURI,GI,2014,1002.0,open,in-service
+DL-070,Distribution lines,Distribution Main,,SHAURI,GI,2014,518.4,open,in-service
+DL-071,Distribution lines,Distribution Main,,SHAURI,PVC,2020,723.6,open,in-service
+DL-072,Distribution lines,Distribution Main,,SHAURI,PVC,2006,434.4,open,in-service
+DL-073,Distribution lines,Distribution Main,,SHAURI,GI,2014,365.6,open,in-service
+DL-074,Distribution lines,Distribution Main,,SHAURI,uPVC,2018,394.9,open,in-service
+DL-075,Distribution lines,Distribution Main,,SHAURI,PVC,2019,543.7,open,in-service
+DL-076,Distribution lines,Distribution Main,,SHAURI,PVC,2023,1817.3,open,in-service
+DL-077,Distribution lines,Distribution Main,,SHAURI,uPVC,2010,564.0,open,in-service
+DL-078,Distribution lines,Distribution Main,,ZIWANI3,uPVC,2010,1764.2,open,in-service
+DL-079,Distribution lines,Distribution Main,,ZIWANI3,PVC,2016,590.6,open,in-service
+DL-080,Distribution lines,Distribution Main,,ZIWANI3,PVC,2016,984.5,open,in-service
+DL-081,Distribution lines,Distribution Main,,ZIWANI3,PVC,2024,1332.8,open,in-service
+DL-082,Distribution lines,Distribution Main,,ZIWANI3,GI,2007,1467.4,open,in-service
+DL-083,Distribution lines,Distribution Main,,ZIWANI3,PVC,2009,418.3,open,in-service
+DL-084,Distribution lines,Distribution Main,,ZIWANI3,uPVC,2021,661.4,open,in-service
+DL-085,Distribution lines,Distribution Main,,ZIWANI3,PVC,2016,577.9,open,in-service
+DL-086,Distribution lines,Distribution Main,,ZIWANI3,HDPE,2026,710.8,open,in-service
+DL-087,Distribution lines,Distribution Main,,SHAURI,uPVC,2024,2711.3,open,in-service
+DL-088,Distribution lines,Distribution Main,,SHAURI,uPVC,2024,319.7,open,in-service
+DL-089,Distribution lines,Distribution Main,,SHAURI,uPVC,2013,596.5,open,in-service
+DL-090,Distribution lines,Distribution Main,,SHAURI,DI,2007,890.6,open,in-service
+DL-091,Distribution lines,Distribution Main,,SHAURI,HDPE,2021,2955.2,open,in-service
+DL-092,Distribution lines,Distribution Main,,SHAURI,uPVC,2021,1560.0,open,in-service
+DL-093,Distribution lines,Distribution Main,,SHAURI,PVC,2012,1136.1,open,in-service
+DL-094,Distribution lines,Distribution Main,,SHAURI,HDPE,2023,1160.1,open,in-service
+DL-095,Distribution lines,Distribution Main,,SHAURI,HDPE,2024,1089.5,open,in-service
+DL-096,Distribution lines,Distribution Main,,SHAURI,AC,2009,1974.0,open,in-service
+DL-097,Distribution lines,Distribution Main,,SHAURI,HDPE,2018,457.1,open,in-service
+DL-098,Distribution lines,Distribution Main,,SHAURI,GI,2011,1461.6,open,in-service
+DL-099,Distribution lines,Distribution Main,,SHAURI,AC,2010,305.3,open,in-service
+DL-100,Distribution lines,Distribution Main,,SHAURI,uPVC,2014,863.5,open,in-service
+DL-101,Distribution lines,Distribution Main,,SHAURI,,,497.8,open,in-service
+DL-102,Distribution lines,Distribution Main,,SHAURI,,,271.9,open,in-service
+DL-103,Distribution lines,Distribution Main,,SHAURI,,,196.2,open,in-service
+DL-104,Distribution lines,Distribution Main,,SHAURI,,,746.0,open,in-service
+DL-105,Distribution lines,Distribution Main,,SHAURI,,,681.0,open,in-service
+DL-106,Distribution lines,Distribution Main,,SHAURI,,,529.6,open,in-service
+DL-107,Distribution lines,Distribution Main,,SHAURI,,,352.5,open,in-service
+DL-108,Distribution lines,Distribution Main,,ZIWANI1,,,296.1,open,in-service
+DL-109,Distribution lines,Distribution Main,,ZIWANI1,,,372.0,open,in-service
+DL-110,Distribution lines,Distribution Main,,ZIWANI1,,,537.6,open,in-service
+DL-111,Distribution lines,Distribution Main,,ZIWANI1,,,238.5,open,in-service
+DL-112,Distribution lines,Distribution Main,,ZIWANI1,,,546.7,open,in-service
+DL-113,Distribution lines,Distribution Main,,ZIWANI1,,,431.5,open,in-service
+DL-114,Distribution lines,Distribution Main,,ZIWANI1,,,192.2,open,in-service
+DL-115,Distribution lines,Distribution Main,,ZIWANI1,,,314.9,open,in-service
+DL-116,Distribution lines,Distribution Main,,SHAURI,,,64.8,open,in-service
+DL-117,Distribution lines,Distribution Main,,SHAURI,,,425.0,open,in-service
+DL-118,Distribution lines,Distribution Main,,SHAURI,,,278.1,open,in-service
+DL-119,Distribution lines,Distribution Main,,SHAURI,,,483.1,open,in-service
+DL-120,Distribution lines,Distribution Main,,ZIWANI1,,,309.7,open,in-service
+DL-121,Distribution lines,Distribution Main,,SHAURI,,,501.7,open,in-service
+DL-122,Distribution lines,Distribution Main,,ZIWANI1,,,130.4,open,in-service
+DL-123,Distribution lines,Distribution Main,,SHAURI,,,424.7,open,in-service
+DL-124,Distribution lines,Distribution Main,,ZIWANI1,,,497.4,open,in-service
+DL-125,Distribution lines,Distribution Main,,ZIWANI,,,501.1,open,in-service
+DL-126,Distribution lines,Distribution Main,,KWANJORA,,,2137.8,open,in-service
+DL-127,Distribution lines,Distribution Main,,SHAURI,,,696.3,open,in-service
+DL-128,Distribution lines,Distribution Main,,SHAURI,,,490.4,open,in-service
+DL-129,Distribution lines,Distribution Main,,KWANJORA,,,2667.2,open,in-service
+DL-130,Distribution lines,Distribution Main,,KWANJORA,,,304.7,open,in-service
+DL-131,Distribution lines,Distribution Main,,KWANJORA,,,2654.2,open,in-service
+DL-132,Distribution lines,Distribution Main,,KWANJORA,,,799.7,open,in-service
+DL-133,Distribution lines,Distribution Main,,KWANJORA,,,1410.3,open,in-service

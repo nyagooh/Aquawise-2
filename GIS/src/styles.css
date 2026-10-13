@@ -2143,7 +2143,7 @@ button { font-family: inherit; }
 }
 
 /* ============================================================
-   Real Riverton network map — controls, legend, asset markers
+   Real Erline Water network map — controls, legend, asset markers
    ============================================================ */
 .gis-canvas--real .leaflet-control-zoom {
   margin-left: var(--s4) !important;
@@ -2450,7 +2450,8 @@ button { font-family: inherit; }
 }
 
 .aw-prv,
-.aw-mv {
+.aw-mv,
+.aw-facility {
   filter: drop-shadow(0 0 1px rgba(0,0,0,0.45));
 }
 .aw-status-dot {

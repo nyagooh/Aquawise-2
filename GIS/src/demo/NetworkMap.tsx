@@ -1,11 +1,12 @@
 /**
- * Compact operational map: the real Riverton pipe network on a quiet basemap,
- * with status-coloured monitoring points. Used on Overview, Monitoring and NRW.
+ * Compact operational map: the real Erline Water pipe network on satellite
+ * imagery, with status-coloured monitoring points. Used on Overview and Monitoring.
  * The full GIS workspace lives on the Network page.
  */
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import { useTheme } from '../theme';
+import { markerIcon, PIPE_STYLE } from '../data/network';
 import type { Ops, LatLng } from './model';
 import type { Tone } from './series';
 
@@ -18,10 +19,10 @@ export interface MapPoint {
   size?: number;
 }
 
-const TONE_HEX: Record<Tone, string> = { ok: '#10B981', warn: '#F59E0B', crit: '#EF4444', off: '#94A3B8' }; // map status palette
-// Same basemap provider as the Network page; desaturated (and inverted in dark mode) via CSS.
-const TILE = 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
-const ATTR = 'Map data &copy; Google';
+const TONE_HEX: Record<Tone, string> = { ok: '#059669', warn: '#D97706', crit: '#DC2626', off: '#64748B' }; // map status palette
+// Same satellite imagery as the Network page, in both themes.
+const TILE = 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}';
+const ATTR = 'Imagery &copy; Google';
 
 /** Canvas renderer that ignores redraws scheduled after the map was torn down (route change / StrictMode remount). */
 const SafeCanvas = L.Canvas.extend({
@@ -97,11 +98,11 @@ export function NetworkMap({ ops, points, height = 360, zone = 'ALL', zoneColor,
       const z = p.properties.zone ?? '';
       const inZone = zone === 'ALL' || z === zone;
       const custom = zoneColor?.(z);
-      const color = custom ?? (cls === 'main' ? '#F97316' : cls === 'backfeed' ? '#64748B' : '#18AEEA');
+      const color = custom ?? PIPE_STYLE[cls].color;
       L.polyline(p.geometry.coordinates.map(c => [c[1], c[0]] as LatLng), {
         renderer: canvas, interactive: false,
-        color, weight: cls === 'main' ? 3 : cls === 'backfeed' ? 1.4 : 1.2, dashArray: cls === 'backfeed' && !custom ? '5 4' : undefined,
-        opacity: inZone ? (cls === 'main' ? 0.95 : 0.7) : 0.12
+        color, weight: cls === 'main' ? 4.5 : 2.8, dashArray: cls === 'backfeed' && !custom ? '5 4' : undefined,
+        opacity: inZone ? 1 : 0.25
       }).addTo(g);
     }
     m.fitBounds(coreBounds(ops, zone), { padding: [16, 16], maxZoom: 15, animate: false });
@@ -118,7 +119,8 @@ export function NetworkMap({ ops, points, height = 360, zone = 'ALL', zoneColor,
       const icon = L.divIcon({
         className: '',
         iconSize: [size, size],
-        html: `<span class="dx-pin ${p.shape ?? 'circle'} ${p.tone}${sel ? ' sel' : ''}" style="width:${size}px;height:${size}px;background:${TONE_HEX[p.tone]}"></span>`
+        // Colour shows the asset type; a ring shows a reading outside its normal range.
+        html: `<span class="eg-sym${p.tone !== 'ok' ? ' alert' : ''}${sel ? ' sel' : ''}" style="--halo:${TONE_HEX[p.tone]}">${markerIcon(p.shape === 'square' ? 'tank' : p.shape === 'diamond' ? 'quality' : 'pressure', undefined, size + 8)}</span>`
       });
       const mk = L.marker(p.pos, { icon, keyboard: false, zIndexOffset: order.indexOf(p.tone) * 100 + (sel ? 1000 : 0) });
       mk.bindTooltip(p.label, { direction: 'top', offset: [0, -size / 2], className: 'dx-maptip' });

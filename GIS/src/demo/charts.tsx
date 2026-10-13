@@ -1,56 +1,115 @@
 /**
- * Lightweight SVG charts for the operational UI.
+ * Charts for the operational UI, built on Tremor (@tremor/react).
+ *
+ * Tremor covers bars, donuts, spark charts, bar lists and category bars.
+ * Monitoring charts need acceptable-range bands, threshold lines and event
+ * windows, which Tremor's charts don't expose, so `LineChart` uses Recharts
+ * (the library Tremor is built on) with Tremor's styling, tooltip and colours.
+ *
  * Blue is the default series colour; green/amber/red appear only for
- * acceptable-range bands, threshold lines and out-of-range segments.
+ * acceptable ranges, thresholds and out-of-range readings. Lines are drawn as
+ * steps: each reading holds until the next one arrives, as sensors report.
  */
-import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { METRICS, toneFor, type Metric, type Point, type Tone } from './series';
+import { useMemo, type ReactNode } from 'react';
+import {
+  BarChart as TBarChart, CategoryBar, DonutChart, ProgressBar,
+  SparkAreaChart, SparkBarChart, SparkLineChart, Tracker
+} from '@tremor/react';
+import {
+  Area, CartesianGrid, ComposedChart, Line, ReferenceArea, ReferenceLine,
+  ResponsiveContainer, Tooltip, XAxis, YAxis
+} from 'recharts';
+import { METRICS, NOW, sampleAt, toneFor, worstTone, fmt, type Metric, type Point, type Tone, type RangeSpec } from './series';
 
+/* ── colours ── */
 export const TONE_COLOR: Record<Tone, string> = {
   ok: 'hsl(var(--safe))', warn: 'hsl(var(--warning))', crit: 'hsl(var(--danger))', off: 'hsl(var(--offline))'
 };
+const TONE_HEX: Record<Tone, string> = { ok: '#16A66A', warn: '#E59A17', crit: '#E5484D', off: '#98A2B3' };
+const BLUE = '#1769E8'; // AquaWise blue for Recharts
+/** Tremor colour per status. */
+const TB = 'blue'; // Tremor colour name; Tailwind's blue is remapped to AquaWise blue
+const TONE_TREMOR: Record<Tone | 'blue', string> = { ok: 'emerald', warn: 'amber', crit: 'red', off: 'gray', blue: TB };
 /** Comparison palette — restrained, never status colours. */
-export const SERIES_COLORS = ['hsl(var(--primary))', '#0E9384', '#7A5AF8', '#475467', '#36A3D9', '#B54708'];
+export const SERIES_COLORS = ['#1769E8', '#0E9384', '#7A5AF8', '#475467', '#36A3D9', '#B54708'];
 
-function useWidth<T extends HTMLElement>(): [React.RefObject<T>, number] {
-  const ref = useRef<T>(null);
-  const [w, setW] = useState(600);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([e]) => setW(Math.max(200, Math.floor(e.contentRect.width))));
-    ro.observe(el);
-    setW(Math.max(200, Math.floor(el.getBoundingClientRect().width)));
-    return () => ro.disconnect();
-  }, []);
-  return [ref, w];
+/* ── helpers ── */
+const DAY = 86_400_000;
+function timeFmt(spanMs: number) {
+  if (spanMs <= 26 * 3_600_000) return (t: number) => new Date(t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  if (spanMs <= 2.5 * DAY) return (t: number) => {
+    const d = new Date(t);
+    return d.getHours() === 0 && d.getMinutes() === 0
+      ? d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric' })
+      : d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  };
+  if (spanMs <= 120 * DAY) return (t: number) => new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  return (t: number) => new Date(t).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
 }
-
+const tipTime = (t: number, spanMs: number) =>
+  new Date(t).toLocaleString('en-GB', spanMs > 120 * DAY
+    ? { month: 'long', year: 'numeric' }
+    : { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 function niceTicks(min: number, max: number, count = 4): number[] {
   const span = max - min || 1;
   const raw = span / count;
   const mag = 10 ** Math.floor(Math.log10(raw));
-  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => span / s <= count + 0.5) ?? mag * 10;
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(st => span / st <= count + 0.5) ?? mag * 10;
   const out: number[] = [];
-  for (let v = Math.ceil(min / step) * step; v <= max + 1e-9; v += step) out.push(Math.round(v * 1e6) / 1e6);
+  for (let v = Math.floor(min / step) * step; v <= max + step * 0.999; v += step) out.push(Math.round(v * 1e6) / 1e6);
   return out;
 }
-
-function timeFmt(spanMs: number) {
-  const day = 86_400_000;
-  if (spanMs <= 2 * day) return (t: number) => new Date(t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-  if (spanMs <= 120 * day) return (t: number) => new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-  return (t: number) => new Date(t).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
+/** X-axis ticks on round clock/calendar boundaries (no repeated dates). */
+function timeTicks(t0: number, t1: number, max = 7): number[] {
+  const H = 3_600_000;
+  const steps = [H, 2 * H, 3 * H, 6 * H, 12 * H, DAY, 2 * DAY, 7 * DAY, 14 * DAY, 30 * DAY];
+  const step = steps.find(st => (t1 - t0) / st <= max) ?? 30 * DAY;
+  const tz = new Date(t0).getTimezoneOffset() * 60_000;
+  const out: number[] = [];
+  for (let t = Math.ceil((t0 - tz) / step) * step + tz; t <= t1; t += step) out.push(t);
+  return out;
 }
-const tipTime = (t: number, spanMs: number) =>
-  new Date(t).toLocaleString('en-GB', spanMs > 120 * 86_400_000
-    ? { month: 'long', year: 'numeric' }
-    : { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+function fmtTick(v: number) {
+  if (v === 0) return '0';
+  const a = Math.abs(v);
+  if (a >= 10000) return `${Math.round(v / 1000)}k`;
+  if (a >= 100) return Math.round(v).toLocaleString();
+  if (a >= 10) return v.toFixed(0);
+  if (a >= 1) return v.toFixed(1).replace(/\.0$/, '');
+  return v.toFixed(2);
+}
+
+/* ── Tremor tooltip markup, reused for the Recharts chart ── */
+function TipBox({ title, rows }: { title: string; rows: Array<{ label: string; value: string; color: string }> }) {
+  return (
+    <div className="rounded-tremor-default border border-tremor-border bg-tremor-background text-tremor-default shadow-tremor-dropdown dark:border-dark-tremor-border dark:bg-dark-tremor-background dark:shadow-dark-tremor-dropdown">
+      <div className="border-b border-tremor-border px-4 py-2 dark:border-dark-tremor-border">
+        <p className="m-0 font-medium text-tremor-content-emphasis dark:text-dark-tremor-content-emphasis">{title}</p>
+      </div>
+      <div className="space-y-1 px-4 py-2">
+        {rows.map(r => (
+          <div key={r.label} className="flex items-center justify-between space-x-8">
+            <div className="flex items-center space-x-2">
+              <span className="h-3 w-3 shrink-0 rounded-tremor-full border-2 border-white shadow-tremor-card" style={{ background: r.color }} />
+              <p className="m-0 whitespace-nowrap text-tremor-content dark:text-dark-tremor-content">{r.label}</p>
+            </div>
+            <p className="m-0 whitespace-nowrap font-medium tabular-nums text-tremor-content-emphasis dark:text-dark-tremor-content-emphasis">{r.value}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export interface ChartSeries { id: string; label: string; points: Point[]; color?: string }
 
+/**
+ * Time-series chart with acceptable-range band, threshold lines, event windows
+ * and out-of-range highlighting. One series renders as a Tremor-style gradient
+ * area; several render as lines for comparison.
+ */
 export function LineChart({
-  series, metric, height = 260, band, windows = [], marker, yLabel, format, showThresholds = true, area = true, yMin
+  series, metric, height = 260, band, windows = [], marker, yLabel, format, showThresholds = true, area = true, yMin, domain
 }: {
   series: ChartSeries[];
   metric?: Metric;
@@ -63,149 +122,133 @@ export function LineChart({
   showThresholds?: boolean;
   area?: boolean;
   yMin?: number;
+  /** Force at least this value range, so several small charts share one scale. */
+  domain?: [number, number];
 }) {
-  const [ref, width] = useWidth<HTMLDivElement>();
-  const [hover, setHover] = useState<number | null>(null);
   const def = metric ? METRICS[metric] : null;
-  const fmtV = format ?? ((v: number) => (def ? v.toFixed(def.decimals) : v.toFixed(1)));
-  const pad = { l: 44, r: 12, t: 12, b: 26 };
-  const W = width; const H = height;
-  const iw = W - pad.l - pad.r; const ih = H - pad.t - pad.b;
-
-  const pts = series.flatMap(s => s.points);
-  const tMin = pts.length ? Math.min(...series.map(s => s.points[0]?.t ?? Infinity)) : 0;
-  const tMax = pts.length ? Math.max(...series.map(s => s.points[s.points.length - 1]?.t ?? -Infinity)) : 1;
+  const fmtV = format ?? ((v: number) => `${def ? v.toFixed(def.decimals) : v.toFixed(1)}${def?.unit ? ` ${def.unit}` : ''}`);
+  // Long series are averaged into at most 48 steps so the stepped line stays readable at any size.
+  series = useMemo(() => series.map(s => ({ ...s, points: stepBuckets(s.points) })), [series]);
+  const single = series.length === 1;
+  const base = series[0]?.points ?? [];
+  const t0 = base[0]?.t ?? 0; const t1 = base[base.length - 1]?.t ?? 1;
+  const span = t1 - t0;
+  const tf = timeFmt(span);
   const bandR = band === null ? null : band ?? (def ? def.normal : null);
 
-  const [yLo, yHi] = useMemo(() => {
-    let lo = Math.min(...pts.map(p => p.v));
-    let hi = Math.max(...pts.map(p => p.v));
+  const { rows, yDomain, yTicks } = useMemo(() => {
+    const tones = metric ? base.map(p => toneFor(metric, p.v)) : [];
+    const bad = (j: number) => j >= 0 && j < tones.length && tones[j] !== 'ok';
+    const crit = (j: number) => j >= 0 && j < tones.length && tones[j] === 'crit';
+    const rows = base.map((p, i) => {
+      const r: Record<string, number | null> = { t: p.t };
+      series.forEach((s, si) => { r[`s${si}`] = s.points[i]?.v ?? null; });
+      if (single && metric) {
+        r.warn = bad(i) || bad(i - 1) || bad(i + 1) ? p.v : null;
+        r.crit = crit(i) || crit(i - 1) || crit(i + 1) ? p.v : null;
+      }
+      return r;
+    });
+    const vals = series.flatMap(s => s.points.map(p => p.v));
+    let lo = Math.min(...vals); let hi = Math.max(...vals);
     if (bandR && showThresholds) {
-      // keep the acceptable band in view when it is close to the data
-      const near = (x: number) => Math.abs(x - (lo + hi) / 2) < (hi - lo + 1e-6) * 3 + Math.abs(hi) * 0.6;
-      if (near(bandR[0])) lo = Math.min(lo, bandR[0]);
-      if (near(bandR[1])) hi = Math.max(hi, bandR[1]);
+      const mid = (lo + hi) / 2; const reach = (hi - lo + 1e-6) * 3 + Math.abs(hi) * 0.6;
+      if (Number.isFinite(bandR[0]) && Math.abs(bandR[0] - mid) < reach) lo = Math.min(lo, bandR[0]);
+      if (Number.isFinite(bandR[1]) && Math.abs(bandR[1] - mid) < reach) hi = Math.max(hi, bandR[1]);
     }
+    if (domain) { lo = Math.min(lo, domain[0]); hi = Math.max(hi, domain[1]); }
     if (yMin !== undefined) lo = Math.min(lo, yMin);
-    const span = hi - lo || Math.abs(hi) * 0.1 || 1;
-    return [lo - span * 0.08, hi + span * 0.1];
-  }, [pts, bandR, showThresholds, yMin]);
+    const pad = hi - lo || Math.abs(hi) * 0.1 || 1;
+    const floor = yMin !== undefined ? yMin : lo - pad * 0.08;
+    let ticks = niceTicks(Math.min(floor, lo), hi + pad * 0.05, 4);
+    if (metric === 'level') { // percent full never goes past 100
+      ticks = ticks.filter(v => v <= 100);
+      if (ticks[ticks.length - 1] < 100 && hi > 90) ticks.push(100);
+    }
+    return { rows, yDomain: [ticks[0], ticks[ticks.length - 1]] as [number, number], yTicks: ticks };
+  }, [series, metric, single, bandR, showThresholds, yMin, base, domain]);
 
-  const x = (t: number) => pad.l + ((t - tMin) / (tMax - tMin || 1)) * iw;
-  const y = (v: number) => pad.t + (1 - (v - yLo) / (yHi - yLo)) * ih;
-  const yTicks = niceTicks(yLo, yHi, 4);
-  const tf = timeFmt(tMax - tMin);
-  const xTickCount = Math.max(2, Math.min(7, Math.floor(iw / 110)));
-  const xTicks = Array.from({ length: xTickCount }, (_, i) => tMin + ((tMax - tMin) * i) / (xTickCount - 1));
-
-  const single = series.length === 1 && metric;
-  const base = series[0]?.points ?? [];
-  const idx = hover === null || !base.length ? null : Math.round(((hover - pad.l) / iw) * (base.length - 1));
-  const hi = idx !== null && idx >= 0 && idx < base.length ? idx : null;
-
-  const path = (p: Point[]) => p.map((q, i) => `${i ? 'L' : 'M'}${x(q.t).toFixed(1)},${y(q.v).toFixed(1)}`).join('');
+  const thresholds = def && showThresholds
+    ? (['normal', 'crit'] as const).flatMap(k => def[k].map(v => ({ v, k })))
+        .filter(x => Number.isFinite(x.v) && x.v > yDomain[0] && x.v < yDomain[1])
+    : [];
+  const gid = `g${series[0]?.id ?? 'x'}${series.length}`.replace(/[^a-zA-Z0-9]/g, '');
+  const tick = { fontSize: 11, fill: 'hsl(var(--muted-foreground))' };
+  const bandLo = bandR && Number.isFinite(bandR[0]) ? Math.max(bandR[0], yDomain[0]) : yDomain[0];
+  const bandHi = bandR && Number.isFinite(bandR[1]) ? Math.min(bandR[1], yDomain[1]) : yDomain[1];
 
   return (
-    <div className="dx-chart" ref={ref} style={{ height }}>
-      <svg width={W} height={H} onMouseMove={e => setHover(e.nativeEvent.offsetX)} onMouseLeave={() => setHover(null)} role="img" aria-label={yLabel || def?.label || 'Trend chart'}>
-        {/* grid */}
-        {yTicks.map(v => (
-          <g key={v}>
-            <line x1={pad.l} x2={W - pad.r} y1={y(v)} y2={y(v)} className="dx-grid" />
-            <text x={pad.l - 8} y={y(v)} className="dx-axis" textAnchor="end" dominantBaseline="middle">{fmtTick(v)}</text>
-          </g>
-        ))}
-        {xTicks.map((t, i) => (
-          <text key={i} x={x(t)} y={H - 8} className="dx-axis" textAnchor={i === 0 ? 'start' : i === xTicks.length - 1 ? 'end' : 'middle'}>{tf(t)}</text>
-        ))}
-
-        {/* acceptable band */}
-        {bandR && showThresholds && (() => {
-          const top = y(Math.min(bandR[1], yHi)); const bot = y(Math.max(bandR[0], yLo));
-          if (!Number.isFinite(top) || !Number.isFinite(bot)) return null;
-          return bot > top ? <rect x={pad.l} width={iw} y={top} height={bot - top} className="dx-band" /> : null;
-        })()}
-        {/* event windows */}
-        {windows.map((w, i) => {
-          const x0 = Math.max(pad.l, x(w.start)); const x1 = Math.min(W - pad.r, x(w.end));
-          if (x1 <= pad.l || x0 >= W - pad.r) return null;
-          return <rect key={i} x={x0} width={Math.max(2, x1 - x0)} y={pad.t} height={ih} fill={TONE_COLOR[w.tone]} opacity={0.08} />;
-        })}
-        {/* threshold lines */}
-        {def && showThresholds && (['normal', 'crit'] as const).flatMap(k => def[k].map((v, j) => {
-          if (!Number.isFinite(v) || v <= yLo || v >= yHi) return null;
-          return <line key={`${k}${j}`} x1={pad.l} x2={W - pad.r} y1={y(v)} y2={y(v)} className={`dx-thr ${k === 'crit' ? 'crit' : 'warn'}`} />;
-        }))}
-
-        {/* series */}
-        {series.map((s, si) => {
-          const color = s.color ?? SERIES_COLORS[si % SERIES_COLORS.length];
-          return (
-            <g key={s.id}>
-              {area && series.length === 1 && s.points.length > 1 && (
-                <path d={`${path(s.points)}L${x(s.points[s.points.length - 1].t)},${pad.t + ih}L${x(s.points[0].t)},${pad.t + ih}Z`} fill={color} opacity={0.07} />
-              )}
-              <path d={path(s.points)} fill="none" stroke={color} strokeWidth={1.6} strokeLinejoin="round" />
-            </g>
-          );
-        })}
-        {/* out-of-range segments recoloured */}
-        {single && base.slice(1).map((q, i) => {
-          const p0 = base[i];
-          const tone = worse(toneFor(metric!, p0.v), toneFor(metric!, q.v));
-          if (tone === 'ok') return null;
-          return <line key={i} x1={x(p0.t)} y1={y(p0.v)} x2={x(q.t)} y2={y(q.v)} stroke={TONE_COLOR[tone]} strokeWidth={2} strokeLinecap="round" />;
-        })}
-        {/* incident marker */}
-        {marker && marker.t >= tMin && marker.t <= tMax && (
-          <g>
-            <line x1={x(marker.t)} x2={x(marker.t)} y1={pad.t} y2={pad.t + ih} className="dx-marker" />
-            <text x={x(marker.t) + 4} y={pad.t + 10} className="dx-axis dx-marker-label">{marker.label}</text>
-          </g>
-        )}
-        {/* hover */}
-        {hi !== null && (
-          <g>
-            <line x1={x(base[hi].t)} x2={x(base[hi].t)} y1={pad.t} y2={pad.t + ih} className="dx-cross" />
-            {series.map((s, si) => s.points[hi] && (
-              <circle key={s.id} cx={x(s.points[hi].t)} cy={y(s.points[hi].v)} r={3.5} fill="hsl(var(--card))" stroke={s.color ?? SERIES_COLORS[si % SERIES_COLORS.length]} strokeWidth={2} />
-            ))}
-          </g>
-        )}
-      </svg>
-      {hi !== null && (
-        <div className="dx-tip" style={{ left: Math.min(W - 180, Math.max(0, x(base[hi].t) + 10)), top: 8 }}>
-          <div className="dx-tip-time">{tipTime(base[hi].t, tMax - tMin)}</div>
-          {series.map((s, si) => s.points[hi] && (
-            <div key={s.id} className="dx-tip-row">
-              <span className="sw" style={{ background: s.color ?? SERIES_COLORS[si % SERIES_COLORS.length] }} />
-              <span className="lbl">{s.label}</span>
-              <b>{fmtV(s.points[hi].v)}{def?.unit ? ` ${def.unit}` : ''}</b>
-            </div>
+    <div style={{ height }} aria-label={yLabel || def?.label || 'Trend chart'} role="img">
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={rows} margin={{ top: 10, right: 8, bottom: 0, left: 0 }}>
+          <defs>
+            <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={series[0]?.color ?? BLUE} stopOpacity={0.14} />
+              <stop offset="95%" stopColor={series[0]?.color ?? BLUE} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid vertical={false} stroke="hsl(var(--hair))" strokeDasharray="3 3" />
+          <XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']} tickFormatter={tf} ticks={timeTicks(t0, t1)}
+            tick={tick} axisLine={false} tickLine={false} minTickGap={24} tickMargin={10} />
+          <YAxis domain={yDomain} tick={tick} axisLine={false} tickLine={false} width={44} tickFormatter={fmtTick} ticks={yTicks} allowDataOverflow />
+          {bandR && showThresholds && bandHi > bandLo && (
+            <ReferenceArea y1={bandLo} y2={bandHi} fill={TONE_HEX.ok} fillOpacity={0.045} stroke="none" ifOverflow="hidden" />
+          )}
+          {windows.filter(w => w.end >= t0 && w.start <= t1).map((w, i) => (
+            <ReferenceArea key={i} x1={Math.max(w.start, t0)} x2={Math.min(w.end, t1)} fill={TONE_HEX[w.tone]} fillOpacity={0.06} stroke="none" ifOverflow="hidden" />
           ))}
-        </div>
-      )}
+          {thresholds.map(({ v, k }) => (
+            <ReferenceLine key={`${k}${v}`} y={v} stroke={k === 'crit' ? TONE_HEX.crit : TONE_HEX.warn} strokeDasharray="3 4" strokeOpacity={0.6} ifOverflow="hidden" />
+          ))}
+          {marker && marker.t >= t0 && marker.t <= t1 && (
+            <ReferenceLine x={marker.t} stroke={TONE_HEX.crit} strokeWidth={1.5}
+              label={{ value: marker.label, position: 'insideTopLeft', fill: TONE_HEX.crit, fontSize: 11, fontWeight: 600 }} />
+          )}
+          <Tooltip
+            isAnimationActive={false}
+            cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1, strokeDasharray: '3 3' }}
+            content={({ active, payload, label }) => active && payload?.length ? (
+              <TipBox title={tipTime(Number(label), span)} rows={series.map((s, si) => {
+                const v = payload.find(p => p.dataKey === `s${si}`)?.value as number | undefined | null;
+                return { label: s.label, value: v === undefined || v === null ? '—' : fmtV(v), color: s.color ?? SERIES_COLORS[si % SERIES_COLORS.length] };
+              })} />
+            ) : null}
+          />
+          {series.map((s, si) => single && area ? (
+            <Area key={s.id} dataKey={`s${si}`} type="stepAfter" stroke={s.color ?? BLUE} strokeWidth={1.75} fill={`url(#${gid})`}
+              dot={false} activeDot={{ r: 4.5, strokeWidth: 2, stroke: '#fff', fill: s.color ?? BLUE }} isAnimationActive={false} connectNulls />
+          ) : (
+            <Line key={s.id} dataKey={`s${si}`} type="stepAfter" stroke={s.color ?? SERIES_COLORS[si % SERIES_COLORS.length]} strokeWidth={1.75}
+              dot={false} activeDot={{ r: 4.5, strokeWidth: 2, stroke: '#fff' }} isAnimationActive={false} connectNulls />
+          ))}
+          {single && metric && <Line dataKey="warn" type="stepAfter" stroke={TONE_HEX.warn} strokeWidth={2.5} dot={false} activeDot={false} isAnimationActive={false} connectNulls={false} legendType="none" />}
+          {single && metric && <Line dataKey="crit" type="stepAfter" stroke={TONE_HEX.crit} strokeWidth={2.5} dot={false} activeDot={false} isAnimationActive={false} connectNulls={false} legendType="none" />}
+        </ComposedChart>
+      </ResponsiveContainer>
     </div>
   );
 }
 
-const ORDER: Tone[] = ['ok', 'off', 'warn', 'crit'];
-const worse = (a: Tone, b: Tone) => (ORDER.indexOf(a) > ORDER.indexOf(b) ? a : b);
-function fmtTick(v: number) {
-  const a = Math.abs(v);
-  if (a >= 10000) return `${Math.round(v / 1000)}k`;
-  if (a >= 100) return Math.round(v).toLocaleString();
-  if (a >= 10) return v.toFixed(0);
-  if (a >= 1) return v.toFixed(1).replace(/\.0$/, '');
-  return v.toFixed(2);
+function stepBuckets(points: Point[], max = 48): Point[] {
+  if (points.length <= max * 1.5) return points;
+  const size = Math.ceil(points.length / max);
+  const out: Point[] = [];
+  for (let i = 0; i < points.length; i += size) {
+    const chunk = points.slice(i, i + size);
+    out.push({ t: chunk[0].t, v: chunk.reduce((acc, p) => acc + p.v, 0) / chunk.length });
+  }
+  const last = points[points.length - 1];
+  if (out[out.length - 1].t !== last.t) out.push({ t: last.t, v: out[out.length - 1].v });
+  return out;
 }
 
+/** Legend that can also describe bands and dashed threshold lines. */
 export function ChartLegend({ items }: { items: Array<{ label: string; color: string; dashed?: boolean; band?: boolean }> }) {
   return (
     <div className="dx-legend">
       {items.map(i => (
         <span key={i.label}>
-          <i className={i.band ? 'band' : i.dashed ? 'dash' : ''} style={i.band ? undefined : { background: i.dashed ? undefined : i.color, borderColor: i.color }} />
+          <i className={i.band ? 'band' : i.dashed ? 'dash' : 'dot'} style={i.band ? undefined : i.dashed ? { borderColor: i.color } : { background: i.color }} />
           {i.label}
         </span>
       ))}
@@ -213,7 +256,7 @@ export function ChartLegend({ items }: { items: Array<{ label: string; color: st
   );
 }
 
-/** Horizontal ranked bars. */
+/** Ranked horizontal bars: label and value on one line, a thin bar beneath. */
 export function BarList({ rows, max, onRowClick }: {
   rows: Array<{ key: string; label: ReactNode; value: number; display: string; tone?: Tone; sub?: string }>;
   max?: number;
@@ -221,89 +264,85 @@ export function BarList({ rows, max, onRowClick }: {
 }) {
   const m = max ?? Math.max(...rows.map(r => r.value), 1);
   return (
-    <div className="dx-barlist">
-      {rows.map(r => (
-        <div key={r.key} className={`dx-barrow${onRowClick ? ' click' : ''}`} onClick={onRowClick ? () => onRowClick(r.key) : undefined}>
-          <div className="dx-barrow-top">
-            <span className="lbl">{r.label}</span>
-            <span className="val">{r.display}</span>
-          </div>
-          <div className="dx-bartrack">
-            <div className="dx-barfill" style={{ width: `${(r.value / m) * 100}%`, background: r.tone && r.tone !== 'ok' ? TONE_COLOR[r.tone] : 'hsl(var(--primary))' }} />
-          </div>
-          {r.sub && <div className="dx-barrow-sub">{r.sub}</div>}
-        </div>
-      ))}
+    <div className="eg-bars">
+      {rows.map(r => {
+        const Tag = onRowClick ? 'button' : 'div';
+        return (
+          <Tag key={r.key} type={onRowClick ? 'button' : undefined} className={`eg-bar${onRowClick ? ' click' : ''}`} onClick={onRowClick ? () => onRowClick(r.key) : undefined}>
+            <span className="eg-bar-top"><span className="lbl">{r.label}</span><span className="val">{r.display}</span></span>
+            <span className="eg-bar-track"><span style={{ width: `${Math.max(0.6, (r.value / m) * 100)}%`, background: r.tone && r.tone !== 'ok' ? TONE_HEX[r.tone] : BLUE }} /></span>
+            {r.sub && <span className="eg-bar-sub">{r.sub}</span>}
+          </Tag>
+        );
+      })}
     </div>
   );
 }
 
-/** Monthly stacked columns, e.g. billed vs lost water. */
+/** Monthly stacked columns, e.g. billed vs lost water (Tremor BarChart). */
 export function StackedColumns({ data, height = 220, keys }: {
   data: Array<{ label: string; values: number[] }>;
   keys: Array<{ label: string; color: string }>;
   height?: number;
 }) {
-  const [ref, W] = useWidth<HTMLDivElement>();
-  const [hover, setHover] = useState<number | null>(null);
-  const pad = { l: 44, r: 8, t: 10, b: 24 };
-  const iw = W - pad.l - pad.r; const ih = height - pad.t - pad.b;
-  const max = Math.max(...data.map(d => d.values.reduce((a, b) => a + b, 0))) * 1.08;
-  const ticks = niceTicks(0, max, 4);
-  const bw = (iw / data.length) * 0.62;
-  const y = (v: number) => pad.t + ih - (v / max) * ih;
+  const rows = data.map(d => Object.fromEntries([['month', d.label], ...keys.map((k, i) => [k.label, Math.round(d.values[i])])]));
   return (
-    <div className="dx-chart" ref={ref} style={{ height }}>
-      <svg width={W} height={height} onMouseLeave={() => setHover(null)}>
-        {ticks.map(v => (
-          <g key={v}>
-            <line x1={pad.l} x2={W - pad.r} y1={y(v)} y2={y(v)} className="dx-grid" />
-            <text x={pad.l - 8} y={y(v)} className="dx-axis" textAnchor="end" dominantBaseline="middle">{fmtTick(v)}</text>
-          </g>
-        ))}
-        {data.map((d, i) => {
-          const cx = pad.l + (iw / data.length) * (i + 0.5);
-          let acc = 0;
-          return (
-            <g key={d.label} onMouseEnter={() => setHover(i)}>
-              <rect x={cx - (iw / data.length) / 2} width={iw / data.length} y={pad.t} height={ih} fill="transparent" />
-              {d.values.map((v, k) => {
-                const y0 = y(acc); acc += v; const y1 = y(acc);
-                return <rect key={k} x={cx - bw / 2} width={bw} y={y1} height={Math.max(0, y0 - y1)} fill={keys[k].color} opacity={hover === null || hover === i ? 1 : 0.55} />;
-              })}
-              <text x={cx} y={height - 8} className="dx-axis" textAnchor="middle">{d.label}</text>
-            </g>
-          );
-        })}
-      </svg>
-      {hover !== null && (
-        <div className="dx-tip" style={{ left: Math.min(W - 180, pad.l + (iw / data.length) * (hover + 0.5) + 12), top: 8 }}>
-          <div className="dx-tip-time">{data[hover].label}</div>
-          {keys.map((k, i) => (
-            <div key={k.label} className="dx-tip-row"><span className="sw" style={{ background: k.color }} /><span className="lbl">{k.label}</span><b>{Math.round(data[hover].values[i]).toLocaleString()} m³</b></div>
-          ))}
-        </div>
-      )}
+    <TBarChart data={rows} index="month" categories={keys.map(k => k.label)} colors={[TB, 'amber']} stack
+      valueFormatter={(v: number) => `${Math.round(v / 1000).toLocaleString('en-US')}k`}
+      showLegend={false} yAxisWidth={52} style={{ height }} showAnimation={false} />
+  );
+}
+
+/** Small trend line (Tremor SparkLineChart). */
+export function Sparkline({ points, tone, width = 96, height = 28 }: { points: Point[]; tone?: Tone; width?: number; height?: number }) {
+  if (points.length < 2) return null;
+  return (
+    <SparkLineChart data={points.map(p => ({ t: p.t, v: p.v }))} index="t" categories={['v']}
+      colors={[tone && tone !== 'ok' ? TONE_TREMOR[tone] : TB]} style={{ width, height }} curveType="step" />
+  );
+}
+
+/** Small area trend (Tremor SparkAreaChart). */
+export function SparkArea({ points, tone, width = 110, height = 40, fluid }: { points: Point[]; tone?: Tone | 'blue'; width?: number; height?: number; fluid?: boolean }) {
+  if (points.length < 2) return null;
+  return (
+    <SparkAreaChart data={points.map(p => ({ t: p.t, v: p.v }))} index="t" categories={['v']}
+      colors={[TONE_TREMOR[tone ?? 'blue']]} style={{ width: fluid ? '100%' : width, height }} curveType="step" />
+  );
+}
+
+/** Small bars (Tremor SparkBarChart). */
+export function SparkBars({ values, tone, width = 110, height = 40 }: { values: number[]; tone?: Tone | 'blue'; width?: number; height?: number; highlightLast?: boolean }) {
+  return (
+    <SparkBarChart data={values.map((v, i) => ({ i, v }))} index="i" categories={['v']}
+      colors={[TONE_TREMOR[tone ?? 'blue']]} style={{ width, height }} />
+  );
+}
+
+/** Donut with a centred label (Tremor DonutChart). Second slice uses amber. */
+export function Donut({ parts, size = 150, label, sub }: {
+  parts: Array<{ value: number; color: string; label: string }>; size?: number; thickness?: number; label: ReactNode; sub?: ReactNode;
+}) {
+  return (
+    <div className="dx-donut" style={{ width: size, height: size }}>
+      <DonutChart data={parts.map(p => ({ name: p.label, value: p.value }))} category="value" index="name"
+        colors={[TB, 'amber']} showLabel={false} showAnimation={false}
+        valueFormatter={(v: number) => `${v.toLocaleString()} m³/day`} className="dx-donut-chart" />
+      <div className="dx-donut-c" aria-hidden="true"><b>{label}</b>{sub && <span>{sub}</span>}</div>
     </div>
   );
 }
 
-export function Sparkline({ points, tone, width = 96, height = 28 }: { points: Point[]; tone?: Tone; width?: number; height?: number }) {
-  if (points.length < 2) return null;
-  const lo = Math.min(...points.map(p => p.v)); const hi = Math.max(...points.map(p => p.v));
-  const sx = (i: number) => (i / (points.length - 1)) * width;
-  const sy = (v: number) => height - 2 - ((v - lo) / (hi - lo || 1)) * (height - 4);
-  const d = points.map((p, i) => `${i ? 'L' : 'M'}${sx(i).toFixed(1)},${sy(p.v).toFixed(1)}`).join('');
-  const color = tone && tone !== 'ok' ? TONE_COLOR[tone] : 'hsl(var(--primary))';
+/** Vertical bars over time (Tremor BarChart). */
+export function BarChart({ points, height = 170, format = (v: number) => v.toFixed(0) }: { points: Point[]; height?: number; format?: (v: number) => string; highlightLast?: boolean }) {
+  const tf = timeFmt(points[points.length - 1].t - points[0].t);
   return (
-    <svg width={width} height={height} className="dx-spark" aria-hidden="true">
-      <path d={d} fill="none" stroke={color} strokeWidth={1.4} strokeLinejoin="round" />
-      <circle cx={sx(points.length - 1)} cy={sy(points[points.length - 1].v)} r={2} fill={color} />
-    </svg>
+    <TBarChart data={points.map(p => ({ time: tf(p.t), Value: p.v }))} index="time" categories={['Value']} colors={[TB]}
+      valueFormatter={format} showLegend={false} yAxisWidth={36} style={{ height }} showAnimation={false} tickGap={24} />
   );
 }
 
-/** Vertical tank fill indicator with the low-level threshold. */
+/** Vertical tank fill indicator with the warning level. */
 export function TankGauge({ level, tone, low = 35 }: { level: number; tone: Tone; low?: number }) {
   return (
     <div className="dx-tank" aria-label={`${Math.round(level)} percent full`}>
@@ -313,106 +352,251 @@ export function TankGauge({ level, tone, low = 35 }: { level: number; tone: Tone
   );
 }
 
-/** Thin proportional bar split into segments. */
+/** Proportional bar split into status segments (Tremor CategoryBar). */
 export function SegmentBar({ parts }: { parts: Array<{ value: number; color: string; label: string }> }) {
+  const tones: Record<string, string> = {
+    [TONE_COLOR.ok]: 'emerald', [TONE_COLOR.warn]: 'amber', [TONE_COLOR.crit]: 'red', [TONE_COLOR.off]: 'gray'
+  };
   const total = parts.reduce((s, p) => s + p.value, 0) || 1;
+  const shown = parts.filter(p => p.value > 0);
   return (
-    <div className="dx-segbar" role="img" aria-label={parts.map(p => `${p.label} ${p.value}`).join(', ')}>
-      {parts.map(p => <span key={p.label} style={{ width: `${(p.value / total) * 100}%`, background: p.color }} title={`${p.label}: ${p.value}`} />)}
-    </div>
+    <CategoryBar values={shown.map(p => (p.value / total) * 100)}
+      colors={shown.map(p => (tones[p.color] ?? TB) as never)} showLabels={false} />
   );
 }
 
-/* ── Tremor-style spark charts ── */
-export function SparkArea({ points, tone, width = 110, height = 40, fluid }: { points: Point[]; tone?: Tone | 'blue'; width?: number; height?: number; fluid?: boolean }) {
-  if (points.length < 2) return null;
-  const lo = Math.min(...points.map(p => p.v)); const hi = Math.max(...points.map(p => p.v));
-  const sx = (i: number) => (i / (points.length - 1)) * width;
-  const sy = (v: number) => height - 2 - ((v - lo) / (hi - lo || 1)) * (height - 6);
-  const d = points.map((p, i) => `${i ? 'L' : 'M'}${sx(i).toFixed(1)},${sy(p.v).toFixed(1)}`).join('');
-  const color = !tone || tone === 'blue' ? 'hsl(var(--primary))' : TONE_COLOR[tone];
-  const id = `sa${Math.round(Math.random() * 1e9)}`;
-  return (
-    <svg width={fluid ? undefined : width} height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className={`dx-spark${fluid ? ' fluid' : ''}`} aria-hidden="true">
-      <defs><linearGradient id={id} x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor={color} stopOpacity={0.28} /><stop offset="1" stopColor={color} stopOpacity={0} /></linearGradient></defs>
-      <path d={`${d}L${width},${height}L0,${height}Z`} fill={`url(#${id})`} />
-      <path d={d} fill="none" stroke={color} strokeWidth={1.6} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-    </svg>
-  );
-}
+/* ── monitoring visuals (Tremor) ── */
+const TRACK_COLOR: Record<Tone, string> = { ok: 'emerald', warn: 'amber', crit: 'red', off: 'gray' };
+const TRACK_WORD: Record<Tone, string> = { ok: 'Normal', warn: 'Warning', crit: 'Critical', off: 'No data' };
 
-export function SparkBars({ values, tone, width = 110, height = 40, highlightLast }: { values: number[]; tone?: Tone | 'blue'; width?: number; height?: number; highlightLast?: boolean }) {
-  const max = Math.max(...values, 1);
-  const bw = width / values.length;
-  const color = !tone || tone === 'blue' ? 'hsl(var(--primary))' : TONE_COLOR[tone];
-  return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="dx-spark" aria-hidden="true">
-      {values.map((v, i) => {
-        const h = Math.max(2, (v / max) * (height - 2));
-        return <rect key={i} x={i * bw + bw * 0.18} width={bw * 0.64} y={height - h} height={h} rx={1} fill={color} opacity={highlightLast && i < values.length - 1 ? 0.35 : 0.9} />;
-      })}
-    </svg>
-  );
-}
-
-/** Donut with a centred label (Tremor DonutChart look). */
-export function Donut({ parts, size = 150, thickness = 16, label, sub }: {
-  parts: Array<{ value: number; color: string; label: string }>; size?: number; thickness?: number; label: ReactNode; sub?: ReactNode;
+/**
+ * Status history as a row of squares (Tremor Tracker): one square per hour,
+ * coloured by the worst reading in that hour. Pass several readings to merge
+ * them (e.g. all parameters at a sampling point, or all loggers in a group).
+ */
+export function StatusTracker({ items, hours = 24, buckets = hours, offlineMin, className }: {
+  items: Array<{ metric: Metric; id: string; base: number }>;
+  hours?: number;
+  /** Squares to draw; fewer than `hours` groups several hours per square. */
+  buckets?: number;
+  /** Device silent for this many minutes: the latest squares show "No data". */
+  offlineMin?: number;
+  className?: string;
 }) {
-  const total = parts.reduce((s, p) => s + p.value, 0) || 1;
-  const r = (size - thickness) / 2; const c = 2 * Math.PI * r;
-  let acc = 0;
+  const data = useMemo(() => Array.from({ length: buckets }, (_, i) => {
+    const span = (hours / buckets) * 3_600_000;
+    const end = NOW - (buckets - 1 - i) * span;
+    const silent = offlineMin !== undefined && NOW - end < offlineMin * 60_000;
+    const offsets = Array.from({ length: Math.max(4, Math.round(span / 900_000)) }, (_, k) => k * 900_000);
+    const tones: Tone[] = silent ? ['off'] : items.flatMap(x => offsets.map(o => toneFor(x.metric, sampleAt(x.metric, x.id, x.base, end - o))));
+    const tone = worstTone(tones);
+    const at = new Date(end).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    return { color: TRACK_COLOR[tone], tooltip: `${at} · ${TRACK_WORD[tone]}` };
+  }), [items, hours, buckets, offlineMin]);
+  return <Tracker data={data} className={`aw-tracker ${className ?? ''}`} />;
+}
+
+/** Category columns (Tremor BarChart), e.g. pipe segments by age band. */
+export function Columns({ data, height = 200, format = (v: number) => v.toLocaleString(), color = TB }: {
+  data: Array<{ label: string; value: number }>; height?: number; format?: (v: number) => string; color?: string;
+}) {
+  return (
+    <TBarChart data={data.map(d => ({ label: d.label, Value: d.value }))} index="label" categories={['Value']} colors={[color]}
+      valueFormatter={format} showLegend={false} yAxisWidth={36} style={{ height }} showAnimation={false} showGridLines />
+  );
+}
+
+/** Reservoir level as a gauge bar: low / warning / normal bands with a marker at the level. */
+export function LevelGauge({ level }: { level: number }) {
+  return <CategoryBar values={[20, 15, 65]} colors={['red', 'amber', 'emerald']} markerValue={Math.max(1, Math.min(99, level))} showLabels={false} className="aw-level-gauge" />;
+}
+
+/** Compact progress bar coloured by status (battery, utilisation, compliance). */
+export function MiniBar({ value, tone = 'ok', width = 72 }: { value: number; tone?: Tone | 'blue'; width?: number }) {
+  return <ProgressBar value={Math.max(0, Math.min(100, value))} color={(tone === 'blue' ? TB : TRACK_COLOR[tone]) as never} className="aw-minibar" style={{ width }} />;
+}
+
+/** Donut of counts per status (Tremor DonutChart). */
+export function StatusDonut({ parts, label, sub, size = 132 }: {
+  parts: Array<{ label: string; value: number; tone: Tone }>; label: ReactNode; sub?: ReactNode; size?: number;
+}) {
+  const shown = parts.filter(p => p.value > 0);
   return (
     <div className="dx-donut" style={{ width: size, height: size }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={parts.map(p => `${p.label} ${p.value}`).join(', ')}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="hsl(var(--muted))" strokeWidth={thickness} />
-        {parts.map(p => {
-          const len = (p.value / total) * c; const off = acc; acc += len;
-          return <circle key={p.label} cx={size / 2} cy={size / 2} r={r} fill="none" stroke={p.color} strokeWidth={thickness}
-            strokeDasharray={`${Math.max(0, len - 2)} ${c}`} strokeDashoffset={-off} transform={`rotate(-90 ${size / 2} ${size / 2})`} />;
-        })}
-      </svg>
-      <div className="dx-donut-c"><b>{label}</b>{sub && <span>{sub}</span>}</div>
+      <DonutChart data={shown.map(p => ({ name: p.label, value: p.value }))} category="value" index="name"
+        colors={shown.map(p => TRACK_COLOR[p.tone]) as never} showLabel={false} showAnimation={false} className="dx-donut-chart" />
+      <div className="dx-donut-c" aria-hidden="true"><b>{label}</b>{sub && <span>{sub}</span>}</div>
     </div>
   );
 }
 
-/** Vertical bar chart with axis (Tremor BarChart look). */
-export function BarChart({ points, height = 170, format = (v: number) => v.toFixed(0), highlightLast = true }: { points: Point[]; height?: number; format?: (v: number) => string; highlightLast?: boolean }) {
-  const [ref, W] = useWidth<HTMLDivElement>();
-  const [hover, setHover] = useState<number | null>(null);
-  const pad = { l: 30, r: 4, t: 8, b: 22 };
-  const iw = W - pad.l - pad.r; const ih = height - pad.t - pad.b;
-  const max = Math.max(...points.map(p => p.v)) * 1.1 || 1;
-  const ticks = niceTicks(0, max, 4);
-  const bw = iw / points.length;
-  const y = (v: number) => pad.t + ih - (v / max) * ih;
-  const tf = timeFmt(points[points.length - 1].t - points[0].t);
-  const every = Math.ceil(points.length / Math.max(2, Math.floor(iw / 60)));
+/* ── heatmap: readings as a grid of squares ── */
+/** Multi-hue scale (teal → blue → violet) so neighbouring values read as different colours, not shades of one blue. */
+const HEAT_BLUE = ['#D5F3EE', '#8EDCCB', '#3FBFB0', '#2B98C6', '#2F6FDB', '#4F4CC9', '#6B2FA8'];
+
+/** Columns for a range: hourly for a day, 6-hourly for a week, daily beyond. */
+function heatBuckets(spec: RangeSpec): { count: number; spanMs: number } {
+  const H = 3_600_000;
+  if (spec.hours <= 24) return { count: 24, spanMs: H };
+  if (spec.hours <= 168) return { count: Math.round(spec.hours / 6), spanMs: 6 * H };
+  const count = Math.min(31, Math.round(spec.hours / 24));
+  return { count, spanMs: (spec.hours * H) / count };
+}
+
+/**
+ * One row per monitoring point, one square per time block. Normal readings are
+ * shaded teal → blue → violet by where they sit in the normal range; warnings and critical
+ * readings are amber and red. Hover a square for its time and value.
+ */
+export function Heatmap({ rows, metric, spec, showValues, scale, onRowClick }: {
+  rows: Array<{ id: string; label: string; sub?: string; entity: string; base: number }>;
+  metric: Metric;
+  spec: RangeSpec;
+  showValues?: boolean;
+  /** Value range mapped onto the blue scale (defaults to the metric's normal range). */
+  scale?: [number, number];
+  onRowClick?: (id: string) => void;
+}) {
+  const def = METRICS[metric];
+  const [lo, hi] = scale ?? [Number.isFinite(def.normal[0]) ? def.normal[0] : 0, Number.isFinite(def.normal[1]) ? def.normal[1] : 100];
+  const { count, spanMs } = heatBuckets(spec);
+  const grid = useMemo(() => rows.map(r => Array.from({ length: count }, (_, i) => {
+    const end = NOW - (count - 1 - i) * spanMs;
+    const vals = [0, 0.25, 0.5, 0.75].map(f => sampleAt(metric, r.entity, r.base, end - f * spanMs));
+    const v = vals.reduce((a, b) => a + b, 0) / vals.length;
+    return { end, v, tone: worstTone(vals.map(x => toneFor(metric, x))) };
+  })), [rows, metric, count, spanMs]);
+  const when = (t: number) => new Date(t).toLocaleString('en-GB', spanMs < 86_400_000
+    ? { weekday: spanMs > 3_600_000 ? 'short' : undefined, hour: '2-digit', minute: '2-digit' }
+    : { day: 'numeric', month: 'short' });
+  const every = Math.ceil(count / 8);
+  const colour = (c: { v: number; tone: Tone }) => {
+    if (c.tone === 'crit') return { bg: '#E5484D', fg: '#fff' };
+    if (c.tone === 'warn') return { bg: '#F2A93B', fg: '#3B2600' };
+    const k = Math.max(0, Math.min(HEAT_BLUE.length - 1, Math.round(((c.v - lo) / (hi - lo || 1)) * (HEAT_BLUE.length - 1))));
+    return { bg: HEAT_BLUE[k], fg: k >= 3 ? '#fff' : '#0B3B3A' };
+  };
   return (
-    <div className="dx-chart" ref={ref} style={{ height }}>
-      <svg width={W} height={height} onMouseLeave={() => setHover(null)}>
-        {ticks.map(v => (
-          <g key={v}><line x1={pad.l} x2={W - pad.r} y1={y(v)} y2={y(v)} className="dx-grid" /><text x={pad.l - 6} y={y(v)} className="dx-axis" textAnchor="end" dominantBaseline="middle">{fmtTick(v)}</text></g>
-        ))}
-        {points.map((p, i) => {
-          const h = Math.max(1, (p.v / max) * ih);
-          const on = hover === null ? (!highlightLast || i === points.length - 1) : hover === i;
-          return (
-            <g key={p.t} onMouseEnter={() => setHover(i)}>
-              <rect x={pad.l + i * bw} width={bw} y={pad.t} height={ih} fill="transparent" />
-              <rect x={pad.l + i * bw + bw * 0.15} width={bw * 0.7} y={y(p.v)} height={h} rx={2} fill="hsl(var(--primary))" opacity={on ? 1 : 0.45} />
-              {i % every === 0 && <text x={pad.l + i * bw + bw / 2} y={height - 6} className="dx-axis" textAnchor="middle">{tf(p.t)}</text>}
-            </g>
-          );
-        })}
-      </svg>
-      {hover !== null && (
-        <div className="dx-tip" style={{ left: Math.min(W - 170, pad.l + hover * bw + bw), top: 4 }}>
-          <div className="dx-tip-time">{tipTime(points[hover].t, points[points.length - 1].t - points[0].t)}</div>
-          <div className="dx-tip-row"><span className="sw" style={{ background: 'hsl(var(--primary))' }} /><span className="lbl">Value</span><b>{format(points[hover].v)}</b></div>
+    <div className="hm" style={{ ['--hm-cols' as string]: count }}>
+      {rows.map((r, ri) => (
+        <div key={r.id} className={`hm-row${onRowClick ? ' click' : ''}`} onClick={onRowClick ? () => onRowClick(r.id) : undefined}>
+          <div className="hm-label"><b>{r.label}</b>{r.sub && <span>{r.sub}</span>}</div>
+          {grid[ri].map((c, ci) => {
+            const { bg, fg } = colour(c);
+            return (
+              <div key={ci} className="hm-cell" style={{ background: bg, color: fg }} title={`${r.label} · ${when(c.end)} · ${fmt(metric, c.v)}`}>
+                {showValues && fmt(metric, c.v, false)}
+              </div>
+            );
+          })}
         </div>
-      )}
+      ))}
+      <div className="hm-row hm-axis">
+        <div className="hm-label" />
+        {Array.from({ length: count }, (_, i) => (
+          <div key={i} className="hm-tick">{(count - 1 - i) % every === 0 ? when(NOW - (count - 1 - i) * spanMs) : ''}</div>
+        ))}
+      </div>
+      <div className="hm-legend">
+        <span>{fmt(metric, lo)}</span>
+        <i className="hm-ramp" style={{ background: `linear-gradient(90deg, ${HEAT_BLUE.join(',')})` }} />
+        <span>{fmt(metric, hi)}</span>
+        <span className="hm-key"><i style={{ background: '#F2A93B' }} />Warning</span>
+        <span className="hm-key"><i style={{ background: '#E5484D' }} />Critical</span>
+      </div>
+    </div>
+  );
+}
+
+/* ── squares in a line: where a reading sits on its scale ── */
+/** Display scale per metric for the range squares. */
+const RANGE_SCALE: Partial<Record<Metric, [number, number]>> = {
+  turbidity: [0, 2], ph: [5.5, 9.5], chlorine: [0, 1.2], conductivity: [0, 1600], temperature: [10, 32], pressure: [0, 5.5], level: [0, 100]
+};
+
+/**
+ * A row of squares spanning the metric's scale. Each square is tinted by the
+ * zone it covers (normal, warning, critical); the square holding the current
+ * reading is filled solid.
+ */
+export function RangeSquares({ metric, value, count = 20 }: { metric: Metric; value: number; count?: number }) {
+  const def = METRICS[metric];
+  const [lo, hi] = RANGE_SCALE[metric] ?? [Math.min(0, value), value * 2 || 1];
+  const step = (hi - lo) / count;
+  const at = Math.max(0, Math.min(count - 1, Math.floor((value - lo) / step)));
+  return (
+    <div className="rs" aria-label={`${fmt(metric, value)} on a scale of ${fmt(metric, lo)} to ${fmt(metric, hi)}`}>
+      <div className="rs-row">
+        {Array.from({ length: count }, (_, i) => {
+          const tone = toneFor(metric, lo + (i + 0.5) * step);
+          return <i key={i} className={`rs-sq t-${tone}${i === at ? ' on' : ''}`} />;
+        })}
+      </div>
+      <div className="rs-scale"><span>{fmt(metric, lo, false)}</span><span>{def.rangeText}</span><span>{fmt(metric, hi, false)}</span></div>
+    </div>
+  );
+}
+
+/** Reservoir as a tank outline filled to its level, with the warning (35 %) and low (20 %) marks. */
+export function TankFill({ level, tone, warn = 35, low = 20, width = 64, height = 96 }: { level: number; tone: Tone; warn?: number; low?: number; width?: number; height?: number }) {
+  const pad = 4; const h = height - pad * 2; const w = width - pad * 2;
+  const y = (pct: number) => pad + h * (1 - pct / 100);
+  const fill = tone === 'ok' ? BLUE : TONE_HEX[tone];
+  const id = `tf${Math.round(level * 10)}${tone}`;
+  return (
+    <svg className="tf" width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${Math.round(level)} percent full`}>
+      <defs><clipPath id={id}><rect x={pad} y={pad} width={w} height={h} rx={7} /></clipPath></defs>
+      <rect x={pad} y={pad} width={w} height={h} rx={7} className="tf-shell" />
+      <g clipPath={`url(#${id})`}>
+        <rect x={pad} y={y(level)} width={w} height={h} fill={fill} opacity={0.85} />
+        <rect x={pad} y={y(level)} width={w} height={3} fill="#fff" opacity={0.35} />
+      </g>
+      <line x1={pad} x2={pad + w} y1={y(warn)} y2={y(warn)} stroke={TONE_HEX.warn} strokeWidth={1.25} strokeDasharray="3 2" />
+      <line x1={pad} x2={pad + w} y1={y(low)} y2={y(low)} stroke={TONE_HEX.crit} strokeWidth={1.25} strokeDasharray="3 2" />
+      <rect x={pad} y={pad} width={w} height={h} rx={7} fill="none" className="tf-edge" />
+    </svg>
+  );
+}
+
+/**
+ * Range plot: one row per group on a shared scale. The tinted band is the
+ * normal range, the bar spans the lowest to highest reading, the dot is now.
+ */
+export function RangeRows({ rows, metric, scale }: {
+  rows: Array<{ key: string; label: string; min: number; max: number; now: number; sub?: string }>;
+  metric: Metric; scale?: [number, number];
+}) {
+  const def = METRICS[metric];
+  const [lo, hi] = scale ?? (metric === 'pressure' ? [1, 5] : RANGE_SCALE[metric]) ?? [0, 1];
+  const x = (v: number) => `${Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100))}%`;
+  const nLo = Number.isFinite(def.normal[0]) ? def.normal[0] : lo; const nHi = Number.isFinite(def.normal[1]) ? def.normal[1] : hi;
+  return (
+    <div className="rr">
+      {rows.map(r => {
+        const tone = toneFor(metric, r.now);
+        return (
+          <div key={r.key} className="rr-row">
+            <div className="rr-lbl"><b>{r.label}</b>{r.sub && <span>{r.sub}</span>}</div>
+            <div className={`rr-val${tone !== 'ok' ? ` t-${tone}` : ''}`}>{fmt(metric, r.now)}</div>
+            <div className="rr-track">
+              <span className="rr-band" style={{ left: x(nLo), width: `calc(${x(nHi)} - ${x(nLo)})` }} />
+              <span className="rr-span" style={{ left: x(r.min), width: `calc(${x(r.max)} - ${x(r.min)})` }} title={`${fmt(metric, r.min)} – ${fmt(metric, r.max)}`} />
+              <span className={`rr-dot t-${tone}`} style={{ left: x(r.now) }} />
+            </div>
+          </div>
+        );
+      })}
+      <div className="rr-ticks"><span>{fmt(metric, lo)}</span><span>{fmt(metric, (lo + hi) / 2)}</span><span>{fmt(metric, hi)}</span></div>
+    </div>
+  );
+}
+
+/** Proportional bar in the comparison palette, with a matching ranked legend. */
+export function ShareBar({ parts }: { parts: Array<{ key: string; value: number; color: string; label: string }> }) {
+  const total = parts.reduce((a, p) => a + p.value, 0) || 1;
+  return (
+    <div className="sb" role="img" aria-label={parts.map(p => `${p.label} ${Math.round((p.value / total) * 100)} %`).join(', ')}>
+      {parts.map(p => <span key={p.key} style={{ flexGrow: p.value, background: p.color }} title={`${p.label} · ${((p.value / total) * 100).toFixed(0)} %`} />)}
     </div>
   );
 }

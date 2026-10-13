@@ -14,7 +14,7 @@ services:
       - key: DJANGO_DEBUG
         value: "false"
       - key: DEMO_LEAD_RECIPIENT
-        value: annmaina.info@gmail.com
+        value: info.aquawise@gmail.com
       # Set these to actually deliver demo-request emails (SMTP), e.g. Gmail app password:
       # - key: EMAIL_HOST
       #   value: smtp.gmail.com

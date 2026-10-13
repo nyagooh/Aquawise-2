@@ -1,12 +1,13 @@
 /**
- * Network data loader — fetches the real Riverton shapefile (converted to
- * GeoJSON by scripts/shapefile_to_geojson.py) and exposes typed accessors.
+ * Network data loader — fetches the Erline Water asset shapefiles (converted
+ * to GeoJSON by scripts/erline_to_geojson.py) and exposes typed accessors.
  *
  * Files served as static assets from /public/data/:
- *   - riverton-pipes.geojson    (3,233 polylines, classified with ui_class)
- *   - riverton-assets.geojson   (synthesized point telemetry overlay)
- *   - riverton-meta.json        (rich aggregates: km by class/zone/material,
- *                              status counts, age/diameter distribution, bbox)
+ *   - erline-pipes.geojson      (raw water, transmission + distribution lines and
+ *                              the service-area outline, classified with ui_class)
+ *   - erline-assets.geojson     (surveyed intakes, treatment plants, reservoirs +
+ *                              synthesized telemetry overlay)
+ *   - erline-meta.json          (aggregates: km by class/zone/material, age, bbox)
  */
 import { current, currentQualityForZone, toneFor, QUALITY_POINTS, type Tone } from '../demo/series';
 
@@ -39,8 +40,26 @@ export interface PipeFeature {
   properties: PipeProps;
 }
 
-export type AssetKind = 'tank' | 'pressure_valve' | 'meter_valve' | 'sensor';
+export type AssetKind = 'facility' | 'tank' | 'pressure_valve' | 'meter_valve' | 'sensor';
 export type AssetStatus = 'ok' | 'warn' | 'alert';
+
+export type FacilityType = 'intake' | 'wtp' | 'wwtp';
+
+export interface FacilityProps {
+  asset: 'facility';
+  id: string;
+  name: string;
+  facility_type: FacilityType;
+  capacity_m3d: number;
+  throughput_m3d: number;
+  status: AssetStatus;
+}
+
+export const FACILITY_LABEL: Record<FacilityType, string> = {
+  intake: 'Dam & intake',
+  wtp: 'Water treatment plant',
+  wwtp: 'Wastewater treatment plant'
+};
 
 export interface TankProps {
   asset: 'tank';
@@ -93,7 +112,7 @@ export interface SensorProps {
   pipe_id: string;
 }
 
-export type AssetProps = TankProps | PressureValveProps | MeterValveProps | SensorProps;
+export type AssetProps = FacilityProps | TankProps | PressureValveProps | MeterValveProps | SensorProps;
 
 export interface AssetFeature {
   type: 'Feature';
@@ -145,7 +164,7 @@ export function clearNetworkCache(): void {
 
 /**
  * Auth headers for the optional Django backend (network upload / chooser pages).
- * The bundled Riverton demo is fully static and never calls this — it only runs
+ * The bundled Erline dataset is fully static and never calls this — it only runs
  * when a user drives the backend-backed upload flow against a live API.
  */
 let accessToken: string | null = null;
@@ -172,12 +191,12 @@ export function loadNetwork(): Promise<NetworkData> {
     const base = (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
     const url = (path: string) => `${base.replace(/\/$/, '')}/data/${path}`;
     const [pipesRes, assetsRes, metaRes] = await Promise.all([
-      fetch(url('riverton-pipes.geojson')),
-      fetch(url('riverton-assets.geojson')),
-      fetch(url('riverton-meta.json'))
+      fetch(url('erline-pipes.geojson')),
+      fetch(url('erline-assets.geojson')),
+      fetch(url('erline-meta.json'))
     ]);
     if (!pipesRes.ok || !assetsRes.ok || !metaRes.ok) {
-      throw new Error('Failed to load Riverton network dataset.');
+      throw new Error('Failed to load Erline network dataset.');
     }
     const pipesFc = await pipesRes.json();
     const assetsFc = await assetsRes.json();
@@ -257,7 +276,7 @@ export function loadUploadedNetwork(): NetworkData | null {
 }
 
 /**
- * Real Riverton telemetry covers flow + pressure only. Water utilities also
+ * The bundled telemetry overlay covers flow + pressure only. Water utilities also
  * monitor water-quality sensors (pH, turbidity) at reservoirs and key
  * distribution points — we synthesize a representative set here so the
  * Sensors page can demo them alongside the real flow/pressure nodes.
@@ -340,9 +359,9 @@ export const PIPE_STYLE: Record<PipeClass, {
   // Functional palette: hue + width encode pipe class, so classes stay
   // distinguishable without relying on colour alone.
   main: {
-    color: '#F97316',
-    hoverColor: '#FB923C',
-    weight: 4,
+    color: '#FB923C',          // bright orange — reads on satellite imagery
+    hoverColor: '#FDBA74',
+    weight: 6,
     hoverWeight: 6,
     opacity: 1,
     label: 'Transmission main',
@@ -350,9 +369,9 @@ export const PIPE_STYLE: Record<PipeClass, {
     description: 'Primary supply trunk · highest priority'
   },
   distribution: {
-    color: '#18AEEA',
-    hoverColor: '#5CC8F2',
-    weight: 2.5,
+    color: '#22D3EE',          // bright cyan — water convention, high contrast on satellite imagery
+    hoverColor: '#67E8F9',
+    weight: 3.5,
     hoverWeight: 4,
     opacity: 1,
     label: 'Distribution main',
@@ -360,9 +379,9 @@ export const PIPE_STYLE: Record<PipeClass, {
     description: 'Neighbourhood feeder · zone backbone'
   },
   household: {
-    color: '#20C997',
-    hoverColor: '#5ADBB3',
-    weight: 1.5,
+    color: '#65A30D',
+    hoverColor: '#84CC16',
+    weight: 2.2,
     hoverWeight: 3,
     opacity: 0.95,
     label: 'Service connection',
@@ -370,9 +389,9 @@ export const PIPE_STYLE: Record<PipeClass, {
     description: 'Service line to customer property'
   },
   backfeed: {
-    color: '#64748B',
-    hoverColor: '#94A3B8',
-    weight: 2,
+    color: '#334155',
+    hoverColor: '#475569',
+    weight: 3,
     hoverWeight: 3.5,
     dashArray: '6 5',
     opacity: 1,
@@ -381,9 +400,9 @@ export const PIPE_STYLE: Record<PipeClass, {
     description: 'Reversible supply path · currently closed'
   },
   boundary: {
-    color: '#94A3B8',
-    hoverColor: '#CBD5E1',
-    weight: 1.5,
+    color: '#F8FAFC',          // white dashed outline — visible on imagery
+    hoverColor: '#FFFFFF',
+    weight: 2,
     hoverWeight: 3,
     dashArray: '6 4',
     opacity: 0.9,
@@ -393,7 +412,9 @@ export const PIPE_STYLE: Record<PipeClass, {
   }
 };
 
-export const PIPE_CLASS_ORDER: PipeClass[] = ['main', 'distribution', 'backfeed', 'household', 'boundary'];
+// Only real network classes are drawn; the service-area outline and the
+// unused backfeed / service classes are not shown.
+export const PIPE_CLASS_ORDER: PipeClass[] = ['main', 'distribution'];
 
 export const ASSET_STYLE: Record<AssetKind, {
   color: string;
@@ -403,65 +424,108 @@ export const ASSET_STYLE: Record<AssetKind, {
   description: string;
 }> = {
   // Each asset kind is a distinct category — give it its own hue so icons
-  // read apart from the blue (#00B4FF) pipe network and from each other.
+  // read apart from the orange / cyan pipe network and from each other.
   // Status semantics (green/amber/red) stay on the separate status dot.
+  facility: {
+    color: '#334155',          // dark slate — intake / treatment works
+    ring: '#99F6E4',
+    label: 'Intake / treatment plant',
+    shortLabel: 'Facilities',
+    description: 'Dam intakes, water & wastewater treatment works'
+  },
   tank: {
-    color: '#7C3AED',
+    color: '#2563EB',          // royal blue — water storage
     ring: '#DDD6FE',
     label: 'Reservoir / tank',
     shortLabel: 'Reservoirs',
     description: 'Reservoir level-sensor telemetry'
   },
   pressure_valve: {
-    color: '#F59E0B',
+    color: '#D97706',          // amber — pressure-reducing valve
     ring: '#FDE68A',
     label: 'Valve (PRV)',
     shortLabel: 'Valves',
     description: 'Pressure-reducing valve · live drift'
   },
   meter_valve: {
-    color: '#EC4899',
+    color: '#BE123C',          // deep rose — bulk meter
     ring: '#FBCFE8',
     label: 'Meter / pump',
     shortLabel: 'Meters',
     description: 'Consumption-metered valve assembly'
   },
   sensor: {
-    color: '#2563EB',
+    color: '#7C3AED',          // violet — pressure / flow sensor
     ring: '#BFDBFE',
     label: 'Sensors',
     shortLabel: 'Sensors',
-    description: 'Pressure (blue) and water-quality (violet) sensors'
+    description: 'Pressure (blue) and water-quality (teal) sensors'
   }
 };
 
-export const ASSET_ORDER: AssetKind[] = ['tank', 'pressure_valve', 'meter_valve', 'sensor'];
+export const ASSET_ORDER: AssetKind[] = ['facility', 'tank', 'pressure_valve', 'meter_valve', 'sensor'];
 
 export const STATUS_COLOR: Record<AssetStatus, string> = {
   ok: '#10B981',     // healthy / normal
   warn: '#F59E0B',   // warning / anomaly
-  alert: '#EF4444'   // critical / leak
+  alert: '#EF4444'   // critical
 };
 export const OFFLINE_COLOR = '#94A3B8';
-export const QUALITY_SENSOR_COLOR = '#8B5CF6';
+export const QUALITY_SENSOR_COLOR = '#059669'; // emerald — water-quality sensor
 export const DMA_BOUNDARY_COLOR = '#8B5CF6';
 
 /**
- * Map glyphs shared by markers and the legend: white badge, coloured ring,
- * engineering symbol inside. Returned as SVG strings for Leaflet divIcons.
+ * Flat engineering map symbols shared by markers and the legend:
+ * valve = bowtie, meter = circle, reservoir = square, pressure sensor = dot,
+ * water-quality sensor = diamond. Thin dark outline so they
+ * read on dark and satellite basemaps alike.
  */
-export function assetGlyph(kind: 'tank' | 'valve' | 'meter' | 'leak', color: string, size = 18): string {
-  const st = `fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"`;
+export type SymbolKind = 'valve' | 'meter' | 'tank' | 'pressure' | 'quality';
+export function engSymbol(kind: SymbolKind, color: string, size = 14, outline = '#0B1220'): string {
+  const o = `stroke="${outline}" stroke-width="1.25" stroke-linejoin="round"`;
+  const v = `viewBox="0 0 16 16" width="${size}" height="${size}"`;
   switch (kind) {
-    case 'valve': // gate valve: bowtie body, stem and handwheel
-      return `<svg viewBox="0 0 24 24" width="${size}" height="${size}"><path d="M3.5 10.5v9l8.5-4.5zM20.5 10.5v9L12 15z" fill="${color}"/><path d="M12 15V7" ${st}/><path d="M7.5 5.5h9" ${st} stroke-width="2.4"/></svg>`;
-    case 'meter': // flow meter: dial with needle and pipe stubs
-      return `<svg viewBox="0 0 24 24" width="${size}" height="${size}"><path d="M1.5 13h3.5M19 13h3.5" ${st}/><circle cx="12" cy="13" r="6.5" ${st}/><path d="M12 13l3.2-3.4" ${st}/><circle cx="12" cy="13" r="1.4" fill="${color}"/><path d="M8.6 9.3h.01M12 7.9h.01" ${st} stroke-width="2.4"/></svg>`;
-    case 'tank': // reservoir: cylinder
-      return `<svg viewBox="0 0 24 24" width="${size}" height="${size}"><ellipse cx="12" cy="6" rx="7" ry="2.6" ${st}/><path d="M5 6v12c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6V6" ${st}/><path d="M5 12c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6" ${st} opacity="0.55"/></svg>`;
-    case 'leak':
-      return `<svg viewBox="0 0 24 24" width="${size}" height="${size}"><path d="M12 3.5s5.5 6 5.5 10a5.5 5.5 0 0 1-11 0c0-4 5.5-10 5.5-10z" fill="${color}"/><path d="M9.6 14.2a2.6 2.6 0 0 0 2.4 2.4" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+    case 'valve':    return `<svg ${v}><path d="M1.5 3.5v9L8 8zM14.5 3.5v9L8 8z" fill="${color}" ${o}/></svg>`;
+    case 'meter':    return `<svg ${v}><circle cx="8" cy="8" r="5.5" fill="${color}" ${o}/><circle cx="8" cy="8" r="1.6" fill="${outline}"/></svg>`;
+    case 'tank':     return `<svg ${v}><rect x="2" y="2" width="12" height="12" rx="1.5" fill="${color}" ${o}/></svg>`;
+    case 'pressure': return `<svg ${v}><circle cx="8" cy="8" r="4.5" fill="${color}" ${o}/></svg>`;
+    case 'quality':  return `<svg ${v}><path d="M8 2.5 13.5 8 8 13.5 2.5 8z" fill="${color}" ${o}/></svg>`;
   }
+}
+
+/**
+ * Map markers that show what the asset is: a coloured rounded tile with a
+ * white line icon (reservoir, pressure sensor, water-quality probe, valve,
+ * meter). Status shows as a ring around the tile.
+ */
+export type MarkerKind = 'plant' | 'tank' | 'pressure' | 'quality' | 'valve' | 'meter';
+const MARKER_PATHS: Record<MarkerKind, string> = {
+  plant: '<path d="M3.5 20.5V9.5l5 3v-3l5 3V4.5h7v16z"/><path d="M16.5 12s-2 2.2-2 3.6a2 2 0 0 0 4 0c0-1.4-2-3.6-2-3.6z" fill="#fff"/>',
+  tank: '<ellipse cx="12" cy="6" rx="7" ry="2.5"/><path d="M5 6v12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6"/><path d="M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/>',
+  pressure: '<path d="M4.5 16.5a8 8 0 1 1 15 0"/><path d="m12 13 4-4.5"/><circle cx="12" cy="13" r="1.2" fill="#fff"/>',
+  quality: '<path d="M12 3.5s5.5 6 5.5 10a5.5 5.5 0 0 1-11 0c0-4 5.5-10 5.5-10z"/><path d="M9.8 14.5a2.3 2.3 0 0 0 2.2 2.2"/>',
+  valve: '<path d="M3.5 10v8l8.5-4zM20.5 10v8L12 14z"/><path d="M12 14V7.5M8.5 5.5h7"/>',
+  meter: '<rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="M7 10.5h2.5M10.8 10.5h2.4M14.5 10.5H17M7 14h10"/>'
+};
+/** Map marker colour per symbol — one colour per asset type, shared by maps and legends. */
+export const MARKER_COLOR: Record<MarkerKind, string> = {
+  plant: '#334155',
+  tank: '#2563EB',
+  pressure: '#7C3AED',
+  quality: '#059669',
+  valve: '#D97706',
+  meter: '#BE123C'
+};
+
+export function markerIcon(kind: MarkerKind, color: string = MARKER_COLOR[kind], size = 22): string {
+  // Solid badge in the asset-type colour with a white symbol and rim, so each
+  // asset type is recognisable at a glance on satellite imagery.
+  return `<span class="mk mk-${kind}" style="width:${size}px;height:${size}px;background:${color}"><svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${MARKER_PATHS[kind]}</svg></span>`;
+}
+
+/** @deprecated kept for older imports; maps to the engineering symbols. */
+export function assetGlyph(kind: 'tank' | 'valve' | 'meter', color: string, size = 18): string {
+  return engSymbol(kind, color, size);
 }
 
 export const MATERIAL_TINT: Record<string, string> = {
@@ -472,22 +536,19 @@ export const MATERIAL_TINT: Record<string, string> = {
   GI: '#94A3B8',
   Steel: '#64748B',
   PPR: '#A78BFA',
+  DI: '#475569',
   AC: '#F97316'
 };
 
-/** Zone display names (curated). Falls back to raw key for unknowns. */
+/** Zone display names — Erline distribution zones are named after the
+ *  reservoir that feeds them. Falls back to the raw key for unknowns. */
 export const ZONE_LABELS: Record<string, string> = {
-  MIL: 'Riverside',
-  MYT: 'Northgate',
-  KREKAJ: 'East Meadows',
-  CBD: 'Downtown Central',
-  ME: 'Millbrook East',
-  OBA: 'Westhaven',
-  KRE: 'Millwood',
-  'RIAT C': 'Hillcrest',
-  MTY: 'Northgate (legacy)',
-  HDPE: 'Unclassified',
-  CDD: 'Unclassified'
+  SHAURI: 'Shauri',
+  ZIWANI1: 'Ziwani 1',
+  ZIWANI2: 'Ziwani 2',
+  ZIWANI3: 'Ziwani 3',
+  KWANJORA: 'Kwa Njora',
+  ZIWANI: 'Ziwani (shared)'
 };
 
 export function zoneLabel(code: string): string {
@@ -495,10 +556,7 @@ export function zoneLabel(code: string): string {
 }
 
 export function isRealZone(code: string): boolean {
-  // Filter out polluted zone codes (material names accidentally entered as zone, etc.)
-  if (!code) return false;
-  if (code === 'HDPE' || code === 'CDD' || code === 'MTY') return false;
-  return code.length <= 8;
+  return !!code && code.trim().length > 0;
 }
 
 /** Network health derived from real status counts. */

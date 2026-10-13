@@ -265,7 +265,7 @@ function ChooserView() {
       <footer className="demo-hub-foot">
         <div className="demo-hub-foot-cell">
           <span>Active Organization</span>
-          <strong>KIWASCO — Kisumu Water & Sewerage</strong>
+          <strong>Erline Water</strong>
         </div>
         <div className="demo-hub-foot-cell">
           <span>Storage Backend</span>
@@ -473,7 +473,7 @@ function UploadView() {
                   {busy ? 'Ingesting…' : 'Ingest & render on live map →'}
                 </button>
                 <button className="btn btn-ghost btn-lg" onClick={() => navigate('/overview')}>
-                  Skip — use Kisumu sandbox
+                  Skip — use Erline Water network
                 </button>
               </div>
             </div>

@@ -2,11 +2,17 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { RANGE_KEYS, type RangeKey, type Tone } from './series';
 import { useFilters } from './filters';
+import {
+  Badge, BadgeDelta as TBadgeDelta, Card as TCard, Metric, Table, TableBody, TableCell,
+  TableHead, TableHeaderCell, TableRow, Text
+} from '@tremor/react';
 
 export const TONE_LABEL: Record<Tone, string> = { ok: 'Normal', warn: 'Warning', crit: 'Critical', off: 'Offline' };
 
+const BADGE_COLOR: Record<Tone, string> = { ok: 'emerald', warn: 'amber', crit: 'red', off: 'gray' };
+/** Status pill (Tremor Badge). */
 export function Status({ tone, label }: { tone: Tone; label?: string }) {
-  return <span className={`dx-status ${tone}`}><i />{label ?? TONE_LABEL[tone]}</span>;
+  return <Badge color={BADGE_COLOR[tone] as never} size="xs" className="dx-badge">{label ?? TONE_LABEL[tone]}</Badge>;
 }
 export function Dot({ tone }: { tone: Tone }) {
   return <span className={`dx-dot ${tone}`} aria-label={TONE_LABEL[tone]} />;
@@ -16,7 +22,7 @@ export function Card({ title, sub, actions, children, flush, className }: {
   title?: ReactNode; sub?: ReactNode; actions?: ReactNode; children: ReactNode; flush?: boolean; className?: string;
 }) {
   return (
-    <section className={`dx-card${className ? ` ${className}` : ''}`}>
+    <TCard className={`dx-card p-0${className ? ` ${className}` : ''}`}>
       {(title || actions) && (
         <header className="dx-card-head">
           <div>
@@ -27,7 +33,7 @@ export function Card({ title, sub, actions, children, flush, className }: {
         </header>
       )}
       <div className={flush ? 'dx-card-flush' : 'dx-card-body'}>{children}</div>
-    </section>
+    </TCard>
   );
 }
 
@@ -36,30 +42,26 @@ export function IconTile({ icon, tone = 'blue', size = 40 }: { icon: ReactNode; 
   return <span className={`dx-icontile ${tone}`} style={{ width: size, height: size }}>{icon}</span>;
 }
 
-/** Tremor-style delta badge: ▲/▼ with colour chosen by whether the change is good. */
+/** Delta badge (Tremor BadgeDelta). Colour follows whether the change is good. */
 export function BadgeDelta({ text, good, up }: { text: string; good: boolean; up: boolean }) {
   return (
-    <span className={`dx-badge-delta ${good ? 'good' : 'bad'}`}>
-      <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        {up ? <path d="M12 19V5M5 12l7-7 7 7" /> : <path d="M12 5v14M19 12l-7 7-7-7" />}
-      </svg>
+    <TBadgeDelta deltaType={up ? 'moderateIncrease' : 'moderateDecrease'} isIncreasePositive={good === up} size="xs">
       {text}
-    </span>
+    </TBadgeDelta>
   );
 }
 
-export function Kpi({ label, value, unit, tone, sub, delta, onClick, children, icon, iconTone, chart }: {
+export function Kpi({ label, value, unit, tone, sub, delta, onClick, children, icon, iconTone, chart, selected }: {
   label: string; value: ReactNode; unit?: string; tone?: Tone; sub?: ReactNode;
   delta?: { text: string; good: boolean; up?: boolean } | null; onClick?: () => void; children?: ReactNode;
-  icon?: ReactNode; iconTone?: IconTone; chart?: ReactNode;
+  icon?: ReactNode; iconTone?: IconTone; chart?: ReactNode; selected?: boolean;
 }) {
-  const Tag = onClick ? 'button' : 'div';
-  return (
-    <Tag className={`dx-kpi${onClick ? ' click' : ''}${icon ? ' has-icon' : ''}`} onClick={onClick} type={onClick ? 'button' : undefined}>
+  const body = (
+    <>
       {icon && <IconTile icon={icon} tone={iconTone ?? tone ?? 'blue'} />}
       <div className="dx-kpi-main">
-        <div className="dx-kpi-label">{!icon && tone && <Dot tone={tone} />}{label}</div>
-        <div className="dx-kpi-value">{value}{unit && <span className="unit">{unit}</span>}</div>
+        <Text className="dx-kpi-label">{!icon && tone && <Dot tone={tone} />}{label}</Text>
+        <Metric className="dx-kpi-value">{value}{unit && <span className="unit">{unit}</span>}</Metric>
         <div className="dx-kpi-foot">
           {delta && <BadgeDelta text={delta.text} good={delta.good} up={delta.up ?? !delta.good} />}
           {sub && <span className="dx-kpi-sub">{sub}</span>}
@@ -67,7 +69,25 @@ export function Kpi({ label, value, unit, tone, sub, delta, onClick, children, i
         {children}
       </div>
       {chart && <div className="dx-kpi-chart">{chart}</div>}
-    </Tag>
+    </>
+  );
+  const cls = `dx-kpi p-4${onClick ? ' click' : ''}${icon ? ' has-icon' : ''}${selected ? ' selected' : ''}`;
+  return onClick
+    ? <TCard className={cls} onClick={onClick} role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}>{body}</TCard>
+    : <TCard className={cls}>{body}</TCard>;
+}
+
+/** Severity glyph used in alert lists (octicon-like, 16px). */
+export function SevIcon({ severity }: { severity: 'critical' | 'warning' | 'info' }) {
+  const c = severity === 'critical' ? 'hsl(var(--danger))' : severity === 'warning' ? 'hsl(var(--warning))' : 'hsl(var(--muted-foreground))';
+  return (
+    <svg className="aw-sev" width={16} height={16} viewBox="0 0 16 16" fill="none" stroke={c} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" aria-label={severity}>
+      {severity === 'critical'
+        ? <><path d="M5.3 1.5h5.4l3.8 3.8v5.4l-3.8 3.8H5.3l-3.8-3.8V5.3z" /><path d="M8 4.8v3.6M8 11h.01" /></>
+        : severity === 'warning'
+          ? <><path d="M7.1 2.2 1.4 12.3a1 1 0 0 0 .9 1.5h11.4a1 1 0 0 0 .9-1.5L8.9 2.2a1 1 0 0 0-1.8 0z" /><path d="M8 6v3M8 11.5h.01" /></>
+          : <><circle cx={8} cy={8} r={6.5} /><path d="M8 7.2V11M8 5h.01" /></>}
+    </svg>
   );
 }
 
@@ -184,43 +204,55 @@ export function DataTable<T>({ columns, rows, rowKey, onRowClick, selectedKey, p
   const visible = pageSize ? sorted.slice(page * pageSize, page * pageSize + pageSize) : sorted;
   return (
     <div className="dx-table-wrap">
-      <table className="dx-table">
-        <thead>
-          <tr>
+      <Table className="dx-table">
+        <TableHead>
+          <TableRow>
             {columns.map(c => (
-              <th key={c.key} style={{ width: c.width, textAlign: c.align }} aria-sort={sort?.key === c.key ? (sort.dir === 1 ? 'ascending' : 'descending') : undefined}>
+              <TableHeaderCell key={c.key} style={{ width: c.width, textAlign: c.align }} aria-sort={sort?.key === c.key ? (sort.dir === 1 ? 'ascending' : 'descending') : undefined}>
                 {c.sort ? (
                   <button type="button" onClick={() => setSort(s => ({ key: c.key, dir: s?.key === c.key ? (-s.dir as 1 | -1) : 1 }))}>
                     {c.label}<span className="dx-sort">{sort?.key === c.key ? (sort.dir === 1 ? '▲' : '▼') : '↕'}</span>
                   </button>
                 ) : c.label}
-              </th>
+              </TableHeaderCell>
             ))}
-          </tr>
-        </thead>
-        <tbody>
+          </TableRow>
+        </TableHead>
+        <TableBody>
           {visible.map(r => {
             const k = rowKey(r);
             return (
-              <tr key={k} className={`${onRowClick ? 'click' : ''}${selectedKey === k ? ' sel' : ''}`} onClick={onRowClick ? () => onRowClick(r) : undefined}>
-                {columns.map(c => <td key={c.key} style={{ textAlign: c.align }}>{c.render(r)}</td>)}
-              </tr>
+              <TableRow key={k} className={`${onRowClick ? 'click' : ''}${selectedKey === k ? ' sel' : ''}`} onClick={onRowClick ? () => onRowClick(r) : undefined}>
+                {columns.map(c => <TableCell key={c.key} style={{ textAlign: c.align }}>{c.render(r)}</TableCell>)}
+              </TableRow>
             );
           })}
-          {!visible.length && <tr><td colSpan={columns.length} className="dx-empty">{empty}</td></tr>}
-        </tbody>
-      </table>
+          {!visible.length && <TableRow><TableCell colSpan={columns.length} className="dx-empty">{empty}</TableCell></TableRow>}
+        </TableBody>
+      </Table>
       {pageSize > 0 && sorted.length > pageSize && (
         <div className="dx-pager">
           <span>{page * pageSize + 1}–{Math.min(sorted.length, (page + 1) * pageSize)} of {sorted.length.toLocaleString()}</span>
-          <div>
-            <button type="button" disabled={page === 0} onClick={() => setPage(p => p - 1)}>Previous</button>
-            <button type="button" disabled={page >= pages - 1} onClick={() => setPage(p => p + 1)}>Next</button>
-          </div>
+          <nav className="dx-pages" aria-label="Pages">
+            <button type="button" disabled={page === 0} onClick={() => setPage(p => p - 1)} aria-label="Previous page">‹</button>
+            {pageList(page, pages).map((n, i) => n === null
+              ? <span key={`gap${i}`} className="gap">…</span>
+              : <button key={n} type="button" className={n === page ? 'on' : ''} aria-current={n === page ? 'page' : undefined} onClick={() => setPage(n)}>{n + 1}</button>)}
+            <button type="button" disabled={page >= pages - 1} onClick={() => setPage(p => p + 1)} aria-label="Next page">›</button>
+          </nav>
         </div>
       )}
     </div>
   );
+}
+
+/** Page numbers to show: first, last, and a window around the current page, with gaps. */
+export function pageList(page: number, pages: number): Array<number | null> {
+  if (pages <= 7) return Array.from({ length: pages }, (_, i) => i);
+  const keep = new Set([0, pages - 1, page - 1, page, page + 1].filter(n => n >= 0 && n < pages));
+  const out: Array<number | null> = [];
+  [...keep].sort((x, y) => x - y).forEach((n, i, arr) => { if (i && n - arr[i - 1] > 1) out.push(null); out.push(n); });
+  return out;
 }
 
 /* ── drawer ── */

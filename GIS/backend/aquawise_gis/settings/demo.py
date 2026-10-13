@@ -71,7 +71,7 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 104857600
 
 # --- Email (demo-request / "Book a Walkthrough" lead capture) ---
 # Where demo requests are delivered. Override with DEMO_LEAD_RECIPIENT.
-DEMO_LEAD_RECIPIENT = os.environ.get("DEMO_LEAD_RECIPIENT", "annmaina.info@gmail.com")
+DEMO_LEAD_RECIPIENT = os.environ.get("DEMO_LEAD_RECIPIENT", "info.aquawise@gmail.com")
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "Aquawise <no-reply@aquawise.io>")
 
 # Real SMTP when EMAIL_HOST is set; otherwise print emails to the console so the

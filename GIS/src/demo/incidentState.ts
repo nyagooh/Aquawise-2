@@ -1,6 +1,6 @@
 /**
  * Session-level incident workflow state (acknowledge / resolve) layered over
- * the model's seeded incidents, shared by the Alerts page, Overview and the
+ * the alerts detected from readings, shared by the Alerts page, Overview and the
  * sidebar badge.
  */
 import { useEffect, useState } from 'react';
